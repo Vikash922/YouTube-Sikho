@@ -14,7 +14,12 @@
     "test": "node scripts/run-all-tests.js",
     "test:contrast": "node scripts/test-contrast.js",
     "check": "node scripts/test-contrast.js && node scripts/test-no-hardcoded-colors.js && node scripts/test-accessibility.js && node scripts/test-firestore-rules.js && node scripts/test-cloud-functions.js",
-    "e2e": "maestro test e2e/flows"
+    "e2e": "maestro test e2e/flows",
+    "client:use": "node scripts/client-manager.js use",
+    "client:new": "node scripts/client-manager.js new",
+    "build:client": "node scripts/client-manager.js build",
+    "deploy:admin": "node scripts/client-manager.js deploy-admin",
+    "deploy:backend": "node scripts/client-manager.js deploy-backend"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.2.3",

@@ -1,27 +1,21 @@
 /**
- * WHITE-LABEL CLIENT CONFIGURATION
+ * CLIENT CONFIGURATION: YouTube Sikho Academy
  * -------------------------------------------------------------
- * This is the SINGLE SOURCE OF TRUTH for white-label rebranding.
- * To rebrand this app for a new client:
- *  1. Change values in this file (appName, packageName, colors, phone, firebaseConfig, etc.)
- *  2. For Expo Go: update firebaseConfig below with client's Firebase credentials.
- *  3. For EAS Build: replace google-services.json in root.
+ * Complete single source of truth for white-label client instance.
  */
 
 export interface ClientConfig {
-  /** Display name of the application */
   appName: string;
-  /** Short identifier slug for Expo / URL schemes */
+  shortName: string;
+  tagline: string;
   slug: string;
-  /** Android package name (Application ID) */
   packageName: string;
-  /** iOS bundle identifier */
   bundleIdentifier: string;
-  /** App version code / display version */
   version: string;
-  /** Brand logo (Remote URL or local require asset) */
   logoUrl: string;
-  /** App branding colors */
+  splashUrl?: string;
+  faviconUrl?: string;
+
   colors: {
     primary: string;
     primaryDark: string;
@@ -35,18 +29,21 @@ export interface ClientConfig {
     error: string;
     success: string;
   };
-  /** Customer Support Details */
+
   supportPhone: string;
-  /** WhatsApp Support phone number with country code */
   supportWhatsApp: string;
-  /** Official Support Email */
   supportEmail: string;
-  /** Legal & Policies */
+
+  companyLegalName: string;
   privacyPolicyUrl: string;
   termsUrl: string;
-  /** Razorpay Public Key ID (Test or Live) */
+  refundPolicyUrl: string;
+  dataDeletionUrl: string;
+
   razorpayKeyId: string;
-  /** Firebase Web / Expo Go Configuration */
+  bunnyLibraryId?: string;
+  bunnyCdnHostname?: string;
+
   firebaseConfig: {
     apiKey: string;
     authDomain: string;
@@ -55,21 +52,36 @@ export interface ClientConfig {
     messagingSenderId: string;
     appId: string;
   };
+
+  features: {
+    liveClassesEnabled: boolean;
+    quizzesEnabled: boolean;
+    certificateEnabled: boolean;
+    communityChatEnabled: boolean;
+    offlineDownloadEnabled: boolean;
+    referralEnabled: boolean;
+    reviewsEnabled: boolean;
+  };
 }
 
 export const clientConfig: ClientConfig = {
   appName: "YouTube Sikho Academy",
+  shortName: "YouTube Sikho",
+  tagline: "India's Premier Creator Academy",
   slug: "youtube-sikho",
   packageName: "YouTube_sikho.com",
   bundleIdentifier: "com.youtubesikho.academy",
   version: "1.0.0",
   logoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
+  splashUrl: "./assets/splash.png",
+  faviconUrl: "./assets/icon.png",
+
   colors: {
-    primary: "#4F46E5", // Modern Indigo brand color
+    primary: "#4F46E5",
     primaryDark: "#4338CA",
     secondary: "#1E293B",
     accent: "#F59E0B",
-    background: "#0B1020", // Sleek dark theme
+    background: "#0B1020",
     surface: "#151B2E",
     text: "#F1F5F9",
     textMuted: "#94A3B8",
@@ -77,12 +89,21 @@ export const clientConfig: ClientConfig = {
     error: "#DC2626",
     success: "#16A34A",
   },
+
   supportPhone: "+919876543210",
   supportWhatsApp: "+919876543210",
   supportEmail: "support@youtubesikho.com",
+
+  companyLegalName: "YouTube Sikho Education LLP",
   privacyPolicyUrl: "https://youtubesikho.com/privacy",
   termsUrl: "https://youtubesikho.com/terms",
+  refundPolicyUrl: "https://youtubesikho.com/refund",
+  dataDeletionUrl: "https://youtubesikho.com/delete-account",
+
   razorpayKeyId: "rzp_test_yt_sikho_519827",
+  bunnyLibraryId: "12345",
+  bunnyCdnHostname: "vz-test-123.b-cdn.net",
+
   firebaseConfig: {
     apiKey: "AIzaSyC2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4",
     authDomain: "sikho-77341.firebaseapp.com",
@@ -90,6 +111,16 @@ export const clientConfig: ClientConfig = {
     storageBucket: "sikho-77341.firebasestorage.app",
     messagingSenderId: "202721234137",
     appId: "1:202721234137:android:0f96cea8ee5c0f29efc2c8",
+  },
+
+  features: {
+    liveClassesEnabled: true,
+    quizzesEnabled: true,
+    certificateEnabled: true,
+    communityChatEnabled: true,
+    offlineDownloadEnabled: false,
+    referralEnabled: false,
+    reviewsEnabled: true,
   },
 };
 
