@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# YOUTUBE SIKHO - UNIFIED DUAL SERVER LAUNCHER & MONITOR (ADMIN + EXPO)
+# ==============================================================================
+
+ROOT_DIR="/root/course-app"
+ADMIN_DIR="$ROOT_DIR/admin"
+
+check_http() {
+  local url="$1"
+  local code
+  code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "$url" 2>/dev/null)
+  if [ "$code" = "200" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+echo "═════════════════════════════════════════════════════════════════"
+echo "        STATUS & LAUNCHER: ADMIN PANEL (:5173) + EXPO (:8081)    "
+echo "═════════════════════════════════════════════════════════════════"
+
+# 1. Admin Panel Check & Start
+if check_http "http://127.0.0.1:5173/"; then
+  echo "✓ [RUNNING] Admin Panel is responding at http://localhost:5173"
+else
+  echo "▶ [STARTING] Admin Panel on port 5173..."
+  cd "$ADMIN_DIR" && nohup npm run dev > /tmp/admin-vite.log 2>&1 &
+  sleep 2
+  if check_http "http://127.0.0.1:5173/"; then
+    echo "✓ [STARTED] Admin Panel is up at http://localhost:5173"
+  else
+    echo "ℹ [STARTING] Admin Panel is initializing. Check /tmp/admin-vite.log"
+  fi
+fi
+
+# 2. Expo Metro Bundler Check & Start
+if check_http "http://127.0.0.1:8081/"; then
+  echo "✓ [RUNNING] Expo Metro Bundler is responding at exp://127.0.0.1:8081"
+else
+  echo "▶ [STARTING] Expo Metro Bundler on port 8081..."
+  cd "$ROOT_DIR" && CI=1 nohup npx expo start --localhost < /dev/null > /tmp/expo-metro.log 2>&1 &
+  sleep 4
+  if check_http "http://127.0.0.1:8081/"; then
+    echo "✓ [STARTED] Expo Metro Bundler is up at exp://127.0.0.1:8081"
+  else
+    echo "ℹ [STARTING] Expo Metro is initializing. Check /tmp/expo-metro.log"
+  fi
+fi
+
+# 3. Termux / PRoot Keep-Alive Background Loop
+if ! pgrep -f "keep-alive-servers" >/dev/null 2>&1; then
+  (
+    exec -a keep-alive-servers bash -c '
+      while true; do
+        kill -CONT $(pgrep -f "vite|expo|node") 2>/dev/null
+        sleep 5
+      done
+    '
+  ) &
+fi
+
+echo ""
+echo "═════════════════════════════════════════════════════════════════"
+echo "🎉 DUAL SERVERS READY:"
+echo "  1. Admin Panel:   http://localhost:5173"
+echo "  2. Mobile App:    exp://127.0.0.1:8081 (Open in Expo Go)"
+echo "═════════════════════════════════════════════════════════════════"

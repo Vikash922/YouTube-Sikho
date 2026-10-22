@@ -1,0 +1,7 @@
+appId: YouTube_sikho.com
+---
+- launchApp
+- assertVisible: "Welcome to YouTube Sikho Academy"
+- assertVisible: "Enter mobile number"
+- assertVisible: "Continue with OTP"
+- assertVisible: "Continue with Google"

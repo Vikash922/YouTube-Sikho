@@ -1,0 +1,9 @@
+appId: YouTube_sikho.com
+---
+- launchApp
+- tapOn: "Continue with Google"
+- tapOn: "Profile"
+- assertVisible: "THEME & APPEARANCE"
+- tapOn: "Light"
+- tapOn: "Dark"
+- tapOn: "System"

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "202721234137",
+    "project_id": "sikho-77341",
+    "storage_bucket": "sikho-77341.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202721234137:android:0f96cea8ee5c0f29efc2c8",
+        "android_client_info": {
+          "package_name": "YouTube_sikho.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

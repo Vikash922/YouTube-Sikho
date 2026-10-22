@@ -1,0 +1,36 @@
+{
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "YouTube Sikho Academy",
+        "supportEmail": "support@youtubesikho.com",
+        "authorizedRedirectUris": [
+          "https://sikho-77341.firebaseapp.com/__/auth/handler",
+          "http://localhost"
+        ]
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions"
+  },
+  "hosting": {
+    "public": "admin/dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

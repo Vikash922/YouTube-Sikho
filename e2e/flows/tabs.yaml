@@ -1,0 +1,13 @@
+appId: YouTube_sikho.com
+---
+- launchApp
+- tapOn: "Continue with Google"
+- assertVisible: "Welcome back"
+- tapOn: "Courses"
+- assertVisible: "Explore Courses"
+- tapOn: "Learning"
+- assertVisible: "My Learning"
+- tapOn: "Live"
+- assertVisible: "Live Classes"
+- tapOn: "Profile"
+- assertVisible: "My Account"

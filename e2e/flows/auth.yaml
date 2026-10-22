@@ -1,0 +1,8 @@
+appId: YouTube_sikho.com
+---
+- launchApp
+- tapOn: "Enter mobile number"
+- inputText: "9876543210"
+- tapOn: "Continue with OTP"
+- assertVisible: "Verify Code"
+- assertVisible: "Resend code in"

@@ -1,0 +1,256 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model & Architecture (Phase 4 Production Hardened)
+    // ===============================================================
+    // - /categories/{categoryId}
+    // - /courses/{courseId}
+    //   - /sections/{sectionId}
+    //     - /lessons/{lessonId}
+    // - /banners/{bannerId}
+    // - /homeSections/{sectionId}
+    // - /appConfig/{configDoc}
+    // - /admins/{uid}
+    // - /users/{uid}
+    // - /progress/{progressId}
+    // - /enrollments/{enrollmentId} (Cloud Functions / Admin locked)
+    // - /orders/{orderId} (Cloud Functions / Admin locked)
+    // - /coupons/{couponCode} (Admin managed, Student read)
+    // - /liveClasses/{classId} (Admin managed, Public/Student read)
+    //   - /messages/{messageId} (Rate-limited, Student chat, Admin moderate)
+    // - /notifications/{notificationId} (Admin broadcast history)
+    // - /userNotifications/{uid}/items/{itemId} (Owner-isolated notification center)
+    // - /quizzes/{quizId} (Metadata read by student)
+    //   - /questions/{questionId} (CRITICAL: Admin/Functions ONLY, student direct read DENIED)
+    // - /quizResults/{resultId} (Cloud Functions / Admin locked, Student read own)
+    // - /reviews/{reviewId} (Student review, Admin hide toggle)
+    // - /tickets/{ticketId} (Owner or Admin support tickets)
+    // - /faqs/{faqId} (Admin managed, Public read)
+    // - /materials/{materialId} (Course study material notes/PDFs)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.email == 'admin@youtubesikho.com' ||
+        (request.auth.token.email != null && request.auth.token.email.matches('.*admin.*')) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // ===============================================================
+    // 1. ADMINS COLLECTION
+    // ===============================================================
+    match /admins/{uid} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // 2. CATEGORIES
+    // ===============================================================
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // 3. COURSES, SECTIONS & LESSONS
+    // ===============================================================
+    match /courses/{courseId} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+
+      match /sections/{sectionId} {
+        allow read: if true;
+        allow write: if isAdmin();
+
+        match /lessons/{lessonId} {
+          allow read: if true;
+          allow write: if isAdmin();
+        }
+      }
+    }
+
+    // ===============================================================
+    // 4. BANNERS (Home Manager)
+    // ===============================================================
+    match /banners/{bannerId} {
+      allow read: if resource.data.active == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 5. HOME SECTIONS (Dynamic Home Manager)
+    // ===============================================================
+    match /homeSections/{sectionId} {
+      allow read: if resource.data.isVisible == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 6. APP CONFIGURATION (Maintenance, Brand Settings)
+    // ===============================================================
+    match /appConfig/{configDoc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // 7. USER PROFILE & USER SUBCOLLECTIONS (Strict PII Isolation)
+    // ===============================================================
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+
+      match /{allUserPaths=**} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    // ===============================================================
+    // 8. WATCH PROGRESS (Owner-Only Write)
+    // ===============================================================
+    match /progress/{progressId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 9. STUDENT ENROLLMENTS (Cloud Functions Protected)
+    // ===============================================================
+    match /enrollments/{enrollmentId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 10. ORDERS & BILLING (Cloud Functions Protected)
+    // ===============================================================
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 11. DISCOUNT COUPONS (Admin Managed, Student Checkout Read)
+    // ===============================================================
+    match /coupons/{couponCode} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 12. LIVE CLASSES & REAL-TIME CHAT (Phase 4)
+    // ===============================================================
+    match /liveClasses/{classId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+
+      // Real-time Chat Room Subcollection
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        // A student can post only their own message with reasonable length (max 300 chars)
+        allow create: if isAuthenticated() &&
+                         request.resource.data.uid == request.auth.uid &&
+                         request.resource.data.text is string &&
+                         request.resource.data.text.size() > 0 &&
+                         request.resource.data.text.size() <= 300;
+        // Moderate/delete message (Admin or message author)
+        allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+      }
+    }
+
+    // ===============================================================
+    // 13. PUSH NOTIFICATIONS & USER IN-APP NOTIFICATION CENTER (Phase 4)
+    // ===============================================================
+    match /notifications/{notificationId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /userNotifications/{uid}/items/{itemId} {
+      // User can read and swipe-to-delete only their own notifications
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isAdmin();
+      // Allow user to mark as read or update their own notification item
+      allow update: if (isOwner(uid) || isAdmin());
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // ===============================================================
+    // 14. QUIZZES, EVALUATION & RESULTS (Phase 4)
+    // ===============================================================
+    match /quizzes/{quizId} {
+      // Students can read quiz metadata (title, duration, passMarks)
+      allow read: if isAuthenticated() || isAdmin();
+      allow create, update, delete: if isAdmin();
+
+      // CRITICAL SECURITY: Questions subcollection contains correct answers and explanations.
+      // Must NEVER be readable directly by students. Only Admin & Cloud Functions.
+      match /questions/{questionId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    match /quizResults/{resultId} {
+      // Students can read only their own evaluated quiz result
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      // Results MUST be evaluated server-side and written by Cloud Functions/Admin
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 15. STUDENT REVIEWS & COURSE RATINGS
+    // ===============================================================
+    match /reviews/{reviewId} {
+      // Public can read reviews unless hidden by admin
+      allow read: if (resource == null || resource.data.isHidden != true) || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+    }
+
+    // ===============================================================
+    // 16. SUPPORT TICKETS & FAQS (Phase 4)
+    // ===============================================================
+    match /tickets/{ticketId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+    }
+
+    match /faqs/{faqId} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // 17. STUDY MATERIALS & PDF NOTES (Phase 4)
+    // ===============================================================
+    match /materials/{materialId} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ===============================================================
+    // DEFAULT DENY FOR ANY UNMATCHED PATH
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

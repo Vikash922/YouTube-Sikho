@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+dist/
+build/
+*.log
+.DS_Store
+admin/node_modules/
+admin/dist/
+functions/node_modules/
+functions/lib/
+.firebase/
