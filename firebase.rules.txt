@@ -70,7 +70,7 @@ service cloud.firestore {
     // 3. COURSES, SECTIONS & LESSONS
     // ===============================================================
     match /courses/{courseId} {
-      allow read: if resource.data.isPublished == true || isAdmin();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
 
       match /sections/{sectionId} {
@@ -88,7 +88,7 @@ service cloud.firestore {
     // 4. BANNERS (Home Manager)
     // ===============================================================
     match /banners/{bannerId} {
-      allow read: if resource.data.active == true || isAdmin();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
@@ -96,7 +96,7 @@ service cloud.firestore {
     // 5. HOME SECTIONS (Dynamic Home Manager)
     // ===============================================================
     match /homeSections/{sectionId} {
-      allow read: if resource.data.isVisible == true || isAdmin();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
@@ -179,7 +179,7 @@ service cloud.firestore {
     // 13. PUSH NOTIFICATIONS & USER IN-APP NOTIFICATION CENTER (Phase 4)
     // ===============================================================
     match /notifications/{notificationId} {
-      allow read: if isAdmin();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

@@ -22,7 +22,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: clientConfig.packageName,
-    targetSdkVersion: 34,
     permissions: [
       'INTERNET',
       'ACCESS_NETWORK_STATE',

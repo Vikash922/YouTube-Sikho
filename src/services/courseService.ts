@@ -75,11 +75,12 @@ export function subscribeToPublishedCourses(
       const list = snapshot.docs
         .map((d) => {
           const data = d.data();
-          return {
+          return ({
             id: d.id,
             ...data,
-            thumbnail: data.thumbnail || data.thumbnailUrl || '',
-          } as Course;
+            thumbnail: data.thumbnail || data.thumbnailUrl || data.image || '',
+            thumbnailUrl: data.thumbnailUrl || data.thumbnail || data.image || '',
+          } as unknown as Course);
         })
         .filter((c) => c.isPublished !== false);
       onUpdate(list);

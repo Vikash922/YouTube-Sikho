@@ -18,6 +18,7 @@ import { ConnectionBanner } from '../src/components/common/ConnectionBanner';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { useConfigStore } from '../src/store/useConfigStore';
 import { useAuthStore } from '../src/store/useAuthStore';
+import { useNotificationStore } from '../src/store/useNotificationStore';
 import { realtimeManager } from '../src/services/realtimeManager';
 
 const queryClient = new QueryClient({
@@ -38,10 +39,14 @@ export default function RootLayout() {
   const isMaintenanceMode = useConfigStore((state) => state.isMaintenanceMode);
   const startLiveSync = useConfigStore((state) => state.startLiveSync);
 
-  // 1. Start central realtime config sync
+  // 1. Start central realtime config sync & notifications
   useEffect(() => {
     const unsubConfig = startLiveSync();
-    return () => unsubConfig();
+    const unsubNotif = useNotificationStore.getState().initListener();
+    return () => {
+      unsubConfig();
+      unsubNotif();
+    };
   }, [startLiveSync]);
 
   // 2. Realtime maintenance mode blocker navigation

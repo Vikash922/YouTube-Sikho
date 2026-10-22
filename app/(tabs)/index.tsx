@@ -6,13 +6,16 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Sparkles, BookOpen, Clock, Star, ArrowRight, Flame, Bell, Radio } from 'lucide-react-native';
+import { Search, Sparkles, BookOpen, Clock, Star, ArrowRight, Flame, Bell, Radio, Play } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useNotificationStore } from '../../src/store/useNotificationStore';
 import { useTheme } from '../../src/theme';
 import { clientConfig } from '../../src/config/client.config';
 import { Avatar } from '../../src/components/common/Avatar';
@@ -36,7 +39,6 @@ import {
   DEFAULT_HOME_SECTIONS,
 } from '../../src/services/bannerService';
 import { Linking } from 'react-native';
-import { Image } from 'expo-image';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -49,6 +51,7 @@ export default function HomeScreen() {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [homeSections, setHomeSections] = useState<HomeSectionConfig[]>(DEFAULT_HOME_SECTIONS);
   const [searchQuery, setSearchQuery] = useState('');
+  const unreadCount = useNotificationStore((state) => state.unreadCount);
 
   // 1. Subscribe to real-time published courses from Firestore
   useEffect(() => {
@@ -146,6 +149,26 @@ export default function HomeScreen() {
               accessibilityLabel="Open Notifications"
             >
               <Bell size={20} color={colors.text} strokeWidth={1.75} />
+              {unreadCount > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 6,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: colors.error,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 4,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -204,8 +227,8 @@ export default function HomeScreen() {
                   onPress={() => handleBannerPress(b)}
                   style={[
                     {
-                      width: 320,
-                      height: 140,
+                      width: Dimensions.get('window').width - 40,
+                      height: 160,
                       borderRadius: radius.card,
                       overflow: 'hidden',
                       backgroundColor: colors.surface,
@@ -378,6 +401,26 @@ export default function HomeScreen() {
                     onPress={() => router.push({ pathname: '/course/[id]', params: { id: course.id } })}
                     padding={spacing.base}
                   >
+                    {course.thumbnail ? (
+                      <View
+                        style={{
+                          width: '100%',
+                          height: 140,
+                          borderRadius: radius.md,
+                          overflow: 'hidden',
+                          marginBottom: spacing.sm,
+                          backgroundColor: colors.surfaceElevated,
+                        }}
+                      >
+                        <Image
+                          source={{ uri: course.thumbnail }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      </View>
+                    ) : null}
+
                     <View style={styles.courseHeader}>
                       <Badge label={displayBadge} variant="primary" size="sm" />
                       <View style={styles.ratingRow}>

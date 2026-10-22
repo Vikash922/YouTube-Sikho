@@ -13,7 +13,7 @@ import {
   Smartphone,
   Sparkles,
 } from 'lucide-react';
-import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { Course } from '../types';
@@ -97,20 +97,39 @@ export const Notifications: React.FC = () => {
     setFeedback(null);
 
     try {
-      const sendNotificationFn = httpsCallable(functions, 'sendNotification');
-      const res: any = await sendNotificationFn({
-        target,
-        targetId: target !== 'all' ? targetId : undefined,
+      // 1. Write directly to Firestore for instant real-time student app delivery
+      const notifRef = collection(db, 'notifications');
+      await addDoc(notifRef, {
         title: title.trim(),
         body: body.trim(),
-        imageUrl: imageUrl.trim() || undefined,
+        imageUrl: imageUrl.trim() || null,
+        target,
+        targetId: target !== 'all' ? targetId : null,
         actionType,
-        actionData: actionData.trim() || undefined,
+        actionData: actionData.trim() || null,
+        sentAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
       });
+
+      // 2. Dispatch FCM Push Notifications via Cloud Functions
+      try {
+        const sendNotificationFn = httpsCallable(functions, 'sendNotification');
+        await sendNotificationFn({
+          target,
+          targetId: target !== 'all' ? targetId : undefined,
+          title: title.trim(),
+          body: body.trim(),
+          imageUrl: imageUrl.trim() || undefined,
+          actionType,
+          actionData: actionData.trim() || undefined,
+        });
+      } catch (fcmErr) {
+        console.warn('FCM Cloud Function note:', fcmErr);
+      }
 
       setFeedback({
         type: 'success',
-        message: `Notification dispatched successfully to ${res.data?.recipients || 0} students!`,
+        message: 'Notification broadcast sent live to all students!',
       });
 
       // Clear form

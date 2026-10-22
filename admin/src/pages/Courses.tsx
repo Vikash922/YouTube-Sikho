@@ -118,6 +118,7 @@ export const Courses: React.FC = () => {
       if (editingCourse) {
         await updateDoc(doc(db, 'courses', editingCourse.id), {
           ...courseForm,
+          thumbnail: courseForm.thumbnailUrl,
           updatedAt: new Date().toISOString(),
         });
         showToast('Course updated successfully!', 'success');
@@ -126,6 +127,7 @@ export const Courses: React.FC = () => {
         await setDoc(doc(db, 'courses', newId), {
           id: newId,
           ...courseForm,
+          thumbnail: courseForm.thumbnailUrl,
           order: courses.length + 1,
           totalLessons: 0,
           totalDuration: '0 Hours',

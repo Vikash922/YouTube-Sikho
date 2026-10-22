@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
@@ -53,7 +54,7 @@ interface EnrolledCourseItem {
 
 export default function MyLearningScreen() {
   const router = useRouter();
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography, spacing, radius } = useTheme();
   const user = useAuthStore((state) => state.user);
 
   const [enrolledList, setEnrolledList] = useState<EnrolledCourseItem[]>([]);
@@ -168,6 +169,26 @@ export default function MyLearningScreen() {
                   padding={spacing.base}
                   style={[styles.courseCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 >
+                  {item.course.thumbnail ? (
+                    <View
+                      style={{
+                        width: '100%',
+                        height: 140,
+                        borderRadius: radius.md,
+                        overflow: 'hidden',
+                        marginBottom: spacing.sm,
+                        backgroundColor: colors.surfaceElevated,
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.course.thumbnail }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    </View>
+                  ) : null}
+
                   <View style={styles.cardHeader}>
                     <Badge label={item.course.category} variant="primary" size="sm" />
                     {item.percentComplete === 100 ? (

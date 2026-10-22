@@ -29,6 +29,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { Image } from 'expo-image';
 import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { firebaseFirestore } from '../../src/services/firebase';
@@ -49,7 +50,7 @@ export default function CourseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors, typography, spacing } = useTheme();
+  const { colors, typography, spacing, radius } = useTheme();
   const user = useAuthStore((state) => state.user);
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -222,6 +223,26 @@ export default function CourseDetailScreen() {
         {/* 2. Hero Overview Card */}
         <Animated.View entering={FadeInDown.duration(400).delay(60)}>
           <Card style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            {course.thumbnail ? (
+              <View
+                style={{
+                  width: '100%',
+                  height: 180,
+                  borderRadius: radius.md,
+                  overflow: 'hidden',
+                  marginBottom: spacing.md,
+                  backgroundColor: colors.surfaceElevated,
+                }}
+              >
+                <Image
+                  source={{ uri: course.thumbnail }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                  transition={200}
+                />
+              </View>
+            ) : null}
+
             <View style={styles.badgeRow}>
               <Badge label={course.category} variant="primary" size="sm" />
               {course.rating && (

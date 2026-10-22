@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Search, BookOpen, Clock, Star, Filter } from 'lucide-react-native';
@@ -162,6 +163,26 @@ export default function CoursesScreen() {
                   onPress={() => router.push({ pathname: '/course/[id]', params: { id: course.id } })}
                   padding={spacing.base}
                 >
+                  {course.thumbnail ? (
+                    <View
+                      style={{
+                        width: '100%',
+                        height: 150,
+                        borderRadius: radius.md,
+                        overflow: 'hidden',
+                        marginBottom: spacing.sm,
+                        backgroundColor: colors.surfaceElevated,
+                      }}
+                    >
+                      <Image
+                        source={{ uri: course.thumbnail }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    </View>
+                  ) : null}
+
                   <View style={styles.cardHeader}>
                     <Badge label={displayBadge} variant="primary" size="sm" />
                     <View style={styles.ratingRow}>

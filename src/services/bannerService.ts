@@ -39,8 +39,18 @@ export function subscribeToBanners(
     colRef,
     (snapshot) => {
       const list = snapshot.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Banner))
-        .filter((b) => b.isVisible !== false && b.imageUrl);
+        .map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            title: data.title || '',
+            imageUrl: data.imageUrl || data.image || '',
+            isVisible: data.isVisible !== false && data.active !== false,
+            order: data.order || 0,
+          } as Banner;
+        })
+        .filter((b) => b.isVisible && !!b.imageUrl);
       list.sort((a, b) => (a.order || 0) - (b.order || 0));
       onUpdate(list);
     },

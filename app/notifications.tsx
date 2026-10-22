@@ -33,6 +33,7 @@ import {
 import { firebaseFirestore } from '../src/services/firebase';
 import { useTheme } from '../src/theme';
 import { useAuthStore } from '../src/store/useAuthStore';
+import { useNotificationStore } from '../src/store/useNotificationStore';
 import { Screen } from '../src/components/common/Screen';
 import { EmptyState } from '../src/components/common/EmptyState';
 import { Badge } from '../src/components/common/Badge';
@@ -59,6 +60,8 @@ export default function NotificationsScreen() {
 
   // Real-time listener for notifications
   useEffect(() => {
+    useNotificationStore.getState().markAllAsRead();
+
     // 1. Listen to broadcast notifications
     const broadcastRef = collection(firebaseFirestore, 'notifications');
     const q = query(broadcastRef, limit(30));

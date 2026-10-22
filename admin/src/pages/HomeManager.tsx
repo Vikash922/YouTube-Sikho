@@ -133,6 +133,7 @@ export const HomeManager: React.FC = () => {
       if (editingBanner) {
         await updateDoc(doc(db, 'banners', editingBanner.id), {
           ...bannerForm,
+          active: bannerForm.isVisible,
           updatedAt: new Date().toISOString(),
         });
         showToast('Banner updated successfully!', 'success');
@@ -141,6 +142,7 @@ export const HomeManager: React.FC = () => {
         await setDoc(doc(db, 'banners', newId), {
           id: newId,
           ...bannerForm,
+          active: bannerForm.isVisible,
           order: banners.length + 1,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -167,7 +169,10 @@ export const HomeManager: React.FC = () => {
 
   const handleToggleBannerVisibility = async (b: AdminBanner) => {
     try {
-      await updateDoc(doc(db, 'banners', b.id), { isVisible: !b.isVisible });
+      await updateDoc(doc(db, 'banners', b.id), {
+        isVisible: !b.isVisible,
+        active: !b.isVisible,
+      });
       showToast(b.isVisible ? 'Banner hidden' : 'Banner active', 'info');
     } catch (err: any) {
       showToast('Could not update visibility', 'error');
