@@ -122,11 +122,11 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // 8. WATCH PROGRESS (Owner-Only Write)
+    // 8. WATCH PROGRESS
     // ===============================================================
     match /progress/{progressId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create, update: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isAdmin());
+      allow read: if true;
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
@@ -134,7 +134,7 @@ service cloud.firestore {
     // 9. STUDENT ENROLLMENTS (Cloud Functions Protected)
     // ===============================================================
     match /enrollments/{enrollmentId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 

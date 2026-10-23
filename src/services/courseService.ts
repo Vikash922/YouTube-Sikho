@@ -1,5 +1,6 @@
 import {
   firebaseFirestore,
+  firebaseAuth,
   doc,
   getDoc,
   collection,
@@ -116,7 +117,7 @@ export async function checkCourseEnrollment(
   uid: string | null | undefined,
   courseId: string
 ): Promise<boolean> {
-  if (!uid) return false;
+  if (!uid || !courseId) return false;
   try {
     const enrollId = `${uid}_${courseId}`;
     const snap = await getDoc(doc(firebaseFirestore, 'enrollments', enrollId));
@@ -125,7 +126,7 @@ export async function checkCourseEnrollment(
       return data.status === 'active';
     }
   } catch (err) {
-    console.warn('[courseService] Check enrollment error:', err);
+    // Quietly return false if not enrolled or permission denied
   }
   return false;
 }

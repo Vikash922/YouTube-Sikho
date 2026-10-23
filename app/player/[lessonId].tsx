@@ -109,23 +109,6 @@ export default function VideoPlayerScreen() {
   // Anti-Piracy Watermark State (Shifting position every 20s)
   const [watermarkPos, setWatermarkPos] = useState({ top: 20, left: 20 });
 
-  // 1. Screen capture prevention
-  useEffect(() => {
-    try {
-      const ScreenCapture = require('expo-screen-capture');
-      if (ScreenCapture && ScreenCapture.preventScreenCaptureAsync) {
-        ScreenCapture.preventScreenCaptureAsync();
-      }
-      return () => {
-        if (ScreenCapture && ScreenCapture.allowScreenCaptureAsync) {
-          ScreenCapture.allowScreenCaptureAsync();
-        }
-      };
-    } catch (e) {
-      // Safe fallback when running in standard Expo Go or Web
-    }
-  }, []);
-
   // 2. Load Course, Current Lesson, Enrollment & Progress
   useEffect(() => {
     let isMounted = true;

@@ -14,26 +14,10 @@ import { TextStyle, Platform } from 'react-native';
  */
 
 export const fontFamilies = {
-  headingBold: Platform.select({
-    ios: 'Poppins-Bold',
-    android: 'Poppins_700Bold',
-    default: 'Inter_700Bold',
-  }),
-  headingSemiBold: Platform.select({
-    ios: 'Poppins-SemiBold',
-    android: 'Poppins_600SemiBold',
-    default: 'Inter_600SemiBold',
-  }),
-  bodyRegular: Platform.select({
-    ios: 'Inter-Regular',
-    android: 'Inter_400Regular',
-    default: 'Inter_400Regular',
-  }),
-  bodyMedium: Platform.select({
-    ios: 'Inter-Medium',
-    android: 'Inter_500Medium',
-    default: 'Inter_500Medium',
-  }),
+  headingBold: 'Inter_700Bold',
+  headingSemiBold: 'Inter_600SemiBold',
+  bodyRegular: 'Inter_400Regular',
+  bodyMedium: 'Inter_500Medium',
 };
 
 export const typography = {

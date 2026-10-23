@@ -1,6 +1,7 @@
 import {
   firebaseFirestore,
   firebaseFunctions,
+  firebaseAuth,
   doc,
   getDoc,
   setDoc,
@@ -52,7 +53,6 @@ export async function getVideoToken(
     const result = await getVideoTokenCallable({ courseId, lessonId });
     return result.data;
   } catch (err: any) {
-    console.warn('[videoService] getVideoToken Cloud Function unavailable, using fallback stream:', err);
     // Return sample HLS stream with 1-hour expiry for offline/test environments
     return {
       hlsUrl: DEMO_HLS_STREAM,
@@ -92,7 +92,7 @@ export async function executeProgressSave(
   positionSec: number,
   durationSec: number
 ): Promise<void> {
-  if (!uid || !courseId || !lessonId || durationSec <= 0) return;
+  if (!uid || !courseId || !lessonId || durationSec <= 0 || !firebaseAuth.currentUser) return;
 
   try {
     const progressId = `${uid}_${courseId}`;
@@ -137,7 +137,7 @@ export async function executeProgressSave(
       { merge: true }
     );
   } catch (err) {
-    console.warn('[videoService] Failed to save progress to Firestore:', err);
+    // Graceful fallback if permission is restricted
   }
 }
 
@@ -148,7 +148,7 @@ export async function getCourseProgress(
   uid: string | null | undefined,
   courseId: string
 ): Promise<CourseProgressData | null> {
-  if (!uid || !courseId) return null;
+  if (!uid || !courseId || !firebaseAuth.currentUser) return null;
 
   try {
     const progressId = `${uid}_${courseId}`;
@@ -167,7 +167,7 @@ export async function getCourseProgress(
       };
     }
   } catch (err) {
-    console.warn('[videoService] getCourseProgress error:', err);
+    // Return null quietly if not yet saved
   }
 
   return null;

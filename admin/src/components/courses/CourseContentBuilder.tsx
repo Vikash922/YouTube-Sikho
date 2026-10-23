@@ -11,7 +11,6 @@ import {
   Eye,
   Lock,
   Save,
-  CheckCircle2,
   Layers,
 } from 'lucide-react';
 import { Section, Lesson } from '../../types';
