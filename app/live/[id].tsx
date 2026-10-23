@@ -47,6 +47,9 @@ import {
   LiveChatMessage,
 } from '../../src/services/liveClassService';
 import { LiveClassData, YouTubeLiveProvider } from '../../src/services/liveStreamProvider';
+import { InAppStreamPlayer } from '../../src/components/video/InAppStreamPlayer';
+import { doc, updateDoc, increment } from 'firebase/firestore';
+import { firebaseFirestore } from '../../src/services/firebase';
 
 export default function LiveRoomScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -81,9 +84,17 @@ export default function LiveRoomScreen() {
     opacity: shouldReduceMotion ? 1 : pulseOpacity.value,
   }));
 
-  // 1. Subscribe to Live Class doc in real time
+  // 1. Subscribe to Live Class doc in real time and track live viewer count
   useEffect(() => {
     if (!id) return;
+
+    // Increment viewer count when joining room
+    try {
+      updateDoc(doc(firebaseFirestore, 'liveClasses', id), {
+        viewerCount: increment(1),
+      });
+    } catch (e) {}
+
     const unsub = subscribeToSingleLiveClass(id, async (cls) => {
       setLiveClass(cls);
       setLoading(false);
@@ -93,7 +104,16 @@ export default function LiveRoomScreen() {
         setHasPermission(allowed);
       }
     });
-    return () => unsub();
+
+    return () => {
+      unsub();
+      // Decrement viewer count on leave
+      try {
+        updateDoc(doc(firebaseFirestore, 'liveClasses', id), {
+          viewerCount: increment(-1),
+        });
+      } catch (e) {}
+    };
   }, [id, user?.uid]);
 
   // 2. Subscribe to real-time chat
@@ -235,41 +255,21 @@ export default function LiveRoomScreen() {
         )}
       </View>
 
-      {/* 2. Video Stream HUD */}
+      {/* 2. In-App Video Stream Canvas */}
       <View style={[styles.playerContainer, { backgroundColor: '#000000' }]}>
-        <View style={styles.playerPlaceholder}>
-          <Radio size={40} color={isLive ? colors.error : colors.textMuted} strokeWidth={1.75} />
-          <Text style={[typography.title, { color: '#FFFFFF', marginTop: 12, textAlign: 'center' }]}>
-            {isLive ? 'Stream is Streaming Live' : 'Class Has Ended'}
-          </Text>
-          <Text style={[typography.caption, { color: 'rgba(255,255,255,0.7)', marginTop: 4, textAlign: 'center' }]}>
-            {liveClass.streamProvider === 'youtube'
-              ? 'Hosted via YouTube Live'
-              : 'Interactive Stream Session'}
-          </Text>
+        <InAppStreamPlayer
+          streamUrl={liveClass.streamUrl}
+          status={liveClass.status}
+          title={liveClass.title}
+          scheduledAt={liveClass.scheduledAt}
+        />
 
-          {liveClass.streamUrl ? (
-            <TouchableOpacity
-              onPress={handleOpenStreamExternally}
-              style={[
-                styles.openExternalBtn,
-                { backgroundColor: colors.primary, borderRadius: radius.button },
-              ]}
-            >
-              <ExternalLink size={16} color="#FFFFFF" strokeWidth={2} />
-              <Text style={[typography.small, { color: '#FFFFFF', fontWeight: '700', marginLeft: 6 }]}>
-                Watch Live Video
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* Viewers bar */}
+        {/* Real Viewers bar */}
         <View style={styles.playerOverlayFooter}>
           <View style={styles.viewerBadge}>
             <Users size={12} color="#FFFFFF" strokeWidth={2} />
             <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
-              {liveClass.viewerCount || 42} watching
+              {liveClass.viewerCount && liveClass.viewerCount > 0 ? liveClass.viewerCount : 1} watching
             </Text>
           </View>
 

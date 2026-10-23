@@ -28,6 +28,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../../src/services/firebase';
+import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { Screen } from '../../src/components/common/Screen';
@@ -181,7 +182,7 @@ export default function MyLearningScreen() {
                       }}
                     >
                       <Image
-                        source={{ uri: item.course.thumbnail }}
+                        source={{ uri: resolveImageUrl(item.course.thumbnail) }}
                         style={{ width: '100%', height: '100%' }}
                         contentFit="cover"
                         transition={200}

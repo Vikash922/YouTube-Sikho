@@ -11,6 +11,7 @@ import {
 import { db } from '../firebase';
 import { Button } from '../components/common/Button';
 import { useToast } from '../context/ToastContext';
+import { ImageUploadField } from '../components/common/ImageUploadField';
 
 export interface AdminAppSettings {
   appName: string;
@@ -223,18 +224,14 @@ export const Settings: React.FC = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
-                Logo Image URL
-              </label>
-              <input
-                type="url"
-                value={settings.logoUrl}
-                onChange={(e) => setSettings({ ...settings, logoUrl: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="https://..."
-              />
-            </div>
+            <ImageUploadField
+              label="App Logo Image"
+              value={settings.logoUrl}
+              onChange={(url) => setSettings({ ...settings, logoUrl: url })}
+              aspectRatio="1/1"
+              storageFolder="branding"
+              helpText="Upload brand logo from phone/PC, or paste Google Photos / Drive / image link."
+            />
           </div>
 
           {/* Color pickers */}

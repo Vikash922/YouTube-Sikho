@@ -24,6 +24,7 @@ import {
   subscribeToPublishedCourses,
 } from '../../src/services/courseService';
 import { subscribeToCategories } from '../../src/services/categoryService';
+import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 
 export default function CoursesScreen() {
   const router = useRouter();
@@ -175,7 +176,7 @@ export default function CoursesScreen() {
                       }}
                     >
                       <Image
-                        source={{ uri: course.thumbnail }}
+                        source={{ uri: resolveImageUrl(course.thumbnail) }}
                         style={{ width: '100%', height: '100%' }}
                         contentFit="cover"
                         transition={200}

@@ -239,20 +239,27 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
 
                     {/* Lesson Meta Controls */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Video specific: Bunny Video ID & Upload */}
+                      {/* Video specific: URL/ID input, Duration & Upload */}
                       {les.type === 'video' && (
-                        <div className="flex items-center gap-1.5">
-                          {les.videoId ? (
-                            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-mono text-[11px]">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                              <span className="truncate max-w-[120px]">{les.videoId}</span>
-                              {les.duration && <span>({les.duration})</span>}
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                              No Video
-                            </span>
-                          )}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <input
+                            type="text"
+                            value={les.videoId || ''}
+                            onChange={(e) =>
+                              handleUpdateLesson(sec.id, les.id, { videoId: e.target.value })
+                            }
+                            placeholder="YouTube link, MP4 URL, or Bunny ID"
+                            className="px-2 py-1 rounded bg-white dark:bg-dark-surface border border-slate-200 dark:border-slate-700 text-[11px] w-48 focus:outline-none focus:border-brand-500"
+                          />
+                          <input
+                            type="text"
+                            value={les.duration || ''}
+                            onChange={(e) =>
+                              handleUpdateLesson(sec.id, les.id, { duration: e.target.value })
+                            }
+                            placeholder="Duration (12:30)"
+                            className="px-2 py-1 rounded bg-white dark:bg-dark-surface border border-slate-200 dark:border-slate-700 text-[11px] w-24 focus:outline-none focus:border-brand-500"
+                          />
 
                           <button
                             type="button"
@@ -266,7 +273,7 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
                             className="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/60 text-brand-600 dark:text-brand-400 font-semibold flex items-center gap-1 text-[11px] transition-colors"
                           >
                             <Upload className="w-3 h-3" />
-                            {les.videoId ? 'Replace' : 'Upload Bunny'}
+                            <span>Upload File</span>
                           </button>
                         </div>
                       )}

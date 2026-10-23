@@ -46,6 +46,8 @@ import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
+import { WebView } from 'react-native-webview';
+import { extractYouTubeId } from '../../src/components/video/InAppStreamPlayer';
 import {
   getCourseById,
   checkCourseEnrollment,
@@ -360,6 +362,68 @@ export default function VideoPlayerScreen() {
           },
         ]}
       >
+        {/* Real Embedded Video Playback Layer */}
+        {(() => {
+          const ytId = extractYouTubeId(currentLesson?.videoId);
+          if (Platform.OS === 'web') {
+            if (ytId) {
+              return (
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`}
+                  style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', top: 0, left: 0 }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              );
+            }
+            if (currentLesson?.videoId?.startsWith('http')) {
+              return (
+                <video
+                  src={currentLesson.videoId}
+                  autoPlay
+                  controls
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'absolute', top: 0, left: 0, backgroundColor: '#000000' }}
+                />
+              );
+            }
+            return null;
+          }
+
+          if (ytId) {
+            const html = `
+              <!DOCTYPE html>
+              <html>
+                <head>
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                  <style>
+                    * { margin:0; padding:0; box-sizing:border-box; background:#000; }
+                    html, body { width:100%; height:100%; overflow:hidden; }
+                    iframe { width:100%; height:100%; border:none; }
+                  </style>
+                </head>
+                <body>
+                  <iframe src="https://www.youtube.com/embed/${ytId}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1" allowfullscreen></iframe>
+                </body>
+              </html>
+            `;
+            return (
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                <WebView
+                  originWhitelist={['*']}
+                  source={{ html }}
+                  allowsInlineMediaPlayback={true}
+                  mediaPlaybackRequiresUserAction={false}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  style={{ flex: 1, backgroundColor: '#000000' }}
+                />
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         <TouchableOpacity
           activeOpacity={1}
           onPress={() => {

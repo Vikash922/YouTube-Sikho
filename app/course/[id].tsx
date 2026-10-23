@@ -37,6 +37,7 @@ import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
+import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 import {
   getCourseById,
   subscribeToEnrollment,
@@ -235,7 +236,7 @@ export default function CourseDetailScreen() {
                 }}
               >
                 <Image
-                  source={{ uri: course.thumbnail }}
+                  source={{ uri: resolveImageUrl(course.thumbnail) }}
                   style={{ width: '100%', height: '100%' }}
                   contentFit="cover"
                   transition={200}

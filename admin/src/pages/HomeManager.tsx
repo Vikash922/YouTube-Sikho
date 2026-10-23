@@ -22,6 +22,7 @@ import {
 import { db } from '../firebase';
 import { Button } from '../components/common/Button';
 import { useToast } from '../context/ToastContext';
+import { ImageUploadField } from '../components/common/ImageUploadField';
 
 export interface AdminBanner {
   id: string;
@@ -396,19 +397,14 @@ export const HomeManager: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
-                  Image URL (16:7 Aspect Ratio)
-                </label>
-                <input
-                  type="url"
-                  value={bannerForm.imageUrl}
-                  onChange={(e) => setBannerForm({ ...bannerForm, imageUrl: e.target.value })}
-                  placeholder="https://..."
-                  required
-                  className="w-full px-3.5 py-2.5 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-sm text-light-text dark:text-dark-text focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
+              <ImageUploadField
+                label="Banner Image (16:7 Aspect Ratio)"
+                value={bannerForm.imageUrl}
+                onChange={(url) => setBannerForm({ ...bannerForm, imageUrl: url })}
+                aspectRatio="16/7"
+                storageFolder="banners"
+                helpText="Upload directly from your phone gallery or paste any Google Photos / Drive / image link."
+              />
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

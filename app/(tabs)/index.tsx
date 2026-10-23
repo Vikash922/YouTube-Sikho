@@ -38,6 +38,7 @@ import {
   HomeSectionConfig,
   DEFAULT_HOME_SECTIONS,
 } from '../../src/services/bannerService';
+import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 import { Linking } from 'react-native';
 
 export default function HomeScreen() {
@@ -239,7 +240,7 @@ export default function HomeScreen() {
                   ]}
                 >
                   <Image
-                    source={{ uri: b.imageUrl }}
+                    source={{ uri: resolveImageUrl(b.imageUrl) }}
                     style={{ width: '100%', height: '100%' }}
                     contentFit="cover"
                   />
@@ -413,7 +414,7 @@ export default function HomeScreen() {
                         }}
                       >
                         <Image
-                          source={{ uri: course.thumbnail }}
+                          source={{ uri: resolveImageUrl(course.thumbnail) }}
                           style={{ width: '100%', height: '100%' }}
                           contentFit="cover"
                           transition={200}

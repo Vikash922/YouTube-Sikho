@@ -17,6 +17,7 @@ import { collection, query, orderBy, onSnapshot, getDocs, addDoc, serverTimestam
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { Course } from '../types';
+import { ImageUploadField } from '../components/common/ImageUploadField';
 
 interface BroadcastRecord {
   id: string;
@@ -298,15 +299,14 @@ export const Notifications: React.FC = () => {
                 </span>
               </div>
 
-              <div>
-                <input
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="Optional Banner Image URL (https://...)"
-                  className="w-full px-3.5 py-2 rounded-btn border border-light-border dark:border-dark-border bg-white dark:bg-dark-card text-light-text dark:text-dark-text text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
+              <ImageUploadField
+                label="Optional Notification Banner Image"
+                value={imageUrl}
+                onChange={(url) => setImageUrl(url)}
+                aspectRatio="16/9"
+                storageFolder="notifications"
+                helpText="Attach an image from your device gallery or paste Google Photos / Drive / image link."
+              />
             </div>
 
             {/* Action / Deep Link */}

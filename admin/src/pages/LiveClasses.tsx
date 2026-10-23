@@ -27,6 +27,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Course } from '../types';
+import { LiveStudioModal } from '../components/live/LiveStudioModal';
 
 export interface AdminLiveClass {
   id: string;
@@ -50,6 +51,7 @@ export const LiveClasses: React.FC = () => {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeStudioClass, setActiveStudioClass] = useState<AdminLiveClass | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -185,6 +187,44 @@ export const LiveClasses: React.FC = () => {
     }
   };
 
+  const handleStartInstantStudio = async (existingClass?: AdminLiveClass) => {
+    if (existingClass) {
+      setActiveStudioClass(existingClass);
+      return;
+    }
+
+    try {
+      const docRef = await addDoc(collection(db, 'liveClasses'), {
+        title: `Live Studio Class - ${new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+        courseId: 'free_for_all',
+        courseTitle: 'Free for all students',
+        scheduledAt: new Date().toISOString(),
+        status: 'live',
+        streamUrl: 'studio',
+        streamProvider: 'studio',
+        chatEnabled: true,
+        viewerCount: 1,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      setActiveStudioClass({
+        id: docRef.id,
+        title: `Live Studio Class - ${new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+        courseId: 'free_for_all',
+        courseTitle: 'Free for all students',
+        scheduledAt: new Date().toISOString(),
+        status: 'live',
+        streamUrl: 'studio',
+        streamProvider: 'youtube',
+        chatEnabled: true,
+        viewerCount: 1,
+      });
+    } catch (e: any) {
+      setFeedback({ type: 'error', message: e.message || 'Could not start studio live.' });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
@@ -194,16 +234,25 @@ export const LiveClasses: React.FC = () => {
             Live Interactive Classes
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Schedule live masterclasses, launch real-time video streams, and monitor student participation.
+            Broadcast camera and screen share directly from browser, or host YouTube live sessions.
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-btn bg-brand-600 hover:bg-brand-700 text-white font-semibold text-sm shadow-md shadow-brand-500/20 transition-all self-start md:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Schedule Live Class</span>
-        </button>
+        <div className="flex items-center gap-3 self-start md:self-auto flex-wrap">
+          <button
+            onClick={() => handleStartInstantStudio()}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-btn bg-red-600 hover:bg-red-700 text-white font-semibold text-sm shadow-md shadow-red-500/20 transition-all animate-pulse"
+          >
+            <Radio className="w-4 h-4" />
+            <span>Go Live (Camera & Screen Share)</span>
+          </button>
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-btn bg-slate-800 hover:bg-slate-900 text-white font-semibold text-sm shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Schedule Session</span>
+          </button>
+        </div>
       </div>
 
       {feedback && (
@@ -314,6 +363,15 @@ export const LiveClasses: React.FC = () => {
 
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleStartInstantStudio(cls)}
+                            className="px-2.5 py-1 rounded-lg bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/60 text-brand-600 dark:text-brand-400 font-semibold text-xs flex items-center gap-1 transition-all"
+                            title="Open Camera & Screen Share Studio"
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            <span>Studio</span>
+                          </button>
+
                           {!isLive && !isEnded && (
                             <button
                               onClick={() => handleStatusChange(cls.id, 'live')}
@@ -494,6 +552,15 @@ export const LiveClasses: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Live Studio Camera & Screen Broadcast Modal */}
+      {activeStudioClass && (
+        <LiveStudioModal
+          isOpen={true}
+          onClose={() => setActiveStudioClass(null)}
+          liveClass={activeStudioClass}
+        />
       )}
     </div>
   );

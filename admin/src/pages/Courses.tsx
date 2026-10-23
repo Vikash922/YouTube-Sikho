@@ -22,6 +22,7 @@ import { Course, Section } from '../types';
 import { Button } from '../components/common/Button';
 import { CourseContentBuilder } from '../components/courses/CourseContentBuilder';
 import { useToast } from '../context/ToastContext';
+import { ImageUploadField } from '../components/common/ImageUploadField';
 
 export const Courses: React.FC = () => {
   const { showToast } = useToast();
@@ -173,6 +174,7 @@ export const Courses: React.FC = () => {
       await updateDoc(doc(db, 'courses', activeCurriculumCourse.id), {
         sections: curriculumSections,
         totalLessons,
+        lessonsCount: totalLessons,
         updatedAt: new Date().toISOString(),
       });
 
@@ -351,12 +353,12 @@ export const Courses: React.FC = () => {
               {/* Action Buttons */}
               <div className="p-4 border-t border-light-border dark:border-dark-border bg-slate-50/50 dark:bg-slate-900/30 flex items-center justify-between gap-2">
                 <Button
-                  variant="outline"
+                  variant="primary"
                   size="sm"
                   onClick={() => handleOpenCurriculum(course)}
                   className="flex-1 text-xs"
                 >
-                  <Layers className="w-3.5 h-3.5 mr-1 text-brand-500" /> Curriculum
+                  <Layers className="w-3.5 h-3.5 mr-1" /> Add/Manage Lessons & Videos
                 </Button>
 
                 <Button
@@ -490,20 +492,14 @@ export const Courses: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Thumbnail Image URL
-                </label>
-                <input
-                  type="text"
-                  value={courseForm.thumbnailUrl}
-                  onChange={(e) =>
-                    setCourseForm({ ...courseForm, thumbnailUrl: e.target.value })
-                  }
-                  placeholder="https://..."
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
-                />
-              </div>
+              <ImageUploadField
+                label="Course Cover Thumbnail"
+                value={courseForm.thumbnailUrl}
+                onChange={(url) => setCourseForm({ ...courseForm, thumbnailUrl: url })}
+                aspectRatio="16/9"
+                storageFolder="thumbnails"
+                helpText="Upload course cover from phone/PC, or paste Google Photos / Drive / image link."
+              />
 
               <div className="flex items-center gap-6 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
