@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Platform, Text, ActivityIndicator } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { Radio, VideoOff, Clock } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { Radio, VideoOff, Clock, Sparkles } from 'lucide-react-native';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { firebaseFirestore } from '../../services/firebase';
 
 interface InAppStreamPlayerProps {
+  classId?: string;
   streamUrl?: string | null;
   status: 'scheduled' | 'live' | 'ended';
   title?: string;
@@ -21,11 +25,34 @@ export function extractYouTubeId(url?: string | null): string | null {
 }
 
 export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
+  classId,
   streamUrl,
   status,
   title,
   scheduledAt,
 }) => {
+  const [liveFrame, setLiveFrame] = useState<string | null>(null);
+
+  // Subscribe to live frame for studio broadcasts
+  useEffect(() => {
+    if (!classId) return;
+
+    const unsub = onSnapshot(
+      doc(firebaseFirestore, 'liveClasses', classId),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.previewFrame) {
+            setLiveFrame(data.previewFrame);
+          }
+        }
+      },
+      (err) => console.warn('Live frame stream error:', err)
+    );
+
+    return () => unsub();
+  }, [classId]);
+
   // If not live
   if (status === 'ended') {
     return (
@@ -33,7 +60,7 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
         <VideoOff size={36} color="#94A3B8" strokeWidth={1.75} />
         <Text style={styles.placeholderTitle}>Class Has Ended</Text>
         <Text style={styles.placeholderSubtitle}>
-          The live interactive session has concluded.
+          The live interactive masterclass has concluded.
         </Text>
       </View>
     );
@@ -55,9 +82,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
 
   const ytId = extractYouTubeId(streamUrl);
 
-  // If running on Web
-  if (Platform.OS === 'web') {
-    if (ytId) {
+  // 1. YouTube Live Embed (Web & Native)
+  if (ytId) {
+    if (Platform.OS === 'web') {
       return (
         <View style={styles.container}>
           <iframe
@@ -70,33 +97,6 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
       );
     }
 
-    if (streamUrl && streamUrl.startsWith('http')) {
-      return (
-        <View style={styles.container}>
-          <video
-            src={streamUrl}
-            autoPlay
-            controls
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000000' }}
-          />
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.placeholderContainer}>
-        <Radio size={36} color="#EF4444" strokeWidth={1.75} />
-        <Text style={styles.placeholderTitle}>Studio Broadcast is Active</Text>
-        <Text style={styles.placeholderSubtitle}>
-          Instructor is broadcasting live from Admin Studio.
-        </Text>
-      </View>
-    );
-  }
-
-  // Native Mobile Player (WebView embedded player)
-  if (ytId) {
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -144,8 +144,22 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
     );
   }
 
-  // Fallback for direct MP4 or other video sources
-  if (streamUrl && streamUrl.startsWith('http')) {
+  // 2. Direct MP4 Video URL
+  if (streamUrl && streamUrl.startsWith('http') && streamUrl !== 'studio') {
+    if (Platform.OS === 'web') {
+      return (
+        <View style={styles.container}>
+          <video
+            src={streamUrl}
+            autoPlay
+            controls
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000000' }}
+          />
+        </View>
+      );
+    }
+
     const videoHtml = `
       <!DOCTYPE html>
       <html>
@@ -176,14 +190,34 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
     );
   }
 
-  // Studio live fallback
+  // 3. Admin Studio Broadcast (Live Camera & Screen Share from Admin Page)
+  if (liveFrame) {
+    return (
+      <View style={styles.container}>
+        <Image
+          source={{ uri: liveFrame }}
+          style={styles.liveFrameImage}
+          contentFit="contain"
+          cachePolicy="none"
+          priority="high"
+        />
+        <View style={styles.liveIndicatorPill}>
+          <View style={styles.liveIndicatorDot} />
+          <Text style={styles.liveIndicatorText}>STUDIO LIVE STREAM</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Waiting for instructor feed
   return (
     <View style={styles.placeholderContainer}>
-      <Radio size={36} color="#EF4444" strokeWidth={1.75} />
-      <Text style={styles.placeholderTitle}>Studio Stream Active</Text>
+      <Radio size={40} color="#EF4444" strokeWidth={1.75} />
+      <Text style={styles.placeholderTitle}>Studio Broadcast Active</Text>
       <Text style={styles.placeholderSubtitle}>
-        The instructor is streaming live from the web broadcast studio.
+        Connecting to the instructor's live camera and screen share...
       </Text>
+      <ActivityIndicator size="small" color="#EF4444" style={{ marginTop: 12 }} />
     </View>
   );
 };
@@ -194,6 +228,7 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#000000',
     overflow: 'hidden',
+    position: 'relative',
   },
   webview: {
     flex: 1,
@@ -224,5 +259,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
+  },
+  liveFrameImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
+  },
+  liveIndicatorPill: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  liveIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EF4444',
+  },
+  liveIndicatorText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });

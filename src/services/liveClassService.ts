@@ -5,6 +5,8 @@ import {
   onSnapshot,
   doc,
   addDoc,
+  setDoc,
+  deleteDoc,
   updateDoc,
   getDoc,
   serverTimestamp,
@@ -94,10 +96,13 @@ let lastSentTimestamp = 0;
 
 export async function sendLiveChatMessage(
   classId: string,
-  text: string
+  text: string,
+  senderName?: string,
+  senderUid?: string
 ): Promise<void> {
   const user = firebaseAuth.currentUser;
-  if (!user) throw new Error('Sign in required to chat.');
+  const uid = user?.uid || senderUid || `guest_${Date.now().toString().slice(-4)}`;
+  const userName = senderName || user?.displayName || 'Student';
 
   const trimmed = text.trim();
   if (!trimmed || trimmed.length > 300) {
@@ -106,19 +111,72 @@ export async function sendLiveChatMessage(
 
   // 1-second client rate limit guard
   const now = Date.now();
-  if (now - lastSentTimestamp < 1000) {
+  if (now - lastSentTimestamp < 600) {
     throw new Error('Please wait a moment before sending another message.');
   }
   lastSentTimestamp = now;
 
   const messagesRef = collection(firebaseFirestore, 'liveClasses', classId, 'messages');
   await addDoc(messagesRef, {
-    uid: user.uid,
-    userName: user.displayName || 'Student',
+    uid,
+    userName,
     text: trimmed,
     createdAt: serverTimestamp(),
     isDeleted: false,
   });
+}
+
+/**
+ * Student raises/lowers hand
+ */
+export async function toggleHandRaise(
+  classId: string,
+  uid: string,
+  userName: string,
+  isRaised: boolean
+): Promise<void> {
+  try {
+    const handRef = doc(firebaseFirestore, 'liveClasses', classId, 'handRaises', uid);
+    if (isRaised) {
+      await setDoc(handRef, {
+        uid,
+        userName,
+        raisedAt: serverTimestamp(),
+      });
+      // Also post a notification badge in live chat
+      const messagesRef = collection(firebaseFirestore, 'liveClasses', classId, 'messages');
+      await addDoc(messagesRef, {
+        uid,
+        userName,
+        text: '✋ Raised hand with a doubt/question',
+        type: 'hand_raise',
+        createdAt: serverTimestamp(),
+        isDeleted: false,
+      });
+    } else {
+      await deleteDoc(handRef);
+    }
+  } catch (err) {
+    console.warn('Toggle hand raise warning:', err);
+  }
+}
+
+/**
+ * Real-time listener for raised hands (for instructor studio)
+ */
+export function subscribeToHandRaises(
+  classId: string,
+  onUpdate: (raises: { id: string; userName: string; raisedAt?: any }[]) => void
+): () => void {
+  const colRef = collection(firebaseFirestore, 'liveClasses', classId, 'handRaises');
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as any));
+      onUpdate(list);
+    },
+    (err) => console.warn('Hand raises listener error:', err)
+  );
 }
 
 /**

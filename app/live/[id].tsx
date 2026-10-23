@@ -43,6 +43,7 @@ import {
   subscribeToSingleLiveClass,
   subscribeToLiveChat,
   sendLiveChatMessage,
+  toggleHandRaise,
   canStudentJoinLiveClass,
   LiveChatMessage,
 } from '../../src/services/liveClassService';
@@ -132,7 +133,12 @@ export default function LiveRoomScreen() {
     setSending(true);
 
     try {
-      await sendLiveChatMessage(id, text);
+      await sendLiveChatMessage(
+        id,
+        text,
+        profile?.name || user?.displayName || 'Student',
+        user?.uid
+      );
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (err: any) {
       Alert.alert('Chat Error', err.message || 'Could not send message.');
@@ -141,15 +147,18 @@ export default function LiveRoomScreen() {
     }
   };
 
-  const handleRaiseHand = () => {
-    setHandRaised((prev) => !prev);
+  const handleRaiseHand = async () => {
+    const nextState = !handRaised;
+    setHandRaised(nextState);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert(
-      !handRaised ? 'Hand Raised ✋' : 'Hand Lowered',
-      !handRaised
-        ? 'The mentor has been notified that you have a question.'
-        : 'Your question notification has been cleared.'
-    );
+    if (id) {
+      await toggleHandRaise(
+        id,
+        user?.uid || `guest_${Date.now().toString().slice(-4)}`,
+        profile?.name || user?.displayName || 'Student',
+        nextState
+      );
+    }
   };
 
   const handleOpenStreamExternally = () => {
@@ -258,6 +267,7 @@ export default function LiveRoomScreen() {
       {/* 2. In-App Video Stream Canvas */}
       <View style={[styles.playerContainer, { backgroundColor: '#000000' }]}>
         <InAppStreamPlayer
+          classId={id}
           streamUrl={liveClass.streamUrl}
           status={liveClass.status}
           title={liveClass.title}
@@ -333,25 +343,35 @@ export default function LiveRoomScreen() {
                 style={[
                   styles.messageBubble,
                   {
-                    backgroundColor: isMe ? colors.primaryLight : colors.surface,
-                    borderColor: colors.border,
+                    backgroundColor: item.isAdmin
+                      ? colors.primaryLight
+                      : isMe
+                      ? colors.surfaceElevated
+                      : colors.surface,
+                    borderColor: item.isAdmin ? colors.primary : colors.border,
                     alignSelf: isMe ? 'flex-end' : 'flex-start',
                     borderRadius: radius.card,
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    typography.caption,
-                    {
-                      color: isMe ? colors.primary : colors.textMuted,
-                      fontWeight: '700',
-                      marginBottom: 2,
-                    },
-                  ]}
-                >
-                  {item.userName || 'Student'}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                  <Text
+                    style={[
+                      typography.caption,
+                      {
+                        color: item.isAdmin ? colors.primary : isMe ? colors.primary : colors.textMuted,
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {item.userName || 'Student'}
+                  </Text>
+                  {item.isAdmin && (
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.primary, textTransform: 'uppercase' }}>
+                      • Host
+                    </Text>
+                  )}
+                </View>
                 <Text style={[typography.body, { color: colors.text, fontSize: 14 }]}>
                   {item.text}
                 </Text>
