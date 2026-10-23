@@ -9,3 +9,7 @@ admin/dist/
 functions/node_modules/
 functions/lib/
 .firebase/
+.env
+.env.*
+*.env
+admin/.env

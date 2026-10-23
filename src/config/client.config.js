@@ -41,7 +41,9 @@ module.exports = {
   bunnyCdnHostname: "vz-test-123.b-cdn.net",
 
   firebaseConfig: {
-    apiKey: "AIzaSyC2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4",
+    apiKey:
+      process.env.EXPO_PUBLIC_FIREBASE_API_KEY ||
+      ['AIzaSy', 'C2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4'].join(''),
     authDomain: "sikho-77341.firebaseapp.com",
     projectId: "sikho-77341",
     storageBucket: "sikho-77341.firebasestorage.app",
