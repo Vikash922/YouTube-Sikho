@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Linking,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ import {
   BookOpen,
   ExternalLink,
   Clock,
-  Sparkles,
+  Trash2,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/theme';
@@ -39,6 +40,8 @@ export default function NotificationsScreen() {
   const unreadCount = useNotificationStore((state) => state.unreadCount);
   const markAsRead = useNotificationStore((state) => state.markAsRead);
   const markAllAsRead = useNotificationStore((state) => state.markAllAsRead);
+  const deleteNotification = useNotificationStore((state) => state.deleteNotification);
+  const clearAll = useNotificationStore((state) => state.clearAll);
 
   const handleNotificationPress = (item: InAppNotification) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -56,6 +59,29 @@ export default function NotificationsScreen() {
   const handleMarkAll = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     markAllAsRead();
+  };
+
+  const handleDeleteItem = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    deleteNotification(id);
+  };
+
+  const handleClearAll = () => {
+    Alert.alert(
+      'Clear All Notifications',
+      'Are you sure you want to remove all notifications?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            clearAll();
+          },
+        },
+      ]
+    );
   };
 
   const formatTimeAgo = (dateVal: any): string => {
@@ -107,19 +133,35 @@ export default function NotificationsScreen() {
           </Text>
         </View>
 
-        {unreadCount > 0 && (
-          <TouchableOpacity
-            onPress={handleMarkAll}
-            style={[
-              styles.markAllBtn,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <CheckCheck size={16} color={colors.primary} strokeWidth={2} />
-            <Text style={[typography.small, { color: colors.primary, fontWeight: '700', marginLeft: 4 }]}>
-              Mark all read
-            </Text>
-          </TouchableOpacity>
+        {notifications.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {unreadCount > 0 && (
+              <TouchableOpacity
+                onPress={handleMarkAll}
+                style={[
+                  styles.markAllBtn,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                ]}
+                accessibilityLabel="Mark all read"
+              >
+                <CheckCheck size={16} color={colors.primary} strokeWidth={2} />
+                <Text style={[typography.small, { color: colors.primary, fontWeight: '700', marginLeft: 4 }]}>
+                  Read all
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={handleClearAll}
+              style={[
+                styles.iconActionBtn,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+              accessibilityLabel="Clear all notifications"
+            >
+              <Trash2 size={16} color={colors.error} strokeWidth={1.75} />
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
@@ -187,14 +229,29 @@ export default function NotificationsScreen() {
                       </Text>
                     </View>
 
-                    {timeAgo ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                        <Clock size={12} color={colors.textMuted} />
-                        <Text style={[typography.caption, { color: colors.textMuted }]}>
-                          {timeAgo}
-                        </Text>
-                      </View>
-                    ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {timeAgo ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Clock size={12} color={colors.textMuted} />
+                          <Text style={[typography.caption, { color: colors.textMuted }]}>
+                            {timeAgo}
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleDeleteItem(item.id);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete notification"
+                        style={styles.deleteItemBtn}
+                      >
+                        <Trash2 size={15} color={colors.textMuted} strokeWidth={1.75} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <Text
@@ -289,6 +346,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
+  },
+  iconActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteItemBtn: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContent: {
     paddingVertical: 16,

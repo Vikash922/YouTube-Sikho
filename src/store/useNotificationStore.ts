@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { collection, onSnapshot, query, limit } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { firebaseFirestore } from '../services/firebase';
 
 export interface InAppNotification {
@@ -17,43 +18,79 @@ export interface InAppNotification {
 }
 
 interface NotificationState {
+  rawNotifications: InAppNotification[];
   notifications: InAppNotification[];
   readIds: string[];
+  deletedIds: string[];
   unreadCount: number;
   isInitialized: boolean;
   initListener: () => () => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
+  deleteNotification: (id: string) => void;
   clearAll: () => void;
 }
 
-const STORAGE_KEY = 'user_read_notification_ids';
+const READ_STORAGE_KEY = '@app_read_notification_ids';
+const DELETED_STORAGE_KEY = '@app_deleted_notification_ids';
 
-const loadStoredReadIds = (): string[] => {
+const loadPersistedIds = async (key: string): Promise<string[]> => {
   try {
-    if (typeof localStorage !== 'undefined') {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) return JSON.parse(stored);
-    }
-  } catch (e) {}
+    const stored = await AsyncStorage.getItem(key);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
+      }
+    } catch {}
+  }
   return [];
 };
 
-const saveStoredReadIds = (ids: string[]) => {
+const savePersistedIds = async (key: string, ids: string[]) => {
   try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-    }
-  } catch (e) {}
+    await AsyncStorage.setItem(key, JSON.stringify(ids));
+  } catch (e) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(key, JSON.stringify(ids));
+      }
+    } catch {}
+  }
 };
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
+  rawNotifications: [],
   notifications: [],
-  readIds: loadStoredReadIds(),
+  readIds: [],
+  deletedIds: [],
   unreadCount: 0,
   isInitialized: false,
 
   initListener: () => {
+    // 1. Load persisted read and deleted ids from AsyncStorage immediately
+    Promise.all([
+      loadPersistedIds(READ_STORAGE_KEY),
+      loadPersistedIds(DELETED_STORAGE_KEY),
+    ]).then(([persistedRead, persistedDeleted]) => {
+      const { rawNotifications } = get();
+      const visibleList = rawNotifications.filter(
+        (n) => !persistedDeleted.includes(n.id)
+      );
+      const unread = visibleList.filter(
+        (n) => !persistedRead.includes(n.id)
+      ).length;
+
+      set({
+        readIds: persistedRead,
+        deletedIds: persistedDeleted,
+        notifications: visibleList,
+        unreadCount: unread,
+      });
+    });
+
     const broadcastRef = collection(firebaseFirestore, 'notifications');
     const q = query(broadcastRef, limit(50));
 
@@ -78,16 +115,22 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
         // Sort descending (newest first)
         list.sort((a, b) => {
-          const tA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt || 0).getTime();
-          const tB = b.createdAt?.seconds ? b.createdAt.seconds * 1000 : new Date(b.createdAt || 0).getTime();
+          const tA = a.createdAt?.seconds
+            ? a.createdAt.seconds * 1000
+            : new Date(a.createdAt || 0).getTime();
+          const tB = b.createdAt?.seconds
+            ? b.createdAt.seconds * 1000
+            : new Date(b.createdAt || 0).getTime();
           return tB - tA;
         });
 
-        const currentReadIds = get().readIds;
-        const unread = list.filter((n) => !currentReadIds.includes(n.id)).length;
+        const { readIds, deletedIds } = get();
+        const visibleList = list.filter((n) => !deletedIds.includes(n.id));
+        const unread = visibleList.filter((n) => !readIds.includes(n.id)).length;
 
         set({
-          notifications: list,
+          rawNotifications: list,
+          notifications: visibleList,
           unreadCount: unread,
           isInitialized: true,
         });
@@ -104,23 +147,46 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
     const { readIds, notifications } = get();
     if (!readIds.includes(id)) {
       const updatedReadIds = [...readIds, id];
-      saveStoredReadIds(updatedReadIds);
+      savePersistedIds(READ_STORAGE_KEY, updatedReadIds);
       const unread = notifications.filter((n) => !updatedReadIds.includes(n.id)).length;
       set({ readIds: updatedReadIds, unreadCount: unread });
     }
   },
 
   markAllAsRead: () => {
-    const { notifications } = get();
-    const allIds = notifications.map((n) => n.id);
-    saveStoredReadIds(allIds);
+    const { notifications, readIds } = get();
+    const allIds = Array.from(new Set([...readIds, ...notifications.map((n) => n.id)]));
+    savePersistedIds(READ_STORAGE_KEY, allIds);
     set({ readIds: allIds, unreadCount: 0 });
   },
 
+  deleteNotification: (id: string) => {
+    const { deletedIds, rawNotifications, readIds } = get();
+    const updatedDeletedIds = Array.from(new Set([...deletedIds, id]));
+    savePersistedIds(DELETED_STORAGE_KEY, updatedDeletedIds);
+    const visibleList = rawNotifications.filter(
+      (n) => !updatedDeletedIds.includes(n.id)
+    );
+    const unread = visibleList.filter(
+      (n) => !readIds.includes(n.id)
+    ).length;
+    set({
+      deletedIds: updatedDeletedIds,
+      notifications: visibleList,
+      unreadCount: unread,
+    });
+  },
+
   clearAll: () => {
-    const { notifications } = get();
-    const allIds = notifications.map((n) => n.id);
-    saveStoredReadIds(allIds);
-    set({ readIds: allIds, unreadCount: 0 });
+    const { deletedIds, notifications } = get();
+    const allDeleted = Array.from(
+      new Set([...deletedIds, ...notifications.map((n) => n.id)])
+    );
+    savePersistedIds(DELETED_STORAGE_KEY, allDeleted);
+    set({
+      deletedIds: allDeleted,
+      notifications: [],
+      unreadCount: 0,
+    });
   },
 }));

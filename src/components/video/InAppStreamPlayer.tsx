@@ -33,9 +33,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
 }) => {
   const [liveFrame, setLiveFrame] = useState<string | null>(null);
 
-  // Subscribe to live frame for studio broadcasts
+  // Subscribe to live frame for studio broadcasts (only if live)
   useEffect(() => {
-    if (!classId) return;
+    if (!classId || status !== 'live') return;
 
     const unsub = onSnapshot(
       doc(firebaseFirestore, 'liveClasses', classId),
@@ -51,21 +51,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
     );
 
     return () => unsub();
-  }, [classId]);
+  }, [classId, status]);
 
-  // If not live
-  if (status === 'ended') {
-    return (
-      <View style={styles.placeholderContainer}>
-        <VideoOff size={36} color="#94A3B8" strokeWidth={1.75} />
-        <Text style={styles.placeholderTitle}>Class Has Ended</Text>
-        <Text style={styles.placeholderSubtitle}>
-          The live interactive masterclass has concluded.
-        </Text>
-      </View>
-    );
-  }
-
+  // 1. Scheduled State
   if (status === 'scheduled') {
     return (
       <View style={styles.placeholderContainer}>
@@ -81,18 +69,39 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
   }
 
   const ytId = extractYouTubeId(streamUrl);
+  const isDirectVideo = streamUrl && streamUrl.startsWith('http') && streamUrl !== 'studio';
+  const isEnded = status === 'ended';
 
-  // 1. YouTube Live Embed (Web & Native)
+  // 2. Ended State without a replay video
+  if (isEnded && !ytId && !isDirectVideo) {
+    return (
+      <View style={styles.placeholderContainer}>
+        <VideoOff size={36} color="#94A3B8" strokeWidth={1.75} />
+        <Text style={styles.placeholderTitle}>Class Has Ended</Text>
+        <Text style={styles.placeholderSubtitle}>
+          The live masterclass has concluded. Replay recording will be available once uploaded.
+        </Text>
+      </View>
+    );
+  }
+
+  // 3. YouTube Embed (Live or Recorded Replay)
   if (ytId) {
     if (Platform.OS === 'web') {
       return (
         <View style={styles.container}>
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`}
+            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1`}
             style={{ width: '100%', height: '100%', border: 'none' }}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
           />
+          {isEnded && (
+            <View style={styles.replayIndicatorPill}>
+              <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
+              <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
+            </View>
+          )}
         </View>
       );
     }
@@ -140,22 +149,34 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
           )}
           startInLoadingState={true}
         />
+        {isEnded && (
+          <View style={styles.replayIndicatorPill}>
+            <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
+            <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
+          </View>
+        )}
       </View>
     );
   }
 
-  // 2. Direct MP4 Video URL
-  if (streamUrl && streamUrl.startsWith('http') && streamUrl !== 'studio') {
+  // 4. Direct MP4 Video URL (Live or Recorded Replay)
+  if (isDirectVideo) {
     if (Platform.OS === 'web') {
       return (
         <View style={styles.container}>
           <video
-            src={streamUrl}
+            src={streamUrl!}
             autoPlay
             controls
             playsInline
             style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000000' }}
           />
+          {isEnded && (
+            <View style={styles.replayIndicatorPill}>
+              <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
+              <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
+            </View>
+          )}
         </View>
       );
     }
@@ -186,11 +207,17 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
           mediaPlaybackRequiresUserAction={false}
           style={styles.webview}
         />
+        {isEnded && (
+          <View style={styles.replayIndicatorPill}>
+            <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
+            <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
+          </View>
+        )}
       </View>
     );
   }
 
-  // 3. Admin Studio Broadcast (Live Camera & Screen Share from Admin Page)
+  // 5. Admin Studio Broadcast (Live Camera & Screen Share from Admin Page)
   if (liveFrame) {
     return (
       <View style={styles.container}>
@@ -209,7 +236,7 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
     );
   }
 
-  // Waiting for instructor feed
+  // 6. Waiting for instructor feed
   return (
     <View style={styles.placeholderContainer}>
       <Radio size={40} color="#EF4444" strokeWidth={1.75} />
@@ -285,6 +312,26 @@ const styles = StyleSheet.create({
   },
   liveIndicatorText: {
     color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  replayIndicatorPill: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.5)',
+  },
+  replayIndicatorText: {
+    color: '#F59E0B',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,

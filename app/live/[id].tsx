@@ -32,6 +32,7 @@ import {
   ExternalLink,
   MessageSquare,
   ShieldAlert,
+  Sparkles,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
@@ -161,13 +162,6 @@ export default function LiveRoomScreen() {
     }
   };
 
-  const handleOpenStreamExternally = () => {
-    if (!liveClass?.streamUrl) return;
-    Linking.openURL(liveClass.streamUrl).catch(() => {
-      Alert.alert('Cannot Open Link', 'Please verify your internet connection.');
-    });
-  };
-
   if (loading) {
     return (
       <Screen style={{ justifyContent: 'center', alignItems: 'center' }}>
@@ -220,6 +214,7 @@ export default function LiveRoomScreen() {
   }
 
   const isLive = liveClass.status === 'live';
+  const isEnded = liveClass.status === 'ended';
 
   return (
     <Screen style={{ backgroundColor: colors.background }}>
@@ -255,9 +250,15 @@ export default function LiveRoomScreen() {
           <Animated.View style={pulseStyle}>
             <Badge label="LIVE" variant="error" size="sm" />
           </Animated.View>
+        ) : isEnded ? (
+          <Badge
+            label="RECORDED REPLAY"
+            variant="neutral"
+            size="sm"
+          />
         ) : (
           <Badge
-            label={liveClass.status === 'ended' ? 'ENDED' : 'SCHEDULED'}
+            label="SCHEDULED"
             variant="neutral"
             size="sm"
           />
@@ -274,36 +275,50 @@ export default function LiveRoomScreen() {
           scheduledAt={liveClass.scheduledAt}
         />
 
-        {/* Real Viewers bar */}
+        {/* Real Viewers or Replay Badge Overlay */}
         <View style={styles.playerOverlayFooter}>
           <View style={styles.viewerBadge}>
-            <Users size={12} color="#FFFFFF" strokeWidth={2} />
-            <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
-              {liveClass.viewerCount && liveClass.viewerCount > 0 ? liveClass.viewerCount : 1} watching
-            </Text>
+            {isLive ? (
+              <>
+                <Users size={12} color="#FFFFFF" strokeWidth={2} />
+                <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
+                  {liveClass.viewerCount && liveClass.viewerCount > 0 ? liveClass.viewerCount : 1} watching
+                </Text>
+              </>
+            ) : (
+              <>
+                <Sparkles size={12} color="#F59E0B" strokeWidth={2} />
+                <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
+                  Recorded Session
+                </Text>
+              </>
+            )}
           </View>
 
-          <TouchableOpacity
-            onPress={handleRaiseHand}
-            style={[
-              styles.raiseHandBtn,
-              { backgroundColor: handRaised ? colors.accent : 'rgba(255,255,255,0.2)' },
-            ]}
-          >
-            <Hand size={14} color={handRaised ? colors.accentText : '#FFFFFF'} strokeWidth={2} />
-            <Text
+          {/* Raise Hand only available during ACTIVE live broadcast */}
+          {isLive && (
+            <TouchableOpacity
+              onPress={handleRaiseHand}
               style={[
-                typography.caption,
-                {
-                  color: handRaised ? colors.accentText : '#FFFFFF',
-                  marginLeft: 4,
-                  fontWeight: '700',
-                },
+                styles.raiseHandBtn,
+                { backgroundColor: handRaised ? colors.accent : 'rgba(255,255,255,0.2)' },
               ]}
             >
-              {handRaised ? 'Hand Raised' : 'Raise Hand'}
-            </Text>
-          </TouchableOpacity>
+              <Hand size={14} color={handRaised ? colors.accentText : '#FFFFFF'} strokeWidth={2} />
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: handRaised ? colors.accentText : '#FFFFFF',
+                    marginLeft: 4,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                {handRaised ? 'Hand Raised' : 'Raise Hand'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -321,11 +336,17 @@ export default function LiveRoomScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <MessageSquare size={16} color={colors.primary} strokeWidth={2} />
             <Text style={[typography.heading, { color: colors.text, fontSize: 14 }]}>
-              Live Chat
+              {isLive ? 'Live Chat' : 'Chat History'}
             </Text>
           </View>
           <Text style={[typography.caption, { color: colors.textMuted }]}>
-            {liveClass.chatEnabled ? `${messages.length} messages` : 'Chat disabled'}
+            {isLive
+              ? liveClass.chatEnabled
+                ? `${messages.length} messages`
+                : 'Chat disabled'
+              : isEnded
+              ? 'Session ended • Replay'
+              : 'Waiting to start'}
           </Text>
         </View>
 
@@ -381,16 +402,18 @@ export default function LiveRoomScreen() {
           ListEmptyComponent={
             <View style={{ padding: 24, alignItems: 'center' }}>
               <Text style={[typography.caption, { color: colors.textMuted }]}>
-                {liveClass.chatEnabled
-                  ? 'No messages yet. Say hello to the mentor!'
-                  : 'Live chat is disabled for this session.'}
+                {isLive
+                  ? liveClass.chatEnabled
+                    ? 'No messages yet. Say hello to the mentor!'
+                    : 'Live chat is disabled for this session.'
+                  : 'No chat messages for this replay session.'}
               </Text>
             </View>
           }
         />
 
-        {/* Chat input box */}
-        {liveClass.chatEnabled && (
+        {/* Chat input box: only active when LIVE. When ENDED, show closed notice */}
+        {isLive && liveClass.chatEnabled ? (
           <View
             style={[
               styles.inputBar,
@@ -440,6 +463,27 @@ export default function LiveRoomScreen() {
               )}
             </TouchableOpacity>
           </View>
+        ) : (
+          <View
+            style={[
+              styles.closedChatBar,
+              {
+                borderTopColor: colors.border,
+                backgroundColor: colors.surface,
+                paddingBottom: insets.bottom > 0 ? insets.bottom + 4 : 14,
+                paddingHorizontal: spacing.screen,
+                paddingTop: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+            ]}
+          >
+            <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>
+              {isEnded
+                ? '🔒 Live session has concluded. Chat is closed for replay.'
+                : 'Live chat is disabled for this session.'}
+            </Text>
+          </View>
         )}
       </KeyboardAvoidingView>
     </Screen>
@@ -462,21 +506,8 @@ const styles = StyleSheet.create({
   },
   playerContainer: {
     width: '100%',
-    aspectRatio: 16 / 9,
+    height: 230,
     position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playerPlaceholder: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  openExternalBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginTop: 14,
   },
   playerOverlayFooter: {
     position: 'absolute',
@@ -525,6 +556,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 1,
     gap: 10,
+  },
+  closedChatBar: {
+    borderTopWidth: 1,
   },
   textInput: {
     flex: 1,
