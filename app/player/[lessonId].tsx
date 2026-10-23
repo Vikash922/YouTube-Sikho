@@ -46,7 +46,7 @@ import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
-import { WebView } from 'react-native-webview';
+import { SafeWebView } from '../../src/components/video/SafeWebView';
 import { extractYouTubeId } from '../../src/components/video/InAppStreamPlayer';
 import {
   getCourseById,
@@ -391,14 +391,11 @@ export default function VideoPlayerScreen() {
               </html>
             `;
             return (
-              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-                <WebView
-                  originWhitelist={['*']}
-                  source={{ html }}
-                  allowsInlineMediaPlayback={true}
-                  mediaPlaybackRequiresUserAction={false}
-                  javaScriptEnabled={true}
-                  domStorageEnabled={true}
+              <View style={StyleSheet.absoluteFillObject}>
+                <SafeWebView
+                  source={{ html, uri: `https://www.youtube.com/embed/${ytId}` }}
+                  ytId={ytId}
+                  title={currentLesson?.title}
                   style={{ flex: 1, backgroundColor: '#000000' }}
                 />
               </View>

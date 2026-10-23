@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Platform, Text, ActivityIndicator } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Radio, VideoOff, Clock, Sparkles } from 'lucide-react-native';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firebaseFirestore } from '../../services/firebase';
+import { SafeWebView } from './SafeWebView';
 
 interface InAppStreamPlayerProps {
   classId?: string;
@@ -87,25 +87,6 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
 
   // 3. YouTube Embed (Live or Recorded Replay)
   if (ytId) {
-    if (Platform.OS === 'web') {
-      return (
-        <View style={styles.container}>
-          <iframe
-            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1`}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-          {isEnded && (
-            <View style={styles.replayIndicatorPill}>
-              <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
-              <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
-            </View>
-          )}
-        </View>
-      );
-    }
-
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -133,21 +114,11 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
 
     return (
       <View style={styles.container}>
-        <WebView
-          originWhitelist={['*']}
-          source={{ html: htmlContent }}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          scalesPageToFit={true}
+        <SafeWebView
+          source={{ html: htmlContent, uri: `https://www.youtube.com/embed/${ytId}` }}
+          ytId={ytId}
+          title={title}
           style={styles.webview}
-          renderLoading={() => (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="small" color="#EF4444" />
-            </View>
-          )}
-          startInLoadingState={true}
         />
         {isEnded && (
           <View style={styles.replayIndicatorPill}>
@@ -161,26 +132,6 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
 
   // 4. Direct MP4 Video URL (Live or Recorded Replay)
   if (isDirectVideo) {
-    if (Platform.OS === 'web') {
-      return (
-        <View style={styles.container}>
-          <video
-            src={streamUrl!}
-            autoPlay
-            controls
-            playsInline
-            style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000000' }}
-          />
-          {isEnded && (
-            <View style={styles.replayIndicatorPill}>
-              <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
-              <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
-            </View>
-          )}
-        </View>
-      );
-    }
-
     const videoHtml = `
       <!DOCTYPE html>
       <html>
@@ -200,11 +151,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
 
     return (
       <View style={styles.container}>
-        <WebView
-          originWhitelist={['*']}
-          source={{ html: videoHtml }}
-          allowsInlineMediaPlayback={true}
-          mediaPlaybackRequiresUserAction={false}
+        <SafeWebView
+          source={{ html: videoHtml, uri: streamUrl! }}
+          title={title}
           style={styles.webview}
         />
         {isEnded && (
