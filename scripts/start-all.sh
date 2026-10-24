@@ -42,7 +42,7 @@ if check_http "http://127.0.0.1:8081/"; then
   echo "✓ [RUNNING] Expo Metro Bundler is responding at exp://127.0.0.1:8081"
 else
   echo "▶ [STARTING] Expo Metro Bundler on port 8081..."
-  cd "$ROOT_DIR" && CI=1 nohup npx expo start --localhost < /dev/null > /tmp/expo-metro.log 2>&1 &
+  cd "$ROOT_DIR" && EXPO_OFFLINE=1 CI=1 nohup npx expo start --host lan --port 8081 < /dev/null > /tmp/expo-metro.log 2>&1 &
   sleep 4
   if check_http "http://127.0.0.1:8081/"; then
     echo "✓ [STARTED] Expo Metro Bundler is up at exp://127.0.0.1:8081"
