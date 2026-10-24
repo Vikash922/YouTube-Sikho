@@ -23,8 +23,8 @@ import {
   CheckCircle2,
   Clock,
   HelpCircle,
-  FileQuestion,
-  ChevronDown,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -35,14 +35,14 @@ import {
   addDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { firebaseFirestore } from '../src/services/firebase';
+import { firebaseFirestore, firebaseAuth } from '../src/services/firebase';
 import { useTheme } from '../src/theme';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useConfigStore } from '../src/store/useConfigStore';
+import { useLanguageStore } from '../src/store/useLanguageStore';
 import { clientConfig } from '../src/config/client.config';
 import { Screen } from '../src/components/common/Screen';
 import { Card } from '../src/components/common/Card';
-import { Badge } from '../src/components/common/Badge';
 import { Button } from '../src/components/common/Button';
 
 export interface SupportTicket {
@@ -80,6 +80,7 @@ export default function SupportScreen() {
   const user = useAuthStore((state) => state.user);
   const profile = useAuthStore((state) => state.profile);
   const config = useConfigStore((state) => state.config);
+  const t = useLanguageStore((state) => state.t);
 
   const [activeTab, setActiveTab] = useState<'tickets' | 'faqs'>('tickets');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -94,7 +95,9 @@ export default function SupportScreen() {
 
   // Live subscription to user's tickets
   useEffect(() => {
-    if (!user?.uid) {
+    const authUser = firebaseAuth.currentUser;
+    // Strictly guard to avoid permission denied when unauthenticated
+    if (!authUser || !user?.uid || authUser.uid !== user.uid) {
       setTickets([]);
       setLoading(false);
       return;
@@ -102,7 +105,7 @@ export default function SupportScreen() {
 
     const q = query(
       collection(firebaseFirestore, 'tickets'),
-      where('uid', '==', user.uid)
+      where('uid', '==', authUser.uid)
     );
 
     const unsub = onSnapshot(
@@ -115,7 +118,7 @@ export default function SupportScreen() {
         setLoading(false);
       },
       (err) => {
-        console.warn('Tickets listener error:', err.message);
+        console.warn('Tickets listener notice:', err.message);
         setLoading(false);
       }
     );
@@ -129,12 +132,18 @@ export default function SupportScreen() {
       return;
     }
 
+    const authUser = firebaseAuth.currentUser;
+    if (!authUser) {
+      Alert.alert('Sign-In Required', 'Please sign in to open a support ticket.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       await addDoc(collection(firebaseFirestore, 'tickets'), {
-        uid: user?.uid || 'anonymous',
+        uid: authUser.uid,
         userName: profile?.name || 'Student',
-        userEmail: user?.email || '',
+        userEmail: authUser.email || user?.email || '',
         subject: subject.trim(),
         message: message.trim(),
         category,
@@ -155,14 +164,48 @@ export default function SupportScreen() {
   };
 
   const handleOpenWhatsApp = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const raw = config?.supportWhatsApp || clientConfig.supportWhatsApp;
     const clean = raw.replace(/\D/g, '');
     Linking.openURL(`https://wa.me/${clean}`).catch(() => {});
   };
 
   const handleCallSupport = () => {
-    const phone = config?.supportPhone || clientConfig.supportPhone;
-    Linking.openURL(`tel:${phone}`).catch(() => {});
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const raw = config?.supportPhone || clientConfig.supportPhone || '+91 98765 43210';
+    const cleanPhone = raw.replace(/[^\d+]/g, '');
+    Linking.openURL(`tel:${cleanPhone}`).catch(() => {});
+  };
+
+  const renderStatusNotch = (status: 'open' | 'in_progress' | 'resolved') => {
+    if (status === 'resolved') {
+      return (
+        <View style={[styles.statusNotch, { backgroundColor: colors.success + '20', borderColor: colors.success }]}>
+          <CheckCircle2 size={12} color={colors.success} strokeWidth={2.5} />
+          <Text style={[typography.caption, { color: colors.success, fontWeight: '700', marginLeft: 4, fontSize: 10 }]}>
+            RESOLVED
+          </Text>
+        </View>
+      );
+    }
+    if (status === 'in_progress') {
+      return (
+        <View style={[styles.statusNotch, { backgroundColor: colors.primaryGlow, borderColor: colors.primary }]}>
+          <RefreshCw size={12} color={colors.primary} strokeWidth={2.5} />
+          <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', marginLeft: 4, fontSize: 10 }]}>
+            IN PROGRESS
+          </Text>
+        </View>
+      );
+    }
+    return (
+      <View style={[styles.statusNotch, { backgroundColor: colors.accent + '20', borderColor: colors.accent }]}>
+        <Clock size={12} color={colors.accent} strokeWidth={2.5} />
+        <Text style={[typography.caption, { color: colors.accent, fontWeight: '700', marginLeft: 4, fontSize: 10 }]}>
+          OPEN
+        </Text>
+      </View>
+    );
   };
 
   return (
@@ -182,16 +225,20 @@ export default function SupportScreen() {
           onPress={() => router.back()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
-          <ArrowLeft size={20} color={colors.text} strokeWidth={1.75} />
+          <ArrowLeft size={20} color={colors.text} strokeWidth={2} />
         </TouchableOpacity>
 
-        <Text
-          style={[typography.title, { color: colors.text, flex: 1, marginLeft: spacing.sm }]}
-          numberOfLines={1}
-        >
-          Help & Support Center
-        </Text>
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text style={[typography.title, { color: colors.text }]} numberOfLines={1}>
+            {t('helpSupport')}
+          </Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>
+            {t('helpSupportSubtitle')}
+          </Text>
+        </View>
       </View>
 
       <ScrollView
@@ -207,10 +254,11 @@ export default function SupportScreen() {
                 styles.quickContactBtn,
                 { backgroundColor: '#25D366', borderRadius: radius.card },
               ]}
+              activeOpacity={0.8}
             >
               <MessageCircle size={18} color="#FFFFFF" strokeWidth={2} />
               <Text style={[typography.small, { color: '#FFFFFF', fontWeight: '700', marginLeft: 6 }]}>
-                WhatsApp Us
+                {t('chatWhatsApp')}
               </Text>
             </TouchableOpacity>
 
@@ -220,10 +268,11 @@ export default function SupportScreen() {
                 styles.quickContactBtn,
                 { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.card },
               ]}
+              activeOpacity={0.8}
             >
               <Phone size={18} color={colors.primary} strokeWidth={2} />
               <Text style={[typography.small, { color: colors.text, fontWeight: '700', marginLeft: 6 }]}>
-                Call Helpline
+                {t('callSupport')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -232,7 +281,10 @@ export default function SupportScreen() {
         {/* Tab Selector */}
         <View style={[styles.tabBar, { backgroundColor: colors.surface, borderRadius: radius.button, marginTop: spacing.lg }]}>
           <TouchableOpacity
-            onPress={() => setActiveTab('tickets')}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('tickets');
+            }}
             style={[
               styles.tabBtn,
               activeTab === 'tickets' && { backgroundColor: colors.primary, borderRadius: radius.button - 2 },
@@ -247,12 +299,15 @@ export default function SupportScreen() {
                 },
               ]}
             >
-              My Support Tickets ({tickets.length})
+              {t('myTickets')} ({tickets.length})
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setActiveTab('faqs')}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setActiveTab('faqs');
+            }}
             style={[
               styles.tabBtn,
               activeTab === 'faqs' && { backgroundColor: colors.primary, borderRadius: radius.button - 2 },
@@ -267,7 +322,7 @@ export default function SupportScreen() {
                 },
               ]}
             >
-              Common FAQs
+              {t('faqs')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -277,10 +332,13 @@ export default function SupportScreen() {
           <View style={{ marginTop: spacing.base }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
               <Text style={[typography.heading, { color: colors.text }]}>
-                Recent Inquiries
+                {t('recentInquiries')}
               </Text>
               <TouchableOpacity
-                onPress={() => setShowCreateForm((prev) => !prev)}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowCreateForm((prev) => !prev);
+                }}
                 style={[
                   styles.createTicketBtn,
                   { backgroundColor: colors.primary, borderRadius: radius.button },
@@ -288,7 +346,7 @@ export default function SupportScreen() {
               >
                 <Plus size={16} color="#FFFFFF" strokeWidth={2} />
                 <Text style={[typography.caption, { color: '#FFFFFF', fontWeight: '700', marginLeft: 4 }]}>
-                  {showCreateForm ? 'Close Form' : 'New Ticket'}
+                  {showCreateForm ? t('closeForm') : t('newTicket')}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -297,7 +355,7 @@ export default function SupportScreen() {
             {showCreateForm && (
               <Card padding={spacing.base} style={{ marginBottom: spacing.lg, borderColor: colors.primary, borderWidth: 1.5 }}>
                 <Text style={[typography.heading, { color: colors.text, fontSize: 16 }]}>
-                  Open a Support Ticket
+                  {t('openTicket')}
                 </Text>
 
                 <TextInput
@@ -340,7 +398,7 @@ export default function SupportScreen() {
                 />
 
                 <Button
-                  title="Submit Ticket"
+                  title={t('submitTicket')}
                   variant="primary"
                   loading={submitting}
                   onPress={handleCreateTicket}
@@ -358,7 +416,7 @@ export default function SupportScreen() {
               <Card padding={spacing.lg} style={{ alignItems: 'center', marginVertical: 12 }}>
                 <LifeBuoy size={36} color={colors.primary} strokeWidth={1.75} />
                 <Text style={[typography.heading, { color: colors.text, marginTop: 12, textAlign: 'center' }]}>
-                  No support tickets
+                  No support tickets yet
                 </Text>
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, textAlign: 'center' }]}>
                   Need help with course access or payment? Click "New Ticket" to message our team.
@@ -366,44 +424,46 @@ export default function SupportScreen() {
               </Card>
             ) : (
               <View style={{ gap: 12 }}>
-                {tickets.map((t) => (
-                  <Card key={t.id} padding={spacing.base}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Badge
-                        label={t.status.toUpperCase()}
-                        variant={t.status === 'resolved' ? 'success' : 'neutral'}
-                        size="sm"
-                      />
-                      <Text style={[typography.caption, { color: colors.textMuted }]}>
-                        {t.category}
-                      </Text>
+                {tickets.map((tItem) => (
+                  <Card key={tItem.id} padding={spacing.base} style={styles.ticketCard}>
+                    {/* Top Row with notch badge and category */}
+                    <View style={styles.ticketTopRow}>
+                      <View style={[styles.categoryPill, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                        <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }]}>
+                          {tItem.category.replace('_', ' ')}
+                        </Text>
+                      </View>
+                      {renderStatusNotch(tItem.status)}
                     </View>
 
-                    <Text style={[typography.heading, { color: colors.text, marginTop: spacing.xs, fontSize: 16 }]}>
-                      {t.subject}
+                    <Text style={[typography.heading, { color: colors.text, marginTop: spacing.sm, fontSize: 16 }]}>
+                      {tItem.subject}
                     </Text>
 
-                    <Text style={[typography.body, { color: colors.textMuted, marginTop: 4, fontSize: 14 }]}>
-                      {t.message}
+                    <Text style={[typography.body, { color: colors.textMuted, marginTop: 6, fontSize: 14, lineHeight: 20 }]}>
+                      {tItem.message}
                     </Text>
 
-                    {t.adminReply && (
+                    {/* Official Admin Reply Speech Bubble */}
+                    {tItem.adminReply && (
                       <View
-                        style={{
-                          backgroundColor: colors.surface,
-                          borderColor: colors.border,
-                          borderLeftColor: colors.primary,
-                          borderLeftWidth: 3,
-                          padding: 10,
-                          borderRadius: 8,
-                          marginTop: 10,
-                        }}
+                        style={[
+                          styles.adminReplyBubble,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                            borderLeftColor: colors.primary,
+                          },
+                        ]}
                       >
-                        <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
-                          Administrator Reply:
-                        </Text>
-                        <Text style={[typography.body, { color: colors.text, fontSize: 13, marginTop: 2 }]}>
-                          {t.adminReply}
+                        <View style={styles.adminHeaderRow}>
+                          <Sparkles size={14} color={colors.primary} strokeWidth={2} />
+                          <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', marginLeft: 6 }]}>
+                            OFFICIAL INSTRUCTOR RESPONSE
+                          </Text>
+                        </View>
+                        <Text style={[typography.body, { color: colors.text, fontSize: 13, marginTop: 6, lineHeight: 20 }]}>
+                          {tItem.adminReply}
                         </Text>
                       </View>
                     )}
@@ -484,5 +544,39 @@ const styles = StyleSheet.create({
     height: 48,
     paddingHorizontal: 14,
     borderWidth: 1,
+  },
+  ticketCard: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ticketTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  statusNotch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  adminReplyBubble: {
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  adminHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });

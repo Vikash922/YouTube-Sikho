@@ -11,6 +11,7 @@ import { Home, BookOpen, PlayCircle, Radio, User } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/theme';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,6 +31,23 @@ const TAB_LABELS: Record<string, string> = {
   profile: 'Profile',
 };
 
+function getTabLabel(name: string, t: (k: any) => string): string {
+  switch (name) {
+    case 'index':
+      return t('tabHome');
+    case 'courses':
+      return t('tabCourses');
+    case 'learning':
+      return t('tabLearning');
+    case 'live':
+      return t('tabLive');
+    case 'profile':
+      return t('tabProfile');
+    default:
+      return name;
+  }
+}
+
 function AnimatedTabItem({
   route,
   isFocused,
@@ -39,10 +57,12 @@ function AnimatedTabItem({
   typography,
 }: any) {
   const IconComponent = TAB_ICONS[route.name as keyof typeof TAB_ICONS] || Home;
-  const label = TAB_LABELS[route.name] || route.name;
+  const t = useLanguageStore((state) => state.t);
+  const label = getTabLabel(route.name, t);
   const shouldReduceMotion = useReducedMotion();
 
   const iconScale = useSharedValue(1);
+  const pressScale = useSharedValue(1);
 
   React.useEffect(() => {
     if (shouldReduceMotion) return;
@@ -55,38 +75,58 @@ function AnimatedTabItem({
     }
   }, [isFocused, shouldReduceMotion]);
 
+  const animatedContainerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: shouldReduceMotion ? 1 : pressScale.value }],
+  }));
+
   const animatedIconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: shouldReduceMotion ? 1 : iconScale.value }],
   }));
+
+  const handlePressIn = () => {
+    if (!shouldReduceMotion) {
+      pressScale.value = withSpring(0.92, { damping: 14, stiffness: 320 });
+    }
+  };
+
+  const handlePressOut = () => {
+    if (!shouldReduceMotion) {
+      pressScale.value = withSpring(1, { damping: 14, stiffness: 320 });
+    }
+  };
 
   return (
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityState={isFocused ? { selected: true } : {}}
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       style={[styles.tabButton, { width: tabWidth }]}
-      activeOpacity={0.8}
+      activeOpacity={0.9}
     >
-      <Animated.View style={[styles.iconBox, animatedIconStyle]}>
-        <IconComponent
-          size={22}
-          color={isFocused ? colors.primary : colors.textMuted}
-          strokeWidth={1.75} // Strict 1.75 stroke width requirement
-        />
+      <Animated.View style={[{ alignItems: 'center' }, animatedContainerStyle]}>
+        <Animated.View style={[styles.iconBox, animatedIconStyle]}>
+          <IconComponent
+            size={22}
+            color={isFocused ? colors.primary : colors.textMuted}
+            strokeWidth={1.75} // Strict 1.75 stroke width requirement
+          />
+        </Animated.View>
+        <Text
+          style={[
+            typography.caption,
+            styles.label,
+            {
+              color: isFocused ? colors.primary : colors.textMuted,
+              fontWeight: isFocused ? '600' : '500',
+            },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
       </Animated.View>
-      <Text
-        style={[
-          typography.caption,
-          styles.label,
-          {
-            color: isFocused ? colors.primary : colors.textMuted,
-            fontWeight: isFocused ? '600' : '500',
-          },
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
     </TouchableOpacity>
   );
 }
@@ -108,8 +148,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       indicatorX.value = state.index * tabWidth;
     } else {
       indicatorX.value = withSpring(state.index * tabWidth, {
-        damping: 18,
-        stiffness: 180,
+        damping: 15,
+        stiffness: 220,
+        mass: 0.8,
       });
     }
   }, [state.index, tabWidth, shouldReduceMotion]);

@@ -1,5 +1,6 @@
 import {
   firebaseFirestore,
+  firebaseAuth,
   doc,
   getDoc,
   setDoc,
@@ -41,6 +42,12 @@ export async function saveUserProfile(
   uid: string,
   data: { name: string; phone: string; photoUrl?: string }
 ): Promise<void> {
+  if (!uid) return;
+  // Guard against unauthenticated writes which trigger Firestore permission-denied
+  if (!firebaseAuth.currentUser || firebaseAuth.currentUser.uid !== uid) {
+    console.warn('[userService] Postponing profile save: user not currently authenticated as', uid);
+    return;
+  }
   try {
     const userRef = doc(firebaseFirestore, 'users', uid);
     const userSnap = await getDoc(userRef);
@@ -72,6 +79,7 @@ export async function saveUserProfile(
  * Sync FCM push notification token for target user
  */
 export async function syncFCMToken(uid: string, token: string): Promise<void> {
+  if (!uid || !firebaseAuth.currentUser || firebaseAuth.currentUser.uid !== uid) return;
   try {
     const userRef = doc(firebaseFirestore, 'users', uid);
     await updateDoc(userRef, {

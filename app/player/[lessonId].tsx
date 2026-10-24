@@ -10,6 +10,7 @@ import {
   Platform,
   Linking,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,6 +110,14 @@ export default function VideoPlayerScreen() {
   // Anti-Piracy Watermark State (Shifting position every 20s)
   const [watermarkPos, setWatermarkPos] = useState({ top: 20, left: 20 });
 
+  // Fullscreen / Landscape StatusBar handler
+  useEffect(() => {
+    StatusBar.setHidden(isFullscreen, 'fade');
+    return () => {
+      StatusBar.setHidden(false, 'fade');
+    };
+  }, [isFullscreen]);
+
   // 2. Load Course, Current Lesson, Enrollment & Progress
   useEffect(() => {
     let isMounted = true;
@@ -148,12 +157,20 @@ export default function VideoPlayerScreen() {
 
         setCurrentLesson(foundLesson);
         if (foundLesson?.duration) {
-          setDuration(foundLesson.duration);
+          const parsedDur = Number(foundLesson.duration);
+          if (Number.isFinite(parsedDur) && parsedDur > 0) {
+            setDuration(parsedDur);
+          } else {
+            setDuration(600);
+          }
         }
 
         // Resume position from Firestore progress if available
-        if (progress?.lessons?.[foundLesson?.id || '']?.position) {
-          setCurrentTime(progress.lessons[foundLesson?.id || ''].position);
+        const pos = Number(progress?.lessons?.[foundLesson?.id || '']?.position);
+        if (Number.isFinite(pos) && pos >= 0) {
+          setCurrentTime(pos);
+        } else {
+          setCurrentTime(0);
         }
 
         setLoadingInitial(false);
@@ -309,9 +326,14 @@ export default function VideoPlayerScreen() {
     }
   };
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
+  const formatTime = (secs: any) => {
+    const num = Number(secs);
+    if (!Number.isFinite(num) || num < 0 || isNaN(num)) {
+      return '00:00';
+    }
+    const totalSecs = Math.floor(num);
+    const m = Math.floor(totalSecs / 60);
+    const s = Math.floor(totalSecs % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -334,15 +356,15 @@ export default function VideoPlayerScreen() {
 
   return (
     <Screen>
-      {/* 1. Video Player HUD Canvas (16:9 Aspect Ratio) */}
+      {/* 1. Video Player HUD Canvas (16:9 Aspect Ratio / Fullscreen Landscape) */}
       <View
         style={[
           styles.playerContainer,
           {
-            backgroundColor: colors.background,
+            backgroundColor: '#000000',
             marginTop: isFullscreen ? 0 : insets.top,
-            height: isFullscreen ? Dimensions.get('window').height : undefined,
           },
+          isFullscreen && styles.playerFullscreenContainer,
         ]}
       >
         {/* Real Embedded Video Playback Layer */}
@@ -587,8 +609,9 @@ export default function VideoPlayerScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 2. PDF Lesson View (if current lesson is a PDF note) */}
-      {currentLesson?.type === 'pdf' ? (
+      {/* 2. PDF Lesson View or Standard Content (Hidden during full screen) */}
+      {!isFullscreen && (
+        currentLesson?.type === 'pdf' ? (
         <ScrollView
           contentContainerStyle={[styles.pdfContainer, { paddingHorizontal: spacing.screen }]}
           showsVerticalScrollIndicator={false}
@@ -816,7 +839,7 @@ export default function VideoPlayerScreen() {
             </Animated.View>
           )}
         </ScrollView>
-      )}
+      ))}
 
       {/* Speed Selector Modal */}
       {showSpeedSheet && (
@@ -905,6 +928,17 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     position: 'relative',
     overflow: 'hidden',
+  },
+  playerFullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    aspectRatio: undefined,
+    zIndex: 9999,
   },
   canvasTouchArea: {
     width: '100%',

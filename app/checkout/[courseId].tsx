@@ -478,11 +478,11 @@ export default function CheckoutScreen() {
           </Card>
         </Animated.View>
 
-        {/* 5. Trust & Security Banner */}
-        <View style={styles.trustRow}>
-          <ShieldCheck size={18} color={colors.textMuted} strokeWidth={1.75} />
-          <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 6 }]}>
-            Server-Verified 256-Bit SSL Razorpay Encryption • Instant Access
+        {/* 5. Trust & Security Badge Pill */}
+        <View style={[styles.trustPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <ShieldCheck size={16} color={colors.primary} strokeWidth={2} />
+          <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 8, fontWeight: '600' }]}>
+            100% Secure Checkout • Instant Course Access
           </Text>
         </View>
       </ScrollView>
@@ -667,12 +667,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  trustRow: {
+  trustPill: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 20,
-    paddingHorizontal: 12,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   stickyBottomBar: {
     position: 'absolute',

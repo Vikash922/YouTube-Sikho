@@ -21,6 +21,7 @@ import {
   signOut,
   updateProfile,
   signInAnonymously,
+  User,
 } from './firebase';
 import { saveUserProfile, getUserProfile } from './userService';
 
@@ -132,17 +133,9 @@ export async function loginWithGoogle(): Promise<AuthResult> {
   }
 
   // Mobile / Expo Go resilient authentication
-  let authUid = firebaseAuth?.currentUser?.uid;
-  if (!authUid) {
-    try {
-      const anonCred = await signInAnonymously(firebaseAuth);
-      authUid = anonCred.user.uid;
-    } catch (e: any) {
-      authUid = `google_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    }
-  }
+  const currentUser = await ensureAuthenticatedSession('google_student');
+  const authUid = currentUser.uid;
 
-  const currentUser = firebaseAuth?.currentUser;
   const googleUser: AuthResult = {
     uid: authUid,
     email: currentUser?.email || null,
@@ -164,7 +157,43 @@ export async function loginWithGoogle(): Promise<AuthResult> {
 }
 
 /**
- * 5. Sign Out
+ * 5. Ensure Authenticated Session
+ * Guarantees firebaseAuth.currentUser is non-null for Firestore authorization rules
+ */
+export async function ensureAuthenticatedSession(identifier?: string): Promise<User> {
+  if (firebaseAuth.currentUser) {
+    return firebaseAuth.currentUser;
+  }
+
+  // 1. Try Anonymous Authentication
+  try {
+    const cred = await signInAnonymously(firebaseAuth);
+    if (cred.user) return cred.user;
+  } catch (anonErr) {
+    console.warn('[authService] Anonymous sign-in note:', anonErr);
+  }
+
+  // 2. Synthetic Account Fallback with emailPassword
+  const cleanId = (identifier || 'student_guest').replace(/[^\w]/g, '').toLowerCase() || 'student';
+  const syntheticEmail = `${cleanId}@app.youtubesikho.internal`;
+  const syntheticPass = `Sikho_${cleanId}_99!`;
+
+  try {
+    const cred = await signInWithEmailAndPassword(firebaseAuth, syntheticEmail, syntheticPass);
+    return cred.user;
+  } catch (e: any) {
+    if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, syntheticEmail, syntheticPass);
+      return cred.user;
+    }
+    // Final fallback attempt
+    const cred = await signInAnonymously(firebaseAuth);
+    return cred.user;
+  }
+}
+
+/**
+ * 6. Sign Out
  */
 export async function logoutUser(): Promise<void> {
   await signOut(firebaseAuth);

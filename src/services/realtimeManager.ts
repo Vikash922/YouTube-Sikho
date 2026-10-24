@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   firebaseFirestore,
+  firebaseAuth,
   doc,
   onSnapshot,
   collection,
@@ -42,7 +43,9 @@ class RealtimeManager {
     uid: string | null | undefined,
     onBlocked: (reason?: string) => void
   ): () => void {
-    if (!uid) return () => {};
+    if (!uid || !firebaseAuth.currentUser || firebaseAuth.currentUser.uid !== uid) {
+      return () => {};
+    }
 
     const userDocRef = doc(firebaseFirestore, 'users', uid);
     return onSnapshot(

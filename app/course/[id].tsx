@@ -32,6 +32,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { Image } from 'expo-image';
 import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 import { firebaseFirestore } from '../../src/services/firebase';
 import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
@@ -53,6 +54,7 @@ export default function CourseDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors, typography, spacing, radius } = useTheme();
   const user = useAuthStore((state) => state.user);
+  const t = useLanguageStore((state) => state.t);
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
@@ -444,7 +446,7 @@ export default function CourseDetailScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(180)} style={{ marginTop: spacing.lg }}>
           <View style={styles.curriculumHeaderRow}>
             <Text style={[typography.caption, { color: colors.textMuted, textTransform: 'uppercase' }]}>
-              Course Syllabus
+              {t('courseSyllabus')}
             </Text>
             <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
               {course.sections?.reduce((acc, s) => acc + s.lessons.length, 0) || 0} Lessons
@@ -517,9 +519,9 @@ export default function CourseDetailScreen() {
                       </View>
 
                       {lesson.isFreePreview && !isEnrolled && (
-                        <View style={[styles.freePreviewPill, { borderColor: colors.accent }]}>
-                          <Text style={[typography.caption, { color: colors.accent, fontWeight: '700' }]}>
-                            FREE PREVIEW
+                        <View style={[styles.freePreviewPill, { borderColor: colors.accent, backgroundColor: colors.accent + '15' }]}>
+                          <Text style={[typography.caption, { color: colors.accent, fontWeight: '700', fontSize: 10 }]}>
+                            {t('freePreview')}
                           </Text>
                         </View>
                       )}
@@ -699,8 +701,8 @@ const styles = StyleSheet.create({
   },
   freePreviewPill: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 2, // Sharp non-rounded highlight
     borderWidth: 1,
   },
   emptyCurriculumCard: {

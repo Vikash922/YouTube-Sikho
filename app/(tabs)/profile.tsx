@@ -28,6 +28,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useThemeStore, ThemePreference } from '../../src/store/useThemeStore';
 import { useConfigStore } from '../../src/store/useConfigStore';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 import { useTheme } from '../../src/theme';
 import { clientConfig } from '../../src/config/client.config';
 import { Avatar } from '../../src/components/common/Avatar';
@@ -45,6 +46,7 @@ export default function ProfileScreen() {
   const setPreference = useThemeStore((state) => state.setPreference);
   const { user, profile, logout } = useAuthStore();
   const config = useConfigStore((state) => state.config);
+  const t = useLanguageStore((state) => state.t);
 
   const [logoutSheetVisible, setLogoutSheetVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -68,19 +70,22 @@ export default function ProfileScreen() {
   };
 
   const handleOpenWhatsApp = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const raw = config?.supportWhatsApp || clientConfig.supportWhatsApp;
     const cleanPhone = raw.replace(/\D/g, '');
     Linking.openURL(`https://wa.me/${cleanPhone}`);
   };
 
   const handleCallSupport = () => {
-    const phone = config?.supportPhone || clientConfig.supportPhone;
-    Linking.openURL(`tel:${phone}`);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const raw = config?.supportPhone || clientConfig.supportPhone || '+91 98765 43210';
+    const cleanPhone = raw.replace(/[^\d+]/g, '');
+    Linking.openURL(`tel:${cleanPhone}`).catch(() => {});
   };
 
   return (
     <Screen withTopInset>
-      <Header title="My Account" subtitle="Manage your preferences and support" />
+      <Header title={t('myAccount')} subtitle={t('accountSubtitle')} />
 
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.screen }]}
@@ -213,7 +218,7 @@ export default function ProfileScreen() {
               { color: colors.textMuted, marginBottom: spacing.xs, marginLeft: 4 },
             ]}
           >
-            HELP & SUPPORT
+            {t('supportHelp')}
           </Text>
           <Card padding={0}>
             <TouchableOpacity
@@ -227,7 +232,7 @@ export default function ProfileScreen() {
               <View style={styles.menuLeft}>
                 <HelpCircle size={20} color={colors.primary} strokeWidth={1.75} />
                 <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  Support Tickets & FAQs
+                  {t('helpSupport')}
                 </Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
@@ -243,7 +248,7 @@ export default function ProfileScreen() {
               <View style={styles.menuLeft}>
                 <MessageCircle size={20} color="#25D366" strokeWidth={1.75} />
                 <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  Chat on WhatsApp
+                  {t('chatWhatsApp')}
                 </Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
@@ -259,7 +264,7 @@ export default function ProfileScreen() {
               <View style={styles.menuLeft}>
                 <Phone size={20} color={colors.primary} strokeWidth={1.75} />
                 <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  Call Support ({config?.supportPhone || clientConfig.supportPhone})
+                  {t('callSupport')}
                 </Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
@@ -279,7 +284,7 @@ export default function ProfileScreen() {
               { color: colors.textMuted, marginBottom: spacing.xs, marginLeft: 4 },
             ]}
           >
-            ABOUT & LEGAL
+            {t('aboutLegal')}
           </Text>
           <Card padding={0}>
             <TouchableOpacity
@@ -293,7 +298,7 @@ export default function ProfileScreen() {
               <View style={styles.menuLeft}>
                 <Shield size={20} color={colors.textMuted} strokeWidth={1.75} />
                 <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  Privacy Policy
+                  {t('privacyPolicy')}
                 </Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
@@ -312,7 +317,7 @@ export default function ProfileScreen() {
               <View style={styles.menuLeft}>
                 <FileText size={20} color={colors.textMuted} strokeWidth={1.75} />
                 <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  Terms of Service
+                  {t('termsOfService')}
                 </Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
@@ -331,7 +336,7 @@ export default function ProfileScreen() {
               <View style={styles.menuLeft}>
                 <RefreshCw size={20} color={colors.textMuted} strokeWidth={1.75} />
                 <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  Refund & Cancellation Policy
+                  {t('refundPolicy')}
                 </Text>
               </View>
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
@@ -345,7 +350,7 @@ export default function ProfileScreen() {
           style={{ marginTop: spacing.xl }}
         >
           <Button
-            title="Log Out"
+            title={t('logOut')}
             variant="ghost"
             onPress={() => setLogoutSheetVisible(true)}
             icon={<LogOut size={18} color={colors.error} strokeWidth={1.75} />}
@@ -365,7 +370,7 @@ export default function ProfileScreen() {
       <BottomSheet
         visible={logoutSheetVisible}
         onClose={() => setLogoutSheetVisible(false)}
-        title="Confirm Log Out"
+        title={t('confirmLogOut')}
       >
         <View style={{ paddingVertical: spacing.base, alignItems: 'center' }}>
           <Text
@@ -374,11 +379,11 @@ export default function ProfileScreen() {
               { color: colors.textMuted, textAlign: 'center', marginBottom: spacing.xl },
             ]}
           >
-            Are you sure you want to log out of {clientConfig.appName}?
+            {t('logOutDescription')}
           </Text>
 
           <Button
-            title="Yes, Log Out"
+            title={t('logOut')}
             variant="danger"
             onPress={handleConfirmLogout}
             loading={loggingOut}
@@ -387,7 +392,7 @@ export default function ProfileScreen() {
 
           <View style={{ marginTop: spacing.sm, width: '100%' }}>
             <Button
-              title="Cancel"
+              title={t('cancel')}
               variant="secondary"
               onPress={() => setLogoutSheetVisible(false)}
             />

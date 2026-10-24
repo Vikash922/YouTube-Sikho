@@ -23,6 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useToastStore } from '../../src/store/useToastStore';
 import { getUserProfile } from '../../src/services/userService';
+import { ensureAuthenticatedSession } from '../../src/services/authService';
 import { firebaseAuth, signInAnonymously } from '../../src/services/firebase';
 import { useTheme } from '../../src/theme';
 import { Button } from '../../src/components/common/Button';
@@ -130,13 +131,13 @@ export default function OtpScreen() {
 
       if (!firebaseAuth.currentUser) {
         try {
-          const anonCred = await signInAnonymously(firebaseAuth);
+          const sessionUser = await ensureAuthenticatedSession(`phone_${phoneNumber}`);
           authenticatedUser = {
             ...authenticatedUser,
-            uid: anonCred.user.uid,
+            uid: sessionUser.uid,
           };
         } catch (authErr) {
-          console.warn('[OtpScreen] Anonymous auth note:', authErr);
+          console.warn('[OtpScreen] Auth session note:', authErr);
         }
       } else {
         authenticatedUser = {

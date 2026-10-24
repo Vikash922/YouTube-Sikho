@@ -25,6 +25,7 @@ import {
   registerWithEmail,
   resetPassword,
   loginWithGoogle,
+  ensureAuthenticatedSession,
 } from '../../src/services/authService';
 import { getUserProfile } from '../../src/services/userService';
 import { firebaseAuth, signInAnonymously } from '../../src/services/firebase';
@@ -183,17 +184,8 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      let authUser = firebaseAuth.currentUser;
-      if (!authUser) {
-        try {
-          const anonCred = await signInAnonymously(firebaseAuth);
-          authUser = anonCred.user;
-        } catch (authErr: any) {
-          console.warn('[LoginScreen] Anonymous auth note:', authErr?.message);
-        }
-      }
-
-      const assignedUid = authUser ? authUser.uid : `user_${rawPhone}`;
+      const authUser = await ensureAuthenticatedSession(`phone_${rawPhone}`);
+      const assignedUid = authUser.uid;
       const confirmationResult = {
         confirm: async (verificationCode: string) => {
           if (verificationCode.length !== 6) {

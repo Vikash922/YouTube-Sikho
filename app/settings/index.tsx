@@ -26,6 +26,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 import { clientConfig } from '../../src/config/client.config';
 import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
@@ -37,10 +38,11 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { colors, typography, radius, spacing } = useTheme();
   const { user, profile, logout } = useAuthStore();
+  const language = useLanguageStore((state) => state.language);
+  const setLanguage = useLanguageStore((state) => state.setLanguage);
+  const t = useLanguageStore((state) => state.t);
 
   // Settings State
-  const [language, setLanguage] = useState<'en' | 'hi'>('en');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoPlayNext, setAutoPlayNext] = useState(true);
   const [downloadQuality, setDownloadQuality] = useState<'720p' | '1080p' | '480p'>('720p');
   const [cacheSize, setCacheSize] = useState('14.6 MB');
@@ -49,11 +51,6 @@ export default function SettingsScreen() {
   // Delete Account State
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleToggleNotifications = (val: boolean) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setNotificationsEnabled(val);
-  };
 
   const handleToggleAutoPlay = (val: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -120,9 +117,9 @@ export default function SettingsScreen() {
           <ArrowLeft size={20} color={colors.text} strokeWidth={2} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
-          <Text style={[typography.title, { color: colors.text }]}>Settings</Text>
+          <Text style={[typography.title, { color: colors.text }]}>{t('settings')}</Text>
           <Text style={[typography.caption, { color: colors.textMuted }]}>
-            Preferences & Account Management
+            {t('settingsSubtitle')}
           </Text>
         </View>
       </View>
@@ -134,7 +131,7 @@ export default function SettingsScreen() {
         {/* 1. Language & App Localization */}
         <Animated.View entering={FadeInDown.duration(350).delay(80)} style={{ marginTop: spacing.base }}>
           <Text style={[typography.caption, styles.sectionTitle, { color: colors.textMuted }]}>
-            APP LANGUAGE
+            {t('appLanguage')}
           </Text>
           <Card padding={spacing.xs}>
             <View style={styles.choiceRow}>
@@ -183,39 +180,18 @@ export default function SettingsScreen() {
           </Card>
         </Animated.View>
 
-        {/* 2. Playback & Notification Controls */}
+        {/* 2. Playback Controls */}
         <Animated.View entering={FadeInDown.duration(350).delay(140)} style={{ marginTop: spacing.lg }}>
           <Text style={[typography.caption, styles.sectionTitle, { color: colors.textMuted }]}>
-            PREFERENCES
+            {t('preferences')}
           </Text>
           <Card padding={0}>
-            {/* Notifications Switch */}
-            <View style={[styles.toggleRow, { paddingHorizontal: spacing.base }]}>
-              <View style={styles.rowLeft}>
-                <Bell size={20} color={colors.primary} strokeWidth={1.75} />
-                <View style={{ marginLeft: 12 }}>
-                  <Text style={[typography.body, { color: colors.text }]}>Push Notifications</Text>
-                  <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    Receive live class reminders & announcements
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={handleToggleNotifications}
-                thumbColor={notificationsEnabled ? colors.primary : colors.surface}
-                trackColor={{ false: colors.border, true: colors.primaryLight }}
-              />
-            </View>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
             {/* Auto Play Next */}
             <View style={[styles.toggleRow, { paddingHorizontal: spacing.base }]}>
               <View style={styles.rowLeft}>
                 <PlayCircle size={20} color={colors.primary} strokeWidth={1.75} />
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={[typography.body, { color: colors.text }]}>Auto-Play Next Lesson</Text>
+                  <Text style={[typography.body, { color: colors.text }]}>{t('autoPlayNext')}</Text>
                   <Text style={[typography.caption, { color: colors.textMuted }]}>
                     Automatically advance to consecutive videos
                   </Text>
@@ -234,14 +210,14 @@ export default function SettingsScreen() {
         {/* 3. Storage & Cache */}
         <Animated.View entering={FadeInDown.duration(350).delay(200)} style={{ marginTop: spacing.lg }}>
           <Text style={[typography.caption, styles.sectionTitle, { color: colors.textMuted }]}>
-            STORAGE & DATA
+            {t('storageData')}
           </Text>
           <Card padding={spacing.base}>
             <View style={styles.cacheRow}>
               <View style={styles.rowLeft}>
                 <HardDrive size={20} color={colors.textMuted} strokeWidth={1.75} />
                 <View style={{ marginLeft: 12 }}>
-                  <Text style={[typography.body, { color: colors.text }]}>Temporary Cache</Text>
+                  <Text style={[typography.body, { color: colors.text }]}>{t('temporaryCache')}</Text>
                   <Text style={[typography.caption, typography.tabular, { color: colors.textMuted }]}>
                     Current size: {cacheSize}
                   </Text>
@@ -273,7 +249,7 @@ export default function SettingsScreen() {
                       },
                     ]}
                   >
-                    Clear Cache
+                    {t('clearCache')}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -284,23 +260,22 @@ export default function SettingsScreen() {
         {/* 4. Google Play Compliance: Account Deletion */}
         <Animated.View entering={FadeInDown.duration(350).delay(260)} style={{ marginTop: spacing.xl }}>
           <Text style={[typography.caption, styles.sectionTitle, { color: colors.error }]}>
-            DANGER ZONE
+            {t('dangerZone')}
           </Text>
           <Card padding={spacing.base} style={{ borderColor: colors.error, borderWidth: 1 }}>
             <View style={styles.dangerRow}>
               <ShieldAlert size={24} color={colors.error} strokeWidth={1.75} />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[typography.heading, { color: colors.text }]}>Delete Account</Text>
+                <Text style={[typography.heading, { color: colors.text }]}>{t('deleteAccount')}</Text>
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                  Permanently wipe your account, course enrollments, quiz results, and personal data.
-                  In accordance with Google Play Store data safety policy, this action is final.
+                  {t('deleteAccountWarning')}
                 </Text>
               </View>
             </View>
 
             <View style={{ marginTop: spacing.base }}>
               <Button
-                title="Delete Account Permanently"
+                title={t('deleteAccount')}
                 variant="danger"
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
