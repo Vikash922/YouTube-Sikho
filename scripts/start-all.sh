@@ -51,7 +51,21 @@ else
   fi
 fi
 
-# 3. Termux / PRoot Keep-Alive Background Loop
+# 3. YouPI PG Payment Gateway Check & Start (Merchant Hub :6001, Portal :7000, API :6100)
+if check_http "http://127.0.0.1:6001/"; then
+  echo "✓ [RUNNING] YouPI Merchant Hub is responding at http://localhost:6001"
+else
+  echo "▶ [STARTING] YouPI Payment Gateway (:6001, :7000, :6100)..."
+  cd "$GATEWAY_DIR" && YOUPI_ALLOW_LOCALHOST_MODE=true YOUPI_MODE=localhost nohup node scripts/start.js > /tmp/youpi-gateway.log 2>&1 &
+  sleep 3
+  if check_http "http://127.0.0.1:6001/"; then
+    echo "✓ [STARTED] YouPI Merchant Hub is up at http://localhost:6001"
+  else
+    echo "ℹ [STARTING] YouPI Gateway is initializing. Check /tmp/youpi-gateway.log"
+  fi
+fi
+
+# 4. Termux / PRoot Keep-Alive Background Loop
 if ! pgrep -f "keep-alive-servers" >/dev/null 2>&1; then
   (
     exec -a keep-alive-servers bash -c '
@@ -65,7 +79,8 @@ fi
 
 echo ""
 echo "═════════════════════════════════════════════════════════════════"
-echo "🎉 ALL-IN-ONE SYSTEM READY (ZERO EXTRA SERVERS NEEDED):"
-echo "  1. Admin Panel & Gateway: http://localhost:5173"
-echo "  2. Mobile App:            exp://127.0.0.1:8081 (Open in Expo Go)"
+echo "🎉 ALL SYSTEMS READY:"
+echo "  1. Admin Panel & Web Checkout: http://localhost:5173"
+echo "  2. YouPI Merchant Console:    http://localhost:6001"
+echo "  3. Mobile App (Expo Go):       exp://127.0.0.1:8081"
 echo "═════════════════════════════════════════════════════════════════"

@@ -36,6 +36,7 @@ export const PaymentGateway: React.FC = () => {
   const [copiedUpi, setCopiedUpi] = useState(false);
 
   // Gateway Status State
+  const [gatewayView, setGatewayView] = useState<'overview' | 'merchantHub'>('overview');
   const [copiedLink, setCopiedLink] = useState(false);
   const [webCheckoutCourseId, setWebCheckoutCourseId] = useState('');
 
@@ -256,20 +257,74 @@ export const PaymentGateway: React.FC = () => {
           </p>
         </div>
 
-        {/* Server Status Pill */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span>All-in-One Admin Gateway (Port :5173 · 0% Fee)</span>
+        {/* View Switcher and Direct Open Button */}
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-light-border dark:border-dark-border">
+            <button
+              onClick={() => setGatewayView('overview')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                gatewayView === 'overview'
+                  ? 'bg-white dark:bg-dark-surface text-brand-600 dark:text-brand-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              📋 Quick Controls
+            </button>
+            <button
+              onClick={() => setGatewayView('merchantHub')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                gatewayView === 'merchantHub'
+                  ? 'bg-white dark:bg-dark-surface text-brand-600 dark:text-brand-400 shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              🖥️ Full Merchant Hub (6001)
+            </button>
           </div>
+
+          <a
+            href="http://localhost:6001"
+            target="_blank"
+            rel="noreferrer"
+            title="Open Full Merchant Hub in New Tab"
+            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-light-border dark:border-dark-border transition"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
       </div>
 
-      {/* Main Grid: Left Settings + Right QR Code Tester */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {gatewayView === 'merchantHub' ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
+            <span>
+              Live interactive Merchant &amp; Supervisor Hub from <strong>http://localhost:6001</strong>. All operations, fraud controls, observer health, and store settings are live below.
+            </span>
+            <a
+              href="http://localhost:6001"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand-600 dark:text-brand-400 font-semibold hover:underline flex items-center gap-1"
+            >
+              Open Fullscreen <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+          <div className="w-full h-[850px] rounded-2xl overflow-hidden border border-light-border dark:border-dark-border shadow-lg bg-white dark:bg-slate-950">
+            <iframe
+              src="http://localhost:6001"
+              title="YouPI Merchant Admin Hub"
+              className="w-full h-full border-0"
+            />
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Main Grid: Left Settings + Right QR Code Tester */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column (7 Cols): Active UPI Account Setup + Manual UTR Tool */}
         <div className="lg:col-span-7 space-y-6">
           {/* 1. Active UPI Receiver Configuration */}
@@ -667,6 +722,8 @@ export const PaymentGateway: React.FC = () => {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };
