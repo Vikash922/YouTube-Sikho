@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Courses } from './pages/Courses';
 import { Orders } from './pages/Orders';
+import { PaymentGateway } from './pages/PaymentGateway';
 import { Coupons } from './pages/Coupons';
 import { Notifications } from './pages/Notifications';
 import { LiveClasses } from './pages/LiveClasses';
@@ -49,6 +50,7 @@ export const App: React.FC = () => {
       {activeTab === 'live-classes' && <LiveClasses />}
       {activeTab === 'quizzes' && <Quizzes />}
       {activeTab === 'orders' && <Orders />}
+      {activeTab === 'payment-gateway' && <PaymentGateway />}
       {activeTab === 'coupons' && <Coupons />}
       {activeTab === 'notifications' && <Notifications />}
       {activeTab === 'home-manager' && <HomeManager />}

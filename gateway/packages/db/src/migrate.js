@@ -158,8 +158,8 @@ export function runMigrations(targetDb) {
     accountRepo.create({
       id: '00000000-0000-0000-0000-000000000002',
       merchantId: defaultMerchant.id,
-      upiId: 'merchant@upi',
-      payeeName: defaultMerchant.businessName,
+      upiId: '7848894498@ibl',
+      payeeName: defaultMerchant.businessName || 'YouTube Sikho',
       isActive: true
     });
   }

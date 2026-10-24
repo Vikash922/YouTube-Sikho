@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -21,6 +22,8 @@ import {
   Lock,
   Sparkles,
   WifiOff,
+  QrCode,
+  Zap,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
@@ -31,6 +34,11 @@ import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
 import { getCourseById, Course } from '../../src/services/courseService';
+import {
+  doc,
+  onSnapshot,
+  firebaseFirestore,
+} from '../../src/services/firebase';
 import {
   createOrder,
   verifyPayment,
@@ -61,6 +69,28 @@ export default function CheckoutScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>('');
   const [isOffline] = useState(false);
+
+  // Direct UPI Gateway State
+  const [merchantUpiId, setMerchantUpiId] = useState(
+    clientConfig.merchantUpiVpa || '7848894498@ibl'
+  );
+  const [showQrCode, setShowQrCode] = useState(false);
+  const [utrInput, setUtrInput] = useState('');
+
+  // Real-time synchronization of merchant UPI ID from Admin Panel
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(firebaseFirestore, 'appConfig', 'payment'),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d?.merchantUpiId) setMerchantUpiId(d.merchantUpiId);
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -148,7 +178,7 @@ export default function CheckoutScreen() {
           phone: profile?.phone || '',
           email: `${profile?.uid || 'student'}@youtubesikho.com`,
         },
-        upiVpa: clientConfig.merchantUpiVpa,
+        upiVpa: merchantUpiId,
         theme: {
           color: colors.primary,
         },
@@ -162,7 +192,7 @@ export default function CheckoutScreen() {
         orderId: order.orderId,
         paymentId: youpiResponse.paymentId,
         signature: youpiResponse.signature,
-        utr: youpiResponse.utr,
+        utr: utrInput.trim() || youpiResponse.utr,
         razorpayPaymentId: youpiResponse.paymentId,
         razorpaySignature: youpiResponse.signature,
       });
@@ -484,7 +514,107 @@ export default function CheckoutScreen() {
           </Card>
         </Animated.View>
 
-        {/* 5. Trust & Security Badge Pill */}
+        {/* 5. Direct UPI Payment Method Card */}
+        <Animated.View entering={FadeInDown.duration(400).delay(250)} style={{ marginTop: spacing.lg }}>
+          <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs, textTransform: 'uppercase' }]}>
+            Payment Method
+          </Text>
+          <Card style={[styles.upiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.upiHeaderRow}>
+              <View style={[styles.upiIconBox, { backgroundColor: colors.primary + '20' }]}>
+                <Zap size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[typography.title, { color: colors.text, fontSize: 15 }]}>
+                    Direct UPI Transfer
+                  </Text>
+                  <View style={[styles.zeroFeePill, { backgroundColor: colors.success + '20' }]}>
+                    <Text style={[typography.caption, { color: colors.success, fontSize: 10, fontWeight: '700' }]}>
+                      0% Fees
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                  Receiving UPI ID:{' '}
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{merchantUpiId}</Text>
+                </Text>
+              </View>
+            </View>
+
+            {/* Supported App Badges */}
+            <View style={styles.appBadgesRow}>
+              {['Google Pay', 'PhonePe', 'Paytm', 'BHIM UPI'].map((app) => (
+                <View key={app} style={[styles.appBadge, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                  <Text style={[typography.caption, { color: colors.text, fontSize: 10, fontWeight: '600' }]}>
+                    {app}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* QR Code Toggle Button */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowQrCode(!showQrCode);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+              style={[styles.qrToggleBtn, { borderColor: colors.border, backgroundColor: colors.background }]}
+            >
+              <QrCode size={16} color={colors.primary} />
+              <Text style={[typography.caption, { color: colors.primary, marginLeft: 8, fontWeight: '600' }]}>
+                {showQrCode ? 'Hide QR Code' : 'Scan & Pay via QR Code'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Dynamic QR Code Expanded View */}
+            {showQrCode && (
+              <View style={[styles.qrExpandedBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Image
+                  source={{
+                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=${encodeURIComponent(
+                      `upi://pay?pa=${merchantUpiId}&pn=YouTube%20Sikho&am=${finalPayable.toFixed(
+                        2
+                      )}&cu=INR&tn=Course%20Enrollment`
+                    )}`,
+                  }}
+                  style={styles.qrImage}
+                  contentFit="contain"
+                />
+                <Text style={[typography.caption, { color: colors.text, fontWeight: '700', marginTop: 4 }]}>
+                  {merchantUpiId}
+                </Text>
+                <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>
+                  Payable: ₹{finalPayable.toLocaleString('en-IN')}
+                </Text>
+                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10, textAlign: 'center', marginTop: 2 }]}>
+                  Scan using GPay, PhonePe, Paytm, or BHIM on any device
+                </Text>
+              </View>
+            )}
+
+            {/* Optional UTR Input Field */}
+            <View style={styles.utrInputContainer}>
+              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 4 }]}>
+                Paid via QR or another app? Enter 12-Digit Bank UTR (Optional)
+              </Text>
+              <TextInput
+                value={utrInput}
+                onChangeText={(text) => setUtrInput(text.replace(/\D/g, ''))}
+                maxLength={12}
+                keyboardType="numeric"
+                placeholder="e.g. 429812984124"
+                placeholderTextColor={colors.textMuted}
+                style={[
+                  styles.utrTextInput,
+                  { borderColor: colors.border, color: colors.text, backgroundColor: colors.background },
+                ]}
+              />
+            </View>
+          </Card>
+        </Animated.View>
+
+        {/* 6. Trust & Security Badge Pill */}
         <View style={[styles.trustPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <ShieldCheck size={16} color={colors.primary} strokeWidth={2} />
           <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 8, fontWeight: '600' }]}>
@@ -700,5 +830,72 @@ const styles = StyleSheet.create({
   payButton: {
     height: 52,
     minHeight: 48,
+  },
+  upiCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  upiHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  upiIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zeroFeePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  appBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  appBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  qrToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  qrExpandedBox: {
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  qrImage: {
+    width: 180,
+    height: 180,
+  },
+  utrInputContainer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(150, 150, 150, 0.2)',
+  },
+  utrTextInput: {
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

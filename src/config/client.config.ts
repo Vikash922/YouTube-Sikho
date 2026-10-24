@@ -107,7 +107,7 @@ export const clientConfig: ClientConfig = {
   youpiGatewayUrl: process.env.EXPO_PUBLIC_YOUPI_URL || "http://127.0.0.1:6100",
   youpiPortalUrl: process.env.EXPO_PUBLIC_YOUPI_PORTAL_URL || "http://127.0.0.1:7000",
   youpiMerchantId: "00000000-0000-0000-0000-000000000001",
-  merchantUpiVpa: "youtubesikho@upi",
+  merchantUpiVpa: "7848894498@ibl",
   razorpayKeyId: "rzp_test_yt_sikho_519827",
   bunnyLibraryId: "12345",
   bunnyCdnHostname: "vz-test-123.b-cdn.net",

@@ -7,6 +7,7 @@ import {
   Palette,
   Phone,
   Loader2,
+  QrCode,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { Button } from '../components/common/Button';
@@ -26,6 +27,7 @@ export interface AdminAppSettings {
   minVersion: string;
   privacyUrl: string;
   termsUrl: string;
+  merchantUpiId?: string;
 }
 
 const DEFAULT_SETTINGS: AdminAppSettings = {
@@ -41,6 +43,7 @@ const DEFAULT_SETTINGS: AdminAppSettings = {
   minVersion: '1.0.0',
   privacyUrl: 'https://youtubesikho.com/privacy',
   termsUrl: 'https://youtubesikho.com/terms',
+  merchantUpiId: '7848894498@ibl',
 };
 
 export const Settings: React.FC = () => {
@@ -83,7 +86,20 @@ export const Settings: React.FC = () => {
         },
         { merge: true }
       );
-      showToast('App configuration & theme saved live!', 'success');
+      if (settings.merchantUpiId) {
+        await setDoc(
+          doc(db, 'appConfig', 'payment'),
+          {
+            merchantUpiId: settings.merchantUpiId.trim(),
+            payeeName: settings.appName || 'YouTube Sikho',
+            gatewayMode: 'direct_upi',
+            zeroCommission: true,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+      showToast('App configuration & UPI payment gateway settings saved live!', 'success');
     } catch (err: any) {
       showToast(err.message || 'Failed to save settings', 'error');
     } finally {
@@ -375,7 +391,33 @@ export const Settings: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. Version Enforcement */}
+        {/* 4. Direct UPI Payment Gateway Settings */}
+        <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-light-border dark:border-dark-border">
+            <QrCode className="w-5 h-5 text-emerald-500" />
+            <h3 className="font-bold font-display text-base text-light-text dark:text-dark-text">
+              Direct UPI Payment Gateway (0% Aggregator Fee)
+            </h3>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+              Active Receiving UPI ID (Where student payments deposit)
+            </label>
+            <input
+              type="text"
+              value={settings.merchantUpiId || '7848894498@ibl'}
+              onChange={(e) => setSettings({ ...settings, merchantUpiId: e.target.value })}
+              className="w-full sm:max-w-md px-3.5 py-2.5 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+              placeholder="7848894498@ibl"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              Payments from Google Pay, PhonePe, Paytm, BHIM, and QR code scans will directly credit to this VPA.
+            </p>
+          </div>
+        </div>
+
+        {/* 5. Version Enforcement */}
         <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-light-border dark:border-dark-border">
             <Smartphone className="w-5 h-5 text-brand-600" />

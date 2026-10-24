@@ -15,6 +15,7 @@ import {
   User,
   ShieldAlert,
   Download,
+  QrCode,
 } from 'lucide-react';
 import { db, functions, httpsCallable } from '../firebase';
 import { Order } from '../types';
@@ -172,6 +173,31 @@ export const Orders: React.FC = () => {
         >
           Export CSV ({filteredOrders.length})
         </Button>
+      </div>
+
+      {/* Active UPI Settlement Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+            <QrCode className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-light-text dark:text-dark-text">
+                Direct UPI Receiver:{' '}
+                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                  7848894498@ibl
+                </span>
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                0% Fee
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Student payments from GPay, PhonePe, Paytm, and BHIM settle directly into 7848894498@ibl.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
