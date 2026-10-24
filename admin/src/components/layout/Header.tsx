@@ -7,9 +7,10 @@ import { NavTab } from './Sidebar';
 interface HeaderProps {
   activeTab: NavTab;
   onOpenMobileSidebar: () => void;
+  onOpenCommandPalette: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab, onOpenMobileSidebar }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, onOpenMobileSidebar, onOpenCommandPalette }) => {
   const { theme, toggleTheme } = useTheme();
   const { adminData } = useAuth();
 
@@ -54,15 +55,18 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onOpenMobileSidebar }
 
       {/* Right: Search, Theme Toggle & Admin Badge */}
       <div className="flex items-center gap-3">
-        {/* Search Bar */}
-        <div className="hidden lg:flex items-center relative">
-          <Search className="w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Search resources..."
-            className="w-48 xl:w-64 pl-9 pr-4 py-1.5 text-xs rounded-full border border-light-border dark:border-dark-border bg-slate-50 dark:bg-dark-card text-light-text dark:text-dark-text placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-          />
-        </div>
+        {/* Command Palette Trigger */}
+        <button
+          onClick={onOpenCommandPalette}
+          className="hidden sm:flex items-center gap-2 pl-3 pr-2.5 py-1.5 text-xs rounded-full border border-light-border dark:border-dark-border bg-slate-50 dark:bg-dark-card text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:border-brand-500/50 transition-all cursor-pointer shadow-sm"
+          title="Open Command Palette (Cmd + K)"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span className="w-36 lg:w-48 text-left truncate">Search or jump to...</span>
+          <span className="font-mono text-[10px] bg-white dark:bg-slate-800 border border-light-border dark:border-dark-border px-1.5 py-0.5 rounded text-slate-500">
+            ⌘K
+          </span>
+        </button>
 
         {/* Theme Toggle Button */}
         <button

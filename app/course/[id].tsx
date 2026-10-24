@@ -558,11 +558,11 @@ export default function CourseDetailScreen() {
                 Course Price
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                <Text style={[typography.heading, { color: colors.text, fontWeight: '700' }]}>
+                <Text style={[typography.heading, typography.tabular, { color: colors.text, fontWeight: '700' }]}>
                   ₹{currentPrice.toLocaleString('en-IN')}
                 </Text>
                 {hasDiscount && (
-                  <Text style={[typography.caption, styles.strikeThrough, { color: colors.textMuted, marginLeft: 6 }]}>
+                  <Text style={[typography.caption, typography.tabular, styles.strikeThrough, { color: colors.textMuted, marginLeft: 6 }]}>
                     ₹{originalPrice.toLocaleString('en-IN')}
                   </Text>
                 )}

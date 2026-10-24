@@ -14,6 +14,7 @@ import {
   RotateCcw,
   User,
   ShieldAlert,
+  Download,
 } from 'lucide-react';
 import { db, functions, httpsCallable } from '../firebase';
 import { Order } from '../types';
@@ -118,6 +119,37 @@ export const Orders: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const handleExportCSV = () => {
+    if (filteredOrders.length === 0) {
+      showToast('No orders to export', 'error');
+      return;
+    }
+    const headers = ['Order ID', 'Student UID', 'Course Title', 'Amount', 'Status', 'Date', 'Razorpay Payment ID'];
+    const rows = filteredOrders.map((o) => [
+      o.id,
+      o.uid || '',
+      o.courseTitle || '',
+      o.amount,
+      o.status,
+      o.createdAt ? new Date(o.createdAt).toISOString() : '',
+      o.razorpayPaymentId || '',
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`Exported ${filteredOrders.length} orders to CSV`, 'success');
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -131,6 +163,15 @@ export const Orders: React.FC = () => {
             Real-time server-verified transactions, Razorpay order IDs, and one-click refund handling.
           </p>
         </div>
+
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download className="w-4 h-4" />}
+          onClick={handleExportCSV}
+        >
+          Export CSV ({filteredOrders.length})
+        </Button>
       </div>
 
       {/* Filter and Search Bar */}

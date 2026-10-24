@@ -5,6 +5,7 @@ import { Radio, VideoOff, Clock, Sparkles } from 'lucide-react-native';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firebaseFirestore } from '../../services/firebase';
 import { SafeWebView } from './SafeWebView';
+import { useTheme } from '../../theme';
 
 interface InAppStreamPlayerProps {
   classId?: string;
@@ -31,6 +32,7 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
   title,
   scheduledAt,
 }) => {
+  const { colors } = useTheme();
   const [liveFrame, setLiveFrame] = useState<string | null>(null);
 
   // Subscribe to live frame for studio broadcasts (only if live)
@@ -57,9 +59,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
   if (status === 'scheduled') {
     return (
       <View style={styles.placeholderContainer}>
-        <Clock size={36} color="#F59E0B" strokeWidth={1.75} />
+        <Clock size={36} color={colors.accent} strokeWidth={1.75} />
         <Text style={styles.placeholderTitle}>Session is Scheduled</Text>
-        <Text style={styles.placeholderSubtitle}>
+        <Text style={[styles.placeholderSubtitle, { color: colors.textMuted }]}>
           {scheduledAt
             ? `Starts at: ${new Date(scheduledAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
             : 'Waiting for instructor to go live...'}
@@ -76,9 +78,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
   if (isEnded && !ytId && !isDirectVideo) {
     return (
       <View style={styles.placeholderContainer}>
-        <VideoOff size={36} color="#94A3B8" strokeWidth={1.75} />
+        <VideoOff size={36} color={colors.textMuted} strokeWidth={1.75} />
         <Text style={styles.placeholderTitle}>Class Has Ended</Text>
-        <Text style={styles.placeholderSubtitle}>
+        <Text style={[styles.placeholderSubtitle, { color: colors.textMuted }]}>
           The live masterclass has concluded. Replay recording will be available once uploaded.
         </Text>
       </View>
@@ -121,9 +123,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
           style={styles.webview}
         />
         {isEnded && (
-          <View style={styles.replayIndicatorPill}>
-            <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
-            <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
+          <View style={[styles.replayIndicatorPill, { borderColor: colors.accent }]}>
+            <Sparkles size={11} color={colors.accent} strokeWidth={2} />
+            <Text style={[styles.replayIndicatorText, { color: colors.accent }]}>RECORDED REPLAY</Text>
           </View>
         )}
       </View>
@@ -138,8 +140,8 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
           <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; background: #000; }
-            body { display: flex; align-items: center; justify-content: center; height: 100%; background: #000; }
+            * { margin: 0; padding: 0; box-sizing: border-box; background: #000000; }
+            body { display: flex; align-items: center; justify-content: center; height: 100%; background: #000000; }
             video { width: 100%; height: 100%; object-fit: contain; }
           </style>
         </head>
@@ -157,9 +159,9 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
           style={styles.webview}
         />
         {isEnded && (
-          <View style={styles.replayIndicatorPill}>
-            <Sparkles size={11} color="#F59E0B" strokeWidth={2} />
-            <Text style={styles.replayIndicatorText}>RECORDED REPLAY</Text>
+          <View style={[styles.replayIndicatorPill, { borderColor: colors.accent }]}>
+            <Sparkles size={11} color={colors.accent} strokeWidth={2} />
+            <Text style={[styles.replayIndicatorText, { color: colors.accent }]}>RECORDED REPLAY</Text>
           </View>
         )}
       </View>
@@ -178,7 +180,7 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
           priority="high"
         />
         <View style={styles.liveIndicatorPill}>
-          <View style={styles.liveIndicatorDot} />
+          <View style={[styles.liveIndicatorDot, { backgroundColor: colors.error }]} />
           <Text style={styles.liveIndicatorText}>STUDIO LIVE STREAM</Text>
         </View>
       </View>
@@ -188,12 +190,12 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
   // 6. Waiting for instructor feed
   return (
     <View style={styles.placeholderContainer}>
-      <Radio size={40} color="#EF4444" strokeWidth={1.75} />
+      <Radio size={40} color={colors.error} strokeWidth={1.75} />
       <Text style={styles.placeholderTitle}>Studio Broadcast Active</Text>
-      <Text style={styles.placeholderSubtitle}>
+      <Text style={[styles.placeholderSubtitle, { color: colors.textMuted }]}>
         Connecting to the instructor's live camera and screen share...
       </Text>
-      <ActivityIndicator size="small" color="#EF4444" style={{ marginTop: 12 }} />
+      <ActivityIndicator size="small" color={colors.error} style={{ marginTop: 12 }} />
     </View>
   );
 };
@@ -218,7 +220,7 @@ const styles = StyleSheet.create({
   },
   placeholderContainer: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -231,7 +233,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   placeholderSubtitle: {
-    color: '#94A3B8',
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
@@ -257,7 +258,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#EF4444',
   },
   liveIndicatorText: {
     color: '#FFFFFF',
@@ -277,10 +277,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.5)',
   },
   replayIndicatorText: {
-    color: '#F59E0B',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,

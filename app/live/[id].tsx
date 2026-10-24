@@ -287,7 +287,7 @@ export default function LiveRoomScreen() {
               </>
             ) : (
               <>
-                <Sparkles size={12} color="#F59E0B" strokeWidth={2} />
+                <Sparkles size={12} color={colors.accent} strokeWidth={2} />
                 <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
                   Recorded Session
                 </Text>

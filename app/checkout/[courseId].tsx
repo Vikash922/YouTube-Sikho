@@ -434,6 +434,7 @@ export default function CheckoutScreen() {
               <Text
                 style={[
                   typography.body,
+                  typography.tabular,
                   courseDiscount > 0
                     ? [styles.strikeThrough, { color: colors.textMuted }]
                     : { color: colors.text },
@@ -446,7 +447,7 @@ export default function CheckoutScreen() {
             {courseDiscount > 0 && (
               <View style={styles.breakdownRow}>
                 <Text style={[typography.body, { color: colors.textMuted }]}>Course Discount</Text>
-                <Text style={[typography.body, { color: colors.success, fontWeight: '600' }]}>
+                <Text style={[typography.body, typography.tabular, { color: colors.success, fontWeight: '600' }]}>
                   -₹{courseDiscount.toLocaleString('en-IN')}
                 </Text>
               </View>
@@ -457,7 +458,7 @@ export default function CheckoutScreen() {
                 <Text style={[typography.body, { color: colors.textMuted }]}>
                   Coupon Discount ({appliedCoupon?.discountPercent}%)
                 </Text>
-                <Text style={[typography.body, { color: colors.success, fontWeight: '600' }]}>
+                <Text style={[typography.body, typography.tabular, { color: colors.success, fontWeight: '600' }]}>
                   -₹{couponDiscount.toLocaleString('en-IN')}
                 </Text>
               </View>
@@ -470,7 +471,7 @@ export default function CheckoutScreen() {
                 <Text style={[typography.heading, { color: colors.text }]}>Total Amount</Text>
                 <Text style={[typography.caption, { color: colors.textMuted }]}>Inclusive of all taxes</Text>
               </View>
-              <Text style={[typography.display, { color: colors.primary, fontWeight: '700' }]}>
+              <Text style={[typography.display, typography.tabular, { color: colors.primary, fontWeight: '700' }]}>
                 ₹{finalPayable.toLocaleString('en-IN')}
               </Text>
             </View>
@@ -500,7 +501,7 @@ export default function CheckoutScreen() {
       >
         <View style={styles.stickyPriceColumn}>
           <Text style={[typography.caption, { color: colors.textMuted }]}>Payable Now</Text>
-          <Text style={[typography.heading, { color: colors.text, fontWeight: '700' }]}>
+          <Text style={[typography.heading, typography.tabular, { color: colors.text, fontWeight: '700' }]}>
             ₹{finalPayable.toLocaleString('en-IN')}
           </Text>
         </View>

@@ -16,6 +16,7 @@ import {
   Trash2,
   Layers,
   ArrowLeft,
+  Download,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { Course, Section } from '../types';
@@ -227,6 +228,38 @@ export const Courses: React.FC = () => {
       c.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleExportCoursesCSV = () => {
+    if (filteredCourses.length === 0) {
+      showToast('No courses to export', 'error');
+      return;
+    }
+    const headers = ['Course ID', 'Title', 'Category', 'Instructor', 'Price', 'Discount Price', 'Published', 'Sections Count'];
+    const rows = filteredCourses.map((c) => [
+      c.id,
+      c.title,
+      c.category,
+      c.instructor,
+      c.price,
+      c.discountPrice || '',
+      c.isPublished !== false ? 'Yes' : 'No',
+      c.sections?.length || 0,
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `courses_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`Exported ${filteredCourses.length} courses to CSV`, 'success');
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
@@ -240,9 +273,19 @@ export const Courses: React.FC = () => {
           </p>
         </div>
 
-        <Button variant="primary" onClick={handleOpenAdd}>
-          <Plus className="w-4 h-4 mr-2" /> Add New Course
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Download className="w-4 h-4" />}
+            onClick={handleExportCoursesCSV}
+          >
+            Export CSV
+          </Button>
+          <Button variant="primary" onClick={handleOpenAdd}>
+            <Plus className="w-4 h-4 mr-2" /> Add New Course
+          </Button>
+        </div>
       </div>
 
       {/* Search Input */}

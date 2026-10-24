@@ -100,6 +100,10 @@ export default function HomeScreen() {
     }
   };
 
+  const currentHour = new Date().getHours();
+  const timeOfDayGreeting =
+    currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
+
   const isLiveSectionVisible =
     homeSections.find((s) => s.type === 'live_stream')?.isVisible !== false;
   const isStreakVisible =
@@ -120,7 +124,7 @@ export default function HomeScreen() {
         >
           <View style={{ flex: 1 }}>
             <Text style={[typography.caption, { color: colors.textMuted }]}>
-              Welcome back
+              {timeOfDayGreeting}
             </Text>
             <Text
               style={[
@@ -464,9 +468,22 @@ export default function HomeScreen() {
                           {course.duration || '12 Hours'}
                         </Text>
                       </View>
-                      <Text style={[typography.heading, { color: colors.primary }]}>
-                        {displayPrice}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                        <Text style={[typography.heading, typography.tabular, { color: colors.primary }]}>
+                          {displayPrice}
+                        </Text>
+                        {course.discountPrice && typeof course.price === 'number' && (
+                          <Text
+                            style={[
+                              typography.caption,
+                              typography.tabular,
+                              { color: colors.textMuted, textDecorationLine: 'line-through' },
+                            ]}
+                          >
+                            ₹{course.price.toLocaleString('en-IN')}
+                          </Text>
+                        )}
+                      </View>
                     </View>
                   </Card>
                 );

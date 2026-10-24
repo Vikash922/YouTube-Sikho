@@ -1,0 +1,59 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.role == 'admin' ||
+        request.auth.token.email == 'admin@youtubesikho.com'
+      );
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function isSafeImage() {
+      return request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp|gif)');
+    }
+
+    function isSafeDocument() {
+      return request.resource.size < 25 * 1024 * 1024
+        && request.resource.contentType.matches('(application/pdf|image/.*)');
+    }
+
+    // 1. User Avatars
+    match /users/{uid}/avatar/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isSafeImage();
+    }
+
+    // 2. Course Thumbnails & Marketing Banners (Admin only)
+    match /courses/{courseId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isSafeImage();
+    }
+
+    match /banners/{bannerId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isSafeImage();
+    }
+
+    // 3. Study Materials & PDF Notes
+    match /materials/{courseId}/{fileName} {
+      allow read: if isAuthenticated() || isAdmin();
+      allow write: if isAdmin() && isSafeDocument();
+    }
+
+    // 4. Default Deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

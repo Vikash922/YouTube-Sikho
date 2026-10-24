@@ -200,7 +200,7 @@ export default function MyLearningScreen() {
                         </Text>
                       </View>
                     ) : (
-                      <Text style={[typography.caption, { color: colors.primary, fontWeight: '700' }]}>
+                      <Text style={[typography.caption, typography.tabular, { color: colors.primary, fontWeight: '700' }]}>
                         {item.percentComplete}% Complete
                       </Text>
                     )}

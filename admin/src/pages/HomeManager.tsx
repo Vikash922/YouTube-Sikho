@@ -23,6 +23,7 @@ import { db } from '../firebase';
 import { Button } from '../components/common/Button';
 import { useToast } from '../context/ToastContext';
 import { ImageUploadField } from '../components/common/ImageUploadField';
+import { PhoneMockup } from '../components/common/PhoneMockup';
 
 export interface AdminBanner {
   id: string;
@@ -223,8 +224,12 @@ export const HomeManager: React.FC = () => {
         </p>
       </div>
 
-      {/* 1. Dynamic Hero Banners Section */}
-      <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm space-y-5">
+      {/* Main Grid: Management Panels + Live Phone Mockup */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
+        {/* Left Column (2 cols): Banners & Sections */}
+        <div className="xl:col-span-2 space-y-8">
+          {/* 1. Dynamic Hero Banners Section */}
+          <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b border-light-border dark:border-dark-border">
           <div className="flex items-center gap-2">
             <ImageIcon className="w-5 h-5 text-brand-600" />
@@ -373,6 +378,18 @@ export const HomeManager: React.FC = () => {
           ))}
         </div>
       </div>
+    </div>
+
+    {/* Right Column (1 col): Live Phone Mockup Preview */}
+    <div className="xl:col-span-1 xl:sticky xl:top-24">
+      <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm">
+        <h2 className="font-bold text-sm text-light-text dark:text-dark-text mb-4 text-center">
+          Real-Time Mobile App Mirror
+        </h2>
+        <PhoneMockup banners={banners} sections={sections} />
+      </div>
+    </div>
+  </div>
 
       {/* Add / Edit Banner Modal */}
       {isBannerModalOpen && (

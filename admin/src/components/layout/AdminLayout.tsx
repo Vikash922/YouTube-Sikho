@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTab } from './Sidebar';
 import { Header } from './Header';
+import { CommandPalette } from '../common/CommandPalette';
 
 interface AdminLayoutProps {
   activeTab: NavTab;
@@ -15,9 +16,27 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isCmdPaletteOpen, setIsCmdPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCmdPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="min-h-screen flex bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text transition-colors">
+      <CommandPalette
+        isOpen={isCmdPaletteOpen}
+        onClose={() => setIsCmdPaletteOpen(false)}
+        onSelectTab={onSelectTab}
+      />
+
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -33,6 +52,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <Header
           activeTab={activeTab}
           onOpenMobileSidebar={() => setIsMobileOpen(true)}
+          onOpenCommandPalette={() => setIsCmdPaletteOpen(true)}
         />
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">

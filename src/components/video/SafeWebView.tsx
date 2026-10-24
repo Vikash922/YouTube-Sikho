@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Platform, Linking, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { Play, ExternalLink } from 'lucide-react-native';
+import { useTheme } from '../../theme';
 
 interface SafeWebViewProps {
   source: { html?: string; uri?: string };
@@ -43,6 +44,7 @@ export const SafeWebView: React.FC<SafeWebViewProps> = ({
   title,
   onPressFallback,
 }) => {
+  const { colors } = useTheme();
   // 1. Web Platform: Standard iframe
   if (Platform.OS === 'web') {
     if (source.uri) {
@@ -123,7 +125,7 @@ export const SafeWebView: React.FC<SafeWebViewProps> = ({
         />
       ) : null}
       <View style={styles.overlay}>
-        <View style={styles.playButton}>
+        <View style={[styles.playButton, { backgroundColor: colors.primary }]}>
           <Play size={24} color="#FFFFFF" fill="#FFFFFF" />
         </View>
         <Text style={styles.playText} numberOfLines={1}>
@@ -159,10 +161,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#EF4444',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 4,

@@ -6,7 +6,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 export const firebaseConfig = {
   apiKey:
-    import.meta.env.VITE_FIREBASE_API_KEY ||
+    (import.meta as any)?.env?.VITE_FIREBASE_API_KEY ||
     ['AIzaSy', 'C2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4'].join(''),
   authDomain: "sikho-77341.firebaseapp.com",
   projectId: "sikho-77341",
