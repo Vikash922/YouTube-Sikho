@@ -12,7 +12,20 @@
           "package_name": "YouTube_sikho.com"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "202721234137-20q3mpmha4jd2i1jq1ponsmrd48tbjb2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "YouTube_sikho.com",
+            "certificate_hash": "8e7fb2eaf1cec47308705143968aefce4bacb77c"
+          }
+        },
+        {
+          "client_id": "202721234137-osai3b5iepc9gqs87pi1qfmbo94f1snr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "202721234137-osai3b5iepc9gqs87pi1qfmbo94f1snr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

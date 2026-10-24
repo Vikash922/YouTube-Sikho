@@ -22,6 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: clientConfig.packageName,
+    googleServicesFile: './google-services.json',
     permissions: [
       'INTERNET',
       'ACCESS_NETWORK_STATE',
