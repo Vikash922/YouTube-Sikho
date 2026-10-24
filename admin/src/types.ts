@@ -101,6 +101,9 @@ export interface Order {
   amount: number;
   currency: string;
   status: 'created' | 'paid' | 'refunded' | 'failed';
+  paymentId?: string;
+  utr?: string;
+  gateway?: string;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
   couponCode?: string;

@@ -124,7 +124,7 @@ export const Orders: React.FC = () => {
       showToast('No orders to export', 'error');
       return;
     }
-    const headers = ['Order ID', 'Student UID', 'Course Title', 'Amount', 'Status', 'Date', 'Razorpay Payment ID'];
+    const headers = ['Order ID', 'Student UID', 'Course Title', 'Amount', 'Status', 'Date', 'YouPI Payment ID / UTR'];
     const rows = filteredOrders.map((o) => [
       o.id,
       o.uid || '',
@@ -132,7 +132,7 @@ export const Orders: React.FC = () => {
       o.amount,
       o.status,
       o.createdAt ? new Date(o.createdAt).toISOString() : '',
-      o.razorpayPaymentId || '',
+      o.utr ? `UTR: ${o.utr}` : (o.paymentId || o.razorpayPaymentId || ''),
     ]);
     const csvContent = [
       headers.join(','),
@@ -160,7 +160,7 @@ export const Orders: React.FC = () => {
             Orders & Payment Gateway History
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Real-time server-verified transactions, Razorpay order IDs, and one-click refund handling.
+            Real-time server-verified transactions, YouPI gateway references, and one-click refund handling.
           </p>
         </div>
 
@@ -239,9 +239,14 @@ export const Orders: React.FC = () => {
                       <div className="font-bold text-light-text dark:text-dark-text">
                         {order.id}
                       </div>
-                      {order.razorpayPaymentId && (
+                      {order.utr && (
+                        <div className="text-emerald-600 dark:text-emerald-400 text-[10px]">
+                          UTR: {order.utr}
+                        </div>
+                      )}
+                      {(order.paymentId || order.razorpayPaymentId) && (
                         <div className="text-slate-400 text-[10px]">
-                          PayID: {order.razorpayPaymentId}
+                          PayID: {order.paymentId || order.razorpayPaymentId}
                         </div>
                       )}
                     </td>
@@ -320,12 +325,12 @@ export const Orders: React.FC = () => {
             <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
               <ShieldAlert className="w-6 h-6" />
               <h3 className="font-bold font-display text-base text-light-text dark:text-dark-text">
-                Confirm Razorpay Refund
+                Confirm YouPI Refund
               </h3>
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Initiating a refund will automatically reverse the transaction via Razorpay and
+              Initiating a refund will automatically reverse or record the transaction via YouPI Gateway and
               immediately revoke the student&apos;s access to the course in Firestore.
             </p>
 

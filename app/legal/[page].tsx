@@ -29,7 +29,7 @@ const LEGAL_DOCS: Record<string, LegalDoc> = {
       },
       {
         heading: '2. Payment Data & Security',
-        body: 'All payment processing is executed through Razorpay. We do not store your credit/debit card numbers or UPI MPIN on our servers. Razorpay processes transactions under strict PCI-DSS Level 1 compliance.',
+        body: 'All payment processing is executed through our secure direct UPI payment gateway (YouPI-PG). We do not store your banking credentials or UPI MPIN on our servers. Transactions settle directly peer-to-peer via verified NPCI UPI protocols.',
       },
       {
         heading: '3. Data Retention & Account Deletion',
@@ -81,7 +81,7 @@ const LEGAL_DOCS: Record<string, LegalDoc> = {
       },
       {
         heading: '3. Processing Timeline',
-        body: 'Approved refunds are credited back to the original payment source (UPI, NetBanking, Card) via Razorpay within 5 to 7 business banking days.',
+        body: 'Approved refunds are credited back to the original payment source (UPI, NetBanking) via direct gateway reversal within 5 to 7 business banking days.',
       },
     ],
   },

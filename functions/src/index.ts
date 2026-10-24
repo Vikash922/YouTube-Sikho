@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { createOrderHandler } from './payments/createOrder';
 import { verifyPaymentHandler } from './payments/verifyPayment';
-import { razorpayWebhookHandler } from './payments/razorpayWebhook';
+import { youpiWebhookHandler } from './payments/youpiWebhook';
 import { refundPaymentHandler } from './payments/refundPayment';
 import { getVideoTokenHandler } from './bunny/getVideoToken';
 import { createBunnyUploadHandler } from './bunny/createBunnyUpload';
@@ -41,25 +41,32 @@ export const verifyPayment = onCall({ cors: true }, async (request) => {
 });
 
 /**
- * 3. razorpayWebhook: Asynchronous Webhook Backup Processor
+ * 3. youpiWebhook: Sovereign Direct UPI Gateway Webhook Handler
  */
-export const razorpayWebhook = onRequest(async (req, res) => {
+export const youpiWebhook = onRequest(async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).send('Method Not Allowed');
     return;
   }
 
-  const signature = req.headers['x-razorpay-signature'] as string | undefined;
+  const signature =
+    (req.headers['x-gateway-signature'] as string | undefined) ||
+    (req.headers['x-razorpay-signature'] as string | undefined);
   const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
   try {
-    const result = await razorpayWebhookHandler(rawBody, signature);
+    const result = await youpiWebhookHandler(rawBody, signature);
     res.status(200).json(result);
   } catch (err: any) {
-    console.error('Webhook processing error:', err.message);
+    console.error('YouPI Webhook processing error:', err.message);
     res.status(400).send(`Webhook Error: ${err.message}`);
   }
 });
+
+/**
+ * 3b. razorpayWebhook: Backward compatibility alias
+ */
+export const razorpayWebhook = youpiWebhook;
 
 /**
  * 4. getVideoToken: Time-Limited Bunny Stream Signed Token HLS Generator

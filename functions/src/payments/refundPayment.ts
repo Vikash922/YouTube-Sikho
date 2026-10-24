@@ -1,5 +1,4 @@
 import * as admin from 'firebase-admin';
-import Razorpay from 'razorpay';
 import { getSecrets } from '../config';
 
 export interface RefundPaymentRequest {
@@ -46,29 +45,32 @@ export async function refundPaymentHandler(
   }
 
   const secrets = getSecrets();
-  let refundId = '';
+  const paymentId = orderData.paymentId || orderData.razorpayPaymentId;
+  let refundId = `rfnd_youpi_${Date.now()}`;
 
-  if (orderData.razorpayPaymentId) {
+  // If YouPI API refund endpoint is active
+  if (paymentId) {
     try {
-      const razorpay = new Razorpay({
-        key_id: secrets.RAZORPAY_KEY_ID,
-        key_secret: secrets.RAZORPAY_KEY_SECRET,
-      });
-
-      const rzpRefund = await razorpay.payments.refund(orderData.razorpayPaymentId, {
-        amount: orderData.amountPaise,
-        notes: {
-          refundedBy: uid,
-          reason: reason || 'Admin requested refund',
+      const res = await fetch(`${secrets.YOUPI_GATEWAY_URL}/api/v1/payments/${paymentId}/refund`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(secrets.YOUPI_MERCHANT_ID ? { 'X-Merchant-Id': secrets.YOUPI_MERCHANT_ID } : {}),
         },
+        body: JSON.stringify({
+          amount: orderData.finalPrice || (orderData.amountPaise ? orderData.amountPaise / 100 : 0),
+          reason: reason || 'Admin requested refund',
+        }),
+        signal: AbortSignal.timeout(1500),
       });
-      refundId = rzpRefund.id;
-    } catch (rzpErr) {
-      console.warn('Razorpay refund API unavailable, generating mock refund ID:', rzpErr);
-      refundId = `rfnd_mock_${Date.now()}`;
+      if (res.ok) {
+        const d = (await res.json()) as any;
+        if (d.refundId) refundId = d.refundId;
+      }
+    } catch {
+      // Fallback to generated reference
+      refundId = `rfnd_direct_${Date.now()}`;
     }
-  } else {
-    refundId = `rfnd_manual_${Date.now()}`;
   }
 
   const enrollmentId = `${orderData.uid}_${orderData.courseId}`;

@@ -34,6 +34,7 @@ import { getCourseById, Course } from '../../src/services/courseService';
 import {
   createOrder,
   verifyPayment,
+  launchYouPICheckout,
   launchRazorpayCheckout,
   validateCoupon,
   CouponValidationResult,
@@ -128,37 +129,42 @@ export default function CheckoutScreen() {
       setProcessingStep('Creating secure order...');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // 1. Server calculates final price & generates Razorpay Order
+      // 1. Server calculates final price & generates YouPI Gateway Order
       const order = await createOrder(course.id, appliedCoupon ? couponCode : undefined);
 
-      setProcessingStep('Opening payment gateway...');
+      setProcessingStep('Opening YouPI UPI gateway...');
 
-      // 2. Launch Razorpay Standard Checkout
+      // 2. Launch Direct YouPI UPI Checkout
       const checkoutOptions = {
-        key: clientConfig.razorpayKeyId,
-        amount: Math.round(order.amount * 100), // convert to paise
+        orderId: order.orderId,
+        paymentId: order.paymentId,
+        checkoutUrl: order.checkoutUrl,
+        amount: order.finalPrice !== undefined ? order.finalPrice : order.amount / 100,
         currency: order.currency || 'INR',
         name: clientConfig.appName,
         description: `Enrollment: ${course.title}`,
-        order_id: order.razorpayOrderId,
-        prefill: {
+        customer: {
           name: profile?.name || 'Student',
-          contact: profile?.phone || '',
+          phone: profile?.phone || '',
           email: `${profile?.uid || 'student'}@youtubesikho.com`,
         },
+        upiVpa: clientConfig.merchantUpiVpa,
         theme: {
           color: colors.primary,
         },
       };
 
-      const razorpayResponse = await launchRazorpayCheckout(checkoutOptions);
+      const youpiResponse = await launchYouPICheckout(checkoutOptions);
 
       // 3. Cryptographic Signature Verification via Cloud Function
-      setProcessingStep('Verifying payment & unlocking course...');
+      setProcessingStep('Verifying UPI payment & unlocking course...');
       const verifyResult = await verifyPayment({
         orderId: order.orderId,
-        razorpayPaymentId: razorpayResponse.razorpay_payment_id,
-        razorpaySignature: razorpayResponse.razorpay_signature,
+        paymentId: youpiResponse.paymentId,
+        signature: youpiResponse.signature,
+        utr: youpiResponse.utr,
+        razorpayPaymentId: youpiResponse.paymentId,
+        razorpaySignature: youpiResponse.signature,
       });
 
       if (verifyResult.success) {
@@ -514,7 +520,7 @@ export default function CheckoutScreen() {
             disabled={isProcessing || isOffline}
             onPress={handlePaySecurely}
             accessibilityRole="button"
-            accessibilityLabel="Pay securely with Razorpay"
+            accessibilityLabel="Pay securely with Direct UPI"
             style={styles.payButton}
           />
         </View>

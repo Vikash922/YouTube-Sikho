@@ -40,7 +40,11 @@ export interface ClientConfig {
   refundPolicyUrl: string;
   dataDeletionUrl: string;
 
-  razorpayKeyId: string;
+  youpiGatewayUrl: string;
+  youpiPortalUrl: string;
+  youpiMerchantId: string;
+  merchantUpiVpa: string;
+  razorpayKeyId?: string;
   bunnyLibraryId?: string;
   bunnyCdnHostname?: string;
 
@@ -100,6 +104,10 @@ export const clientConfig: ClientConfig = {
   refundPolicyUrl: "https://youtubesikho.com/refund",
   dataDeletionUrl: "https://youtubesikho.com/delete-account",
 
+  youpiGatewayUrl: process.env.EXPO_PUBLIC_YOUPI_URL || "http://127.0.0.1:6100",
+  youpiPortalUrl: process.env.EXPO_PUBLIC_YOUPI_PORTAL_URL || "http://127.0.0.1:7000",
+  youpiMerchantId: "00000000-0000-0000-0000-000000000001",
+  merchantUpiVpa: "youtubesikho@upi",
   razorpayKeyId: "rzp_test_yt_sikho_519827",
   bunnyLibraryId: "12345",
   bunnyCdnHostname: "vz-test-123.b-cdn.net",

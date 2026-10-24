@@ -104,7 +104,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     {
       id: 'nav-orders',
       title: 'Orders & Sales Ledger',
-      subtitle: 'Inspect student payments, Razorpay IDs, and refunds',
+      subtitle: 'Inspect student payments, YouPI IDs, and refunds',
       category: 'Navigation',
       icon: <CreditCard className="w-4 h-4 text-emerald-500" />,
       action: () => {

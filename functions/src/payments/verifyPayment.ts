@@ -4,8 +4,11 @@ import { getSecrets } from '../config';
 
 export interface VerifyPaymentRequest {
   orderId: string;
-  razorpayPaymentId: string;
-  razorpaySignature: string;
+  paymentId?: string;
+  utr?: string;
+  signature?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
 }
 
 export interface VerifyPaymentResponse {
@@ -13,9 +16,10 @@ export interface VerifyPaymentResponse {
   orderId: string;
   enrollmentId: string;
   alreadyProcessed?: boolean;
+  utr?: string;
 }
 
-export function computeRazorpaySignature(
+export function computeYoupiSignature(
   orderId: string,
   paymentId: string,
   keySecret: string
@@ -26,6 +30,8 @@ export function computeRazorpaySignature(
     .digest('hex');
 }
 
+export const computeRazorpaySignature = computeYoupiSignature;
+
 export async function verifyPaymentHandler(
   data: VerifyPaymentRequest,
   uid: string | null,
@@ -35,21 +41,30 @@ export async function verifyPaymentHandler(
     throw new Error('Authentication required to verify payment.');
   }
 
-  const { orderId, razorpayPaymentId, razorpaySignature } = data;
-  if (!orderId || !razorpayPaymentId || !razorpaySignature) {
-    throw new Error('Missing required arguments: orderId, razorpayPaymentId, and razorpaySignature.');
+  const orderId = data.orderId;
+  const paymentId = data.paymentId || data.razorpayPaymentId;
+  const signature = data.signature || data.razorpaySignature;
+  const utr = data.utr || '';
+
+  if (!orderId || !paymentId || !signature) {
+    throw new Error('Missing required arguments: orderId, paymentId, and signature.');
   }
 
   const secrets = getSecrets();
 
   // 1. Cryptographic Signature Verification
-  const expectedSignature = computeRazorpaySignature(
+  const expectedSignature = computeYoupiSignature(
     orderId,
-    razorpayPaymentId,
+    paymentId,
+    secrets.YOUPI_WEBHOOK_SECRET || secrets.RAZORPAY_KEY_SECRET
+  );
+  const legacySignature = computeYoupiSignature(
+    orderId,
+    paymentId,
     secrets.RAZORPAY_KEY_SECRET
   );
 
-  if (expectedSignature !== razorpaySignature) {
+  if (expectedSignature !== signature && legacySignature !== signature) {
     throw new Error('Payment verification failed: Invalid cryptographic signature.');
   }
 
@@ -83,8 +98,11 @@ export async function verifyPaymentHandler(
     // 3. Mark Order as Paid
     transaction.update(orderRef, {
       status: 'paid',
-      razorpayPaymentId,
-      razorpaySignature,
+      paymentId,
+      utr: utr || orderData.utr || '',
+      signature,
+      razorpayPaymentId: paymentId, // backward-compat
+      razorpaySignature: signature, // backward-compat
       paidAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -94,10 +112,11 @@ export async function verifyPaymentHandler(
       uid,
       courseId,
       orderId,
-      paymentId: razorpayPaymentId,
+      paymentId,
+      utr: utr || orderData.utr || '',
       enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
       active: true,
-      source: 'razorpay_direct',
+      source: 'youpi_direct',
     }, { merge: true });
 
     // 5. Increment coupon usage if a coupon was used

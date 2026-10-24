@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "gateway": "cd gateway && YOUPI_ALLOW_LOCALHOST_MODE=true YOUPI_MODE=localhost node scripts/start.js",
     "dev:all": "bash scripts/start-all.sh",
     "android": "expo run:android",
     "ios": "expo run:ios",

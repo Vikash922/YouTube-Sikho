@@ -12,4 +12,6 @@ functions/lib/
 .env
 .env.*
 *.env
+gateway/node_modules/
+gateway/data/
 admin/.env
