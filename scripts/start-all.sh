@@ -51,21 +51,7 @@ else
   fi
 fi
 
-# 3. YouPI PG Payment Gateway Check & Start
-if check_http "http://127.0.0.1:7000/api/v1/health"; then
-  echo "✓ [RUNNING] YouPI Payment Gateway is responding at http://localhost:7000 (API :6100)"
-else
-  echo "▶ [STARTING] YouPI Payment Gateway on ports 7000 & 6100..."
-  cd "$GATEWAY_DIR" && YOUPI_ALLOW_LOCALHOST_MODE=true YOUPI_MODE=localhost nohup node scripts/start.js > /tmp/youpi-gateway.log 2>&1 &
-  sleep 3
-  if check_http "http://127.0.0.1:7000/api/v1/health"; then
-    echo "✓ [STARTED] YouPI Payment Gateway is up at http://localhost:7000"
-  else
-    echo "ℹ [STARTING] YouPI Payment Gateway is initializing. Check /tmp/youpi-gateway.log"
-  fi
-fi
-
-# 4. Termux / PRoot Keep-Alive Background Loop
+# 3. Termux / PRoot Keep-Alive Background Loop
 if ! pgrep -f "keep-alive-servers" >/dev/null 2>&1; then
   (
     exec -a keep-alive-servers bash -c '
@@ -79,8 +65,7 @@ fi
 
 echo ""
 echo "═════════════════════════════════════════════════════════════════"
-echo "🎉 TRIPLE SERVERS READY:"
-echo "  1. Admin Panel:       http://localhost:5173"
-echo "  2. Mobile App:        exp://127.0.0.1:8081 (Open in Expo Go)"
-echo "  3. YouPI PG Gateway:  http://localhost:7000 (API :6100)"
+echo "🎉 ALL-IN-ONE SYSTEM READY (ZERO EXTRA SERVERS NEEDED):"
+echo "  1. Admin Panel & Gateway: http://localhost:5173"
+echo "  2. Mobile App:            exp://127.0.0.1:8081 (Open in Expo Go)"
 echo "═════════════════════════════════════════════════════════════════"

@@ -15,7 +15,6 @@ import {
   Copy,
   ExternalLink,
   Save,
-  RefreshCw,
   CreditCard,
   ShieldCheck,
   UserCheck,
@@ -36,10 +35,9 @@ export const PaymentGateway: React.FC = () => {
   const [savingSettings, setSavingSettings] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
 
-  // Server health state
-  const [apiStatus, setApiStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [portalStatus, setPortalStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [lastChecked, setLastChecked] = useState<Date>(new Date());
+  // Gateway Status State
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [webCheckoutCourseId, setWebCheckoutCourseId] = useState('');
 
   // Manual UTR Verification state
   const [utrInput, setUtrInput] = useState('');
@@ -111,37 +109,12 @@ export const PaymentGateway: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // 4. Ping Gateway Server health
-  const checkGatewayHealth = async () => {
-    setApiStatus('checking');
-    setPortalStatus('checking');
-
-    try {
-      const res = await fetch('http://localhost:6100/api/v1/health', {
-        signal: AbortSignal.timeout(2000),
-      });
-      setApiStatus(res.ok ? 'online' : 'offline');
-    } catch {
-      setApiStatus('online'); // localhost browser proxy fallback
-    }
-
-    try {
-      const res2 = await fetch('http://localhost:7000/api/v1/health', {
-        signal: AbortSignal.timeout(2000),
-      });
-      setPortalStatus(res2.ok ? 'online' : 'offline');
-    } catch {
-      setPortalStatus('online');
-    }
-
-    setLastChecked(new Date());
-  };
-
+  // Set default web checkout course when courses load
   useEffect(() => {
-    checkGatewayHealth();
-    const interval = setInterval(checkGatewayHealth, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    if (courses.length > 0 && !webCheckoutCourseId) {
+      setWebCheckoutCourseId(courses[0].id);
+    }
+  }, [courses, webCheckoutCourseId]);
 
   // Save UPI Configuration
   const handleSaveSettings = async () => {
@@ -285,35 +258,12 @@ export const PaymentGateway: React.FC = () => {
 
         {/* Server Status Pill */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-surface text-xs font-medium shadow-sm">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/40 text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm">
             <span className="relative flex h-2 w-2">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full ${
-                  apiStatus === 'online' && portalStatus === 'online'
-                    ? 'bg-emerald-400'
-                    : 'bg-amber-400'
-                } opacity-75`}
-              ></span>
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  apiStatus === 'online' && portalStatus === 'online'
-                    ? 'bg-emerald-500'
-                    : 'bg-amber-500'
-                }`}
-              ></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="text-slate-700 dark:text-slate-200">
-              {apiStatus === 'online' && portalStatus === 'online'
-                ? 'Gateway Online (:7000 / :6100)'
-                : 'Gateway Connected'} · {lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </span>
-            <button
-              onClick={checkGatewayHealth}
-              title="Refresh Gateway Health"
-              className="ml-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+            <span>All-in-One Admin Gateway (Port :5173 · 0% Fee)</span>
           </div>
         </div>
       </div>
@@ -467,6 +417,76 @@ export const PaymentGateway: React.FC = () => {
               >
                 Verify UTR & Unlock Course
               </Button>
+            </div>
+          </div>
+
+          {/* 3. Direct Web Checkout Sharable Links (No separate port 7000 needed!) */}
+          <div className="rounded-2xl border border-light-border dark:border-dark-border bg-white dark:bg-dark-surface p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-brand-600 dark:text-brand-400">
+                <ExternalLink className="w-5 h-5 text-brand-500" />
+                <h3 className="font-bold font-display text-sm text-light-text dark:text-dark-text">
+                  Direct Web Checkout Links (Integrated in Admin)
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800">
+                Port :5173 Unified
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Share this link with any student to let them pay directly in their web browser without installing the app.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Select Course
+                </label>
+                <select
+                  value={webCheckoutCourseId}
+                  onChange={(e) => setWebCheckoutCourseId(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
+                >
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} (₹{c.discountPrice || c.price})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {webCheckoutCourseId && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/?checkout=${webCheckoutCourseId}`}
+                    className="flex-1 px-3 py-2 text-xs font-mono rounded-xl border border-light-border dark:border-dark-border bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 select-all"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/?checkout=${webCheckoutCourseId}`);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                      showToast('Web Checkout link copied!', 'success');
+                    }}
+                    icon={copiedLink ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  >
+                    {copiedLink ? 'Copied' : 'Copy'}
+                  </Button>
+                  <a
+                    href={`/?checkout=${webCheckoutCourseId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-1 transition"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Test
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>

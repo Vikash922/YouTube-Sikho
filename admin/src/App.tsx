@@ -15,12 +15,20 @@ import { Settings } from './pages/Settings';
 import { Categories } from './pages/Categories';
 import { HomeManager } from './pages/HomeManager';
 import { Students } from './pages/Students';
+import { WebCheckout } from './pages/WebCheckout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { NavTab } from './components/layout/Sidebar';
 
 export const App: React.FC = () => {
   const { user, isAdmin, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+
+  // Direct Public Web Checkout route (?checkout=COURSE_ID) - No separate port 7000 needed!
+  const searchParams = new URLSearchParams(window.location.search);
+  const checkoutCourseId = searchParams.get('checkout');
+  if (checkoutCourseId) {
+    return <WebCheckout courseId={checkoutCourseId} />;
+  }
 
   if (loading) {
     return (
