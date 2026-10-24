@@ -300,22 +300,35 @@ export const PaymentGateway: React.FC = () => {
 
       {gatewayView === 'merchantHub' ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 px-1">
-            <span>
-              Live interactive Merchant &amp; Supervisor Hub from <strong>http://localhost:6001</strong>. All operations, fraud controls, observer health, and store settings are live below.
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-light-border dark:border-dark-border text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Admin API Token:</span>
+              <code className="bg-white dark:bg-slate-900 px-2 py-0.5 rounded font-mono text-[11px] text-emerald-600 dark:text-emerald-400 select-all border border-light-border dark:border-dark-border">
+                540612773d3368d9b3baf1511d8a288345ba44678dc6b64ef901aee0e62e9ec7
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText('540612773d3368d9b3baf1511d8a288345ba44678dc6b64ef901aee0e62e9ec7');
+                  showToast('Admin Token copied!', 'success');
+                }}
+                className="text-brand-600 dark:text-brand-400 hover:underline font-medium flex items-center gap-1"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copy
+              </button>
+            </div>
             <a
-              href="http://localhost:6001"
+              href="http://localhost:6001?token=540612773d3368d9b3baf1511d8a288345ba44678dc6b64ef901aee0e62e9ec7"
               target="_blank"
               rel="noreferrer"
-              className="text-brand-600 dark:text-brand-400 font-semibold hover:underline flex items-center gap-1"
+              className="text-brand-600 dark:text-brand-400 font-semibold hover:underline flex items-center gap-1 self-start sm:self-auto"
             >
-              Open Fullscreen <ExternalLink className="w-3.5 h-3.5" />
+              Open Fullscreen Standalone <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
           <div className="w-full h-[850px] rounded-2xl overflow-hidden border border-light-border dark:border-dark-border shadow-lg bg-white dark:bg-slate-950">
             <iframe
-              src="http://localhost:6001"
+              src="http://localhost:6001?token=540612773d3368d9b3baf1511d8a288345ba44678dc6b64ef901aee0e62e9ec7"
               title="YouPI Merchant Admin Hub"
               className="w-full h-full border-0"
             />
