@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { allSecrets } from './config';
-import { requireAdmin } from './auth';
+import { requireAdmin, setAdminClaimHandler } from './auth';
 import { createOrderHandler } from './payments/createOrder';
 import { verifyPaymentHandler } from './payments/verifyPayment';
 import { youpiWebhookHandler } from './payments/youpiWebhook';
@@ -144,6 +144,21 @@ export const manageEnrollment = onCall(
     } catch (err: any) {
       if (err instanceof HttpsError) throw err;
       throw new HttpsError('permission-denied', err.message || 'Manual enrollment management failed.');
+    }
+  }
+);
+
+/**
+ * 7b. setAdminClaim: Owner-Only Custom Claim Privilege Management
+ */
+export const setAdminClaim = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    try {
+      return await setAdminClaimHandler(request.data, request);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('permission-denied', err.message || 'Failed to update admin claims.');
     }
   }
 );

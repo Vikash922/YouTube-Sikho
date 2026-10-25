@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin';
 
 export interface ManageEnrollmentRequest {
-  action: 'enroll' | 'revoke';
+  action: 'grant' | 'enroll' | 'revoke';
   targetUid: string;
   courseId: string;
   reason?: string;
@@ -9,7 +9,7 @@ export interface ManageEnrollmentRequest {
 
 export interface ManageEnrollmentResponse {
   success: boolean;
-  action: 'enroll' | 'revoke';
+  action: 'grant' | 'enroll' | 'revoke';
   enrollmentId: string;
 }
 
@@ -22,12 +22,6 @@ export async function manageEnrollmentHandler(
     throw new Error('Authentication required.');
   }
 
-  // Admin Check
-  const adminDoc = await db.doc(`admins/${uid}`).get();
-  if (!adminDoc.exists) {
-    throw new Error('Permission denied: Only platform administrators can manually manage student enrollments.');
-  }
-
   const { action, targetUid, courseId, reason } = data;
   if (!targetUid || !courseId || !action) {
     throw new Error('Missing required arguments: action, targetUid, courseId.');
@@ -36,7 +30,7 @@ export async function manageEnrollmentHandler(
   const enrollmentId = `${targetUid}_${courseId}`;
   const enrollmentRef = db.doc(`enrollments/${enrollmentId}`);
 
-  if (action === 'enroll') {
+  if (action === 'grant' || action === 'enroll') {
     await enrollmentRef.set({
       uid: targetUid,
       courseId,
@@ -50,7 +44,7 @@ export async function manageEnrollmentHandler(
   } else if (action === 'revoke') {
     await enrollmentRef.delete();
   } else {
-    throw new Error(`Invalid action: '${action}'. Expected 'enroll' or 'revoke'.`);
+    throw new Error(`Invalid action: '${action}'. Expected 'grant', 'enroll' or 'revoke'.`);
   }
 
   return {

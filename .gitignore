@@ -21,4 +21,10 @@ admin/.env
 *service-account*.json
 *credentials*.json
 serviceAccountKey.json
+serviceAccount*.json
+*.pem
+
+# Android keystores & certificates
+*.keystore
+*.jks
 

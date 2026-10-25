@@ -137,7 +137,7 @@ Fill out the Data Safety form with the following answers:
 
 ## 5. Technical Manifest & Bundle Audit
 
-- **Package Name**: `YouTube_sikho.com` (configured in [`app.config.ts`](file:///root/course-app/app.config.ts))
+- **Package Name**: `com.youtubesikho.academy` (configured in [`app.config.ts`](app.config.ts))
 - **Target SDK**: Android 14 (`targetSdkVersion: 34`)
 - **Min SDK**: Android 7.0 (`minSdkVersion: 24`)
 - **Permissions Declared**:

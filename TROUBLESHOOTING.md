@@ -54,9 +54,9 @@ The top 10 production issues that may arise, root causes, and step-by-step resol
   1. *Reviewer cannot log in*: Reviewer is located outside India and cannot receive SMS OTP.
      - **Solution**: In Play Console **App Content** $\rightarrow$ **App Access**, provide test credentials: Phone `+91 99999 88888`, OTP `123456`.
   2. *Target SDK too low*: Must target API 34+ (Android 14).
-     - **Solution**: Confirmed `targetSdkVersion: 34` in [`app.config.ts`](file:///root/course-app/app.config.ts).
+     - **Solution**: Confirmed `targetSdkVersion: 34` in [`app.config.ts`](app.config.ts).
   3. *Missing Account Deletion Link*:
-     - **Solution**: Verified present both in-app ([`app/settings/index.tsx`](file:///root/course-app/app/settings/index.tsx)) and web link `https://youtubesikho.com/delete-account`.
+     - **Solution**: Verified present both in-app ([`app/settings/index.tsx`](app/settings/index.tsx)) and web link `https://youtubesikho.com/delete-account`.
 
 ---
 
@@ -74,7 +74,7 @@ The top 10 production issues that may arise, root causes, and step-by-step resol
 - **Root Cause**: `onSnapshot` listeners created inside screen components without returning an `unsubscribe` cleanup function, resulting in duplicate listeners every time a user switches tabs.
 - **Fix**:
   1. All listeners in this codebase are wrapped in `useEffect(() => { const unsub = ...; return () => unsub(); }, [])`.
-  2. Centralized in [`src/services/realtimeManager.ts`](file:///root/course-app/src/services/realtimeManager.ts) and shared across tabs.
+  2. Centralized in [`src/services/realtimeManager.ts`](src/services/realtimeManager.ts) and shared across tabs.
   3. Firestore offline persistence is enabled with LRU cache eviction, serving repeat views from local disk storage.
 
 ---

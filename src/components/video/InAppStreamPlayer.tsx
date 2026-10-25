@@ -27,6 +27,7 @@ export function extractYouTubeId(url?: string | null): string | null {
 }
 
 const DirectVideoPlayerView: React.FC<{ url: string }> = ({ url }) => {
+  const { colors } = useTheme();
   const player = useVideoPlayer(url, (p: any) => {
     p.loop = false;
     p.play();

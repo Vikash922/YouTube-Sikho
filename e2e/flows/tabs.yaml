@@ -1,4 +1,4 @@
-appId: YouTube_sikho.com
+appId: com.youtubesikho.academy
 ---
 - launchApp
 - tapOn: "Continue with Google"

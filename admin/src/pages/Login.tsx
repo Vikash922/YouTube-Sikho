@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, KeyRound, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 
+const MAX_FAILED_ATTEMPTS = 5;
+const COOLDOWN_SECONDS = 60;
+
 export const Login: React.FC = () => {
-  const { signIn, signInAsDemoAdmin, resetPassword, error: authError, clearError } = useAuth();
+  const { signIn, resetPassword, error: authError, clearError } = useAuth();
   const { showToast } = useToast();
 
   const [email, setEmail] = useState('');
@@ -15,19 +18,43 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
+  // Client lockout state
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+
   // Forgot Password modal state
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // Timer countdown for lockout
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (lockoutRemaining > 0) {
+      timer = setTimeout(() => {
+        setLockoutRemaining((prev) => prev - 1);
+      }, 1000);
+    } else if (lockoutRemaining === 0 && failedAttempts >= MAX_FAILED_ATTEMPTS) {
+      setFailedAttempts(0);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [lockoutRemaining, failedAttempts]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError(null);
     clearError();
 
+    if (lockoutRemaining > 0) {
+      setLocalError(`Too many failed login attempts. Please wait ${lockoutRemaining} seconds.`);
+      return;
+    }
+
     if (!email.trim()) {
-      setLocalError('Please enter your administrator email address.');
+      setLocalError('Please enter your email address.');
       return;
     }
     if (!password) {
@@ -38,9 +65,18 @@ export const Login: React.FC = () => {
     setLoading(true);
     try {
       await signIn(email, password);
+      setFailedAttempts(0);
       showToast('Welcome back, Administrator!', 'success');
     } catch (err: any) {
-      setLocalError(err.message || 'Login failed. Please verify your credentials.');
+      const nextFailCount = failedAttempts + 1;
+      setFailedAttempts(nextFailCount);
+
+      if (nextFailCount >= MAX_FAILED_ATTEMPTS) {
+        setLockoutRemaining(COOLDOWN_SECONDS);
+        setLocalError(`Too many failed login attempts. Account temporarily locked for ${COOLDOWN_SECONDS} seconds.`);
+      } else {
+        setLocalError(err.message || 'Invalid email or password.');
+      }
     } finally {
       setLoading(false);
     }
@@ -103,10 +139,11 @@ export const Login: React.FC = () => {
               type="email"
               autoComplete="email"
               required
-              placeholder="admin@youtubesikho.com"
+              placeholder="admin@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               icon={<Mail className="w-4 h-4" />}
+              disabled={lockoutRemaining > 0}
             />
 
             <div className="flex flex-col gap-1.5">
@@ -137,6 +174,7 @@ export const Login: React.FC = () => {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={lockoutRemaining > 0}
                   className="w-full rounded-input border border-light-border dark:border-dark-border bg-white dark:bg-dark-surface text-light-text dark:text-dark-text pl-10 pr-10 py-2.5 text-sm hover:border-slate-400 dark:hover:border-slate-500 focus:border-brand-500 dark:focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 transition-all min-h-[44px]"
                 />
                 <button
@@ -155,30 +193,11 @@ export const Login: React.FC = () => {
               variant="primary"
               size="lg"
               loading={loading}
+              disabled={lockoutRemaining > 0}
               className="w-full mt-2 font-semibold shadow-md shadow-brand-500/20"
               icon={<ArrowRight className="w-4 h-4" />}
             >
-              Sign In to Dashboard
-            </Button>
-
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-700" />
-              <span className="flex-shrink mx-3 text-xs text-slate-400">or</span>
-              <div className="flex-grow border-t border-slate-200 dark:border-slate-700" />
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="md"
-              className="w-full text-xs"
-              onClick={() => {
-                signInAsDemoAdmin();
-                showToast('Signed in with Demo Admin credentials!', 'success');
-              }}
-              icon={<Sparkles className="w-4 h-4 text-brand-500" />}
-            >
-              Instant Admin Demo Access
+              {lockoutRemaining > 0 ? `Locked (${lockoutRemaining}s)` : 'Sign In to Dashboard'}
             </Button>
           </form>
 
@@ -199,50 +218,48 @@ export const Login: React.FC = () => {
               <div className="p-2 rounded-xl bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400">
                 <KeyRound className="w-5 h-5" />
               </div>
-              <h3 className="font-bold text-base text-light-text dark:text-dark-text">
-                Reset Admin Password
-              </h3>
+              <div>
+                <h3 className="font-semibold text-sm text-light-text dark:text-dark-text">Reset Password</h3>
+                <p className="text-xs text-slate-500">We'll send you a link to reset your password</p>
+              </div>
             </div>
 
             {resetSuccess ? (
               <div className="text-center py-4">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center mb-3">
-                  <Check className="w-6 h-6" />
+                <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-950 text-green-600 dark:text-green-400 flex items-center justify-center mx-auto mb-3">
+                  <Check className="w-5 h-5" />
                 </div>
-                <h4 className="font-bold text-sm text-light-text dark:text-dark-text">
-                  Reset Link Sent!
-                </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Please check your inbox at <span className="font-semibold">{resetEmail}</span>.
+                <p className="text-xs text-slate-600 dark:text-slate-300 mb-4">
+                  Password reset link sent to <strong>{resetEmail}</strong>.
                 </p>
                 <Button
-                  variant="secondary"
+                  variant="outline"
                   size="sm"
-                  className="mt-5 w-full"
-                  onClick={() => setIsResetOpen(false)}
+                  className="w-full"
+                  onClick={() => {
+                    setIsResetOpen(false);
+                    setResetSuccess(false);
+                  }}
                 >
-                  Back to Sign In
+                  Close
                 </Button>
               </div>
             ) : (
               <form onSubmit={handleResetPassword} className="space-y-4">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Enter your registered administrator email address to receive a secure password reset link.
-                </p>
                 <Input
-                  label="Admin Email"
+                  label="Email Address"
                   type="email"
                   required
-                  placeholder="admin@youtubesikho.com"
+                  placeholder="admin@example.com"
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                 />
-                <div className="flex items-center justify-end gap-2.5 pt-2">
+                <div className="flex gap-2">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={resetLoading}
+                    className="flex-1"
                     onClick={() => setIsResetOpen(false)}
                   >
                     Cancel
@@ -252,8 +269,9 @@ export const Login: React.FC = () => {
                     variant="primary"
                     size="sm"
                     loading={resetLoading}
+                    className="flex-1"
                   >
-                    Send Reset Link
+                    Send Link
                   </Button>
                 </div>
               </form>

@@ -3,9 +3,8 @@
 # YOUTUBE SIKHO - UNIFIED DUAL SERVER LAUNCHER & MONITOR (ADMIN + EXPO)
 # ==============================================================================
 
-ROOT_DIR="/root/course-app"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ADMIN_DIR="$ROOT_DIR/admin"
-
 GATEWAY_DIR="$ROOT_DIR/gateway"
 
 check_http() {
@@ -51,17 +50,19 @@ else
   fi
 fi
 
-# 3. YouPI PG Payment Gateway Check & Start (Merchant Hub :6001, Portal :7000, API :6100)
-if check_http "http://127.0.0.1:6001/"; then
-  echo "✓ [RUNNING] YouPI Merchant Hub is responding at http://localhost:6001"
-else
-  echo "▶ [STARTING] YouPI Payment Gateway (:6001, :7000, :6100)..."
-  cd "$GATEWAY_DIR" && YOUPI_ALLOW_LOCALHOST_MODE=true YOUPI_MODE=localhost nohup node scripts/start.js > /tmp/youpi-gateway.log 2>&1 &
-  sleep 3
+# 3. Optional Payment Gateway Check & Start (Merchant Hub :6001, Portal :7000, API :6100)
+if [ -d "$GATEWAY_DIR" ] && [ -f "$GATEWAY_DIR/scripts/start.js" ]; then
   if check_http "http://127.0.0.1:6001/"; then
-    echo "✓ [STARTED] YouPI Merchant Hub is up at http://localhost:6001"
+    echo "✓ [RUNNING] Optional Gateway is responding at http://localhost:6001"
   else
-    echo "ℹ [STARTING] YouPI Gateway is initializing. Check /tmp/youpi-gateway.log"
+    echo "▶ [OPTIONAL] Starting Payment Gateway (:6001, :7000, :6100)..."
+    cd "$GATEWAY_DIR" && YOUPI_ALLOW_LOCALHOST_MODE=true YOUPI_MODE=localhost nohup node scripts/start.js > /tmp/youpi-gateway.log 2>&1 &
+    sleep 3
+    if check_http "http://127.0.0.1:6001/"; then
+      echo "✓ [STARTED] Optional Gateway is up at http://localhost:6001"
+    else
+      echo "ℹ [INFO] Optional Gateway is initializing. Check /tmp/youpi-gateway.log"
+    fi
   fi
 fi
 

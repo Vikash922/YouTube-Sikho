@@ -1,5 +1,8 @@
 import { ConfigContext } from 'expo/config';
-import { clientConfig } from './src/config/client.config';
+
+// Safe loader that works with pure TypeScript client.config.ts without needing a .js duplicate
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { clientConfig } = require('./scripts/load-client-config');
 
 export default ({ config }: ConfigContext): any => ({
   ...config,
@@ -42,22 +45,7 @@ export default ({ config }: ConfigContext): any => ({
   plugins: [
     'expo-router',
     'expo-font',
-    'expo-secure-store',
-    'expo-screen-capture',
-    'expo-notifications',
     'expo-video',
-    '@react-native-firebase/app',
-    '@react-native-firebase/auth',
-    [
-      'expo-build-properties',
-      {
-        android: {
-          compileSdkVersion: 34,
-          targetSdkVersion: 34,
-          minSdkVersion: 24,
-        },
-      },
-    ],
   ],
   extra: {
     clientConfig,

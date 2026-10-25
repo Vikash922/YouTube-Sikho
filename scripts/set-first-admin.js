@@ -142,6 +142,7 @@ async function main() {
   await auth.setCustomUserClaims(uid, {
     ...currentClaims,
     admin: true,
+    role: 'owner',
   });
   console.log('✓ Firebase Auth custom claim { admin: true } granted successfully.');
 

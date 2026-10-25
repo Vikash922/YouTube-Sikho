@@ -49,7 +49,7 @@ flowchart TD
 ## 2. Core Operational Data Flows
 
 ### A. Course Purchase & Instant Enrollment
-1. **Initiate**: Student taps "Enroll Now" in [`app/checkout/[courseId].tsx`](file:///root/course-app/app/checkout/[courseId].tsx).
+1. **Initiate**: Student taps "Enroll Now" in [`app/checkout/[courseId].tsx`](app/checkout/[courseId].tsx).
 2. **Order Creation**: Client calls `createOrder` Cloud Function with `courseId` and optional `couponCode`.
 3. **Price Calculation**: Cloud Function calculates final discounted amount on the server (preventing client-side tampering) and requests an official `order_id` from Razorpay API.
 4. **Checkout Modal**: Mobile app opens native Razorpay checkout sheet with UPI / Google Pay / Cards.
@@ -60,7 +60,7 @@ flowchart TD
 ---
 
 ### B. Secure Tokenized Video Playback
-1. **Lesson Access Check**: Student taps a video lesson in [`app/player/[lessonId].tsx`](file:///root/course-app/app/player/[lessonId].tsx).
+1. **Lesson Access Check**: Student taps a video lesson in [`app/player/[lessonId].tsx`](app/player/[lessonId].tsx).
 2. **Access Verification**: Client invokes `getVideoToken` Cloud Function providing `courseId` and `lessonId`.
 3. **Authorization**: Server confirms caller has an active enrollment in `/enrollments/{uid}_{courseId}`.
 4. **Token Generation**: Cloud Function generates a time-limited SHA-256 signed Bunny Stream token (valid for 4 hours), locking the stream to the student's IP address.
@@ -69,9 +69,9 @@ flowchart TD
 ---
 
 ### C. Live Interactive Classes & Doubt Clearing
-1. **Class Scheduling**: Admin creates or starts a live class in [`admin/src/pages/LiveClasses.tsx`](file:///root/course-app/admin/src/pages/LiveClasses.tsx).
+1. **Class Scheduling**: Admin creates or starts a live class in [`admin/src/pages/LiveClasses.tsx`](admin/src/pages/LiveClasses.tsx).
 2. **Real-Time Notification**: Cloud Function dispatches FCM push notification to all students enrolled in the course.
-3. **Live Sync**: Mobile [`app/(tabs)/live.tsx`](file:///root/course-app/app/(tabs)/live.tsx) displays flashing red `LIVE NOW` badge.
+3. **Live Sync**: Mobile [`app/(tabs)/live.tsx`](app/(tabs)/live.tsx) displays flashing red `LIVE NOW` badge.
 4. **Interactive Room**: Students enter the live room, watch the live broadcast, participate in rate-limited real-time chat, and raise hands for doubt clearing.
 5. **Replay Archiving**: When admin ends the stream, the class status updates to `ended` and the replay recording is immediately made available for students.
 
