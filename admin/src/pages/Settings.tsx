@@ -9,6 +9,7 @@ import {
   Loader2,
   CreditCard,
   ShieldCheck,
+  Megaphone,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { Button } from '../components/common/Button';
@@ -28,6 +29,11 @@ export interface AdminAppSettings {
   minVersion: string;
   privacyUrl: string;
   termsUrl: string;
+  playStoreUrl?: string;
+  appStoreUrl?: string;
+  announcementActive?: boolean;
+  announcementText?: string;
+  announcementUrl?: string;
 }
 
 const DEFAULT_SETTINGS: AdminAppSettings = {
@@ -43,6 +49,11 @@ const DEFAULT_SETTINGS: AdminAppSettings = {
   minVersion: '1.0.0',
   privacyUrl: 'https://youtubesikho.com/privacy',
   termsUrl: 'https://youtubesikho.com/terms',
+  playStoreUrl: 'https://play.google.com/store/apps',
+  appStoreUrl: 'https://apps.apple.com',
+  announcementActive: false,
+  announcementText: '',
+  announcementUrl: '',
 };
 
 export const Settings: React.FC = () => {
@@ -443,6 +454,86 @@ export const Settings: React.FC = () => {
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Devices running a lower version will prompt the student to update from Play Store.
             </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                Play Store Link (Android)
+              </label>
+              <input
+                type="text"
+                value={settings.playStoreUrl || ''}
+                onChange={(e) => setSettings({ ...settings, playStoreUrl: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="https://play.google.com/store/apps/details?id=..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                App Store Link (iOS)
+              </label>
+              <input
+                type="text"
+                value={settings.appStoreUrl || ''}
+                onChange={(e) => setSettings({ ...settings, appStoreUrl: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="https://apps.apple.com/app/..."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 6. Live Announcement Banner */}
+        <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-light-border dark:border-dark-border">
+            <div className="flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-amber-500" />
+              <div>
+                <h2 className="font-bold text-light-text dark:text-dark-text">
+                  Live Announcement Banner
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Broadcasts an urgent alert or promotion at the top of the mobile app in real-time.
+                </p>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.announcementActive || false}
+                onChange={(e) => setSettings({ ...settings, announcementActive: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
+            </label>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                Announcement Message
+              </label>
+              <input
+                type="text"
+                value={settings.announcementText || ''}
+                onChange={(e) => setSettings({ ...settings, announcementText: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="e.g. 🔥 Flash Sale! Use code FLAT50 for 50% discount on all courses today!"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
+                Action / Target URL (Optional)
+              </label>
+              <input
+                type="text"
+                value={settings.announcementUrl || ''}
+                onChange={(e) => setSettings({ ...settings, announcementUrl: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                placeholder="https://... or course link"
+              />
+            </div>
           </div>
         </div>
 

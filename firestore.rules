@@ -284,6 +284,18 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // 20. ANALYTICS & TRANSACTIONAL MAIL
+    // ===============================================================
+    match /analyticsEvents/{eventId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /mail/{mailId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ===============================================================
     // DEFAULT DENY CATCH-ALL
     // ===============================================================
     match /{document=**} {

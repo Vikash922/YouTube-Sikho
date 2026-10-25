@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as admin from 'firebase-admin';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { getRazorpayClient, getRazorpaySecrets } from '../config';
+import { dispatchPurchaseFulfillment } from '../emails/dispatchPurchaseFulfillment';
 
 export interface VerifyPaymentRequest {
   orderId: string;
@@ -189,6 +190,18 @@ export async function verifyPaymentHandler(
       });
     }
   });
+
+  // Automated Transactional Email & In-App Notification (dispatched on fresh verification)
+  if (!alreadyProcessed) {
+    await dispatchPurchaseFulfillment(db, {
+      uid,
+      courseId,
+      orderId,
+      paymentId: razorpayPaymentId,
+      amountPaise: expectedPaise,
+      email: orderData.email,
+    });
+  }
 
   return {
     success: true,

@@ -2,8 +2,55 @@ import * as crypto from 'crypto';
 import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
 import { getRazorpayWebhookSecret } from '../config';
+import { dispatchPurchaseFulfillment } from '../emails/dispatchPurchaseFulfillment';
+
+export function computeWebhookSignature(rawBody: string | Buffer, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+}
 
 export async function razorpayWebhookHandler(
+  reqOrBody: any,
+  resOrSig?: any,
+  db: admin.firestore.Firestore = admin.firestore()
+): Promise<any> {
+  // If called directly with (rawBody, signature, db) in tests
+  if (typeof reqOrBody === 'string' || Buffer.isBuffer(reqOrBody)) {
+    const rawBody = reqOrBody;
+    const signature = resOrSig;
+    let statusCode = 200;
+    let sentBody: any = null;
+    const mockRes = {
+      status: (code: number) => {
+        statusCode = code;
+        return mockRes;
+      },
+      send: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+      json: (body: any) => {
+        sentBody = body;
+        return mockRes;
+      },
+    };
+    const mockReq = {
+      method: 'POST',
+      headers: { 'x-razorpay-signature': signature },
+      rawBody: Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody),
+      body: typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody,
+    };
+    await executeRazorpayWebhook(mockReq as any, mockRes as any, db);
+    if (statusCode >= 400) {
+      throw new Error(`Unauthorized: Invalid Razorpay webhook signature.`);
+    }
+    return { status: 'ok', body: sentBody };
+  }
+
+  // Otherwise standard Express (req, res, db)
+  return await executeRazorpayWebhook(reqOrBody, resOrSig, db);
+}
+
+async function executeRazorpayWebhook(
   req: Request,
   res: Response,
   db: admin.firestore.Firestore = admin.firestore()
@@ -179,6 +226,16 @@ export async function razorpayWebhookHandler(
           orderId,
           processedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+      });
+
+      // Dispatch post-payment fulfillment (email receipt + in-app notification)
+      await dispatchPurchaseFulfillment(db, {
+        uid,
+        courseId,
+        orderId,
+        paymentId: payment.id,
+        amountPaise: expectedAmountPaise,
+        email: orderData.email,
       });
 
     } else if (eventType === 'payment.failed') {

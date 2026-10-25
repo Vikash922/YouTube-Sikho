@@ -62,6 +62,7 @@ import {
   executeProgressSave,
   getCourseProgress,
 } from '../../src/services/videoService';
+import { analytics } from '../../src/services/analyticsService';
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 const QUALITIES = ['Auto', '1080p', '720p', '480p', '360p'];
@@ -280,6 +281,7 @@ export default function VideoPlayerScreen() {
       setHlsStreamUrl(token.hlsUrl);
       setTokenExpiresAt(token.expiresAt);
       setIsBuffering(false);
+      analytics.logLessonPlay(courseId, currentLesson.id, currentLesson.title);
     } catch (err: any) {
       console.warn('[Player] Token retrieval error:', err);
       setPlaybackError(err.message || 'Unable to load secure video stream.');

@@ -1,3 +1,11 @@
+process.env.RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || 'rzp_test_mock_id';
+process.env.RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'rzp_test_mock_secret_key_123';
+process.env.RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || 'whsec_test_mock_secret_abc';
+process.env.BUNNY_API_KEY = process.env.BUNNY_API_KEY || 'bunny_api_test_key';
+process.env.BUNNY_TOKEN_AUTH_KEY = process.env.BUNNY_TOKEN_AUTH_KEY || 'bunny_token_auth_test_key';
+process.env.BUNNY_LIBRARY_ID = process.env.BUNNY_LIBRARY_ID || 'bunny_lib_123';
+process.env.BUNNY_CDN_HOSTNAME = process.env.BUNNY_CDN_HOSTNAME || 'video.test.b-cdn.net';
+
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { MockFirestore } from './mockDb';

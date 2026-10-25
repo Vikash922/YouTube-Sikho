@@ -15,6 +15,11 @@ export interface AppRemoteConfig {
   privacyUrl?: string;
   termsUrl?: string;
   razorpayKeyId?: string;
+  announcementActive?: boolean;
+  announcementText?: string;
+  announcementUrl?: string;
+  playStoreUrl?: string;
+  appStoreUrl?: string;
 }
 
 const DEFAULT_CONFIG: AppRemoteConfig = {
@@ -30,6 +35,11 @@ const DEFAULT_CONFIG: AppRemoteConfig = {
   minVersion: clientConfig.version,
   privacyUrl: clientConfig.privacyPolicyUrl,
   termsUrl: clientConfig.termsUrl,
+  announcementActive: false,
+  announcementText: '',
+  announcementUrl: '',
+  playStoreUrl: 'https://play.google.com/store/apps',
+  appStoreUrl: 'https://apps.apple.com',
 };
 
 /**

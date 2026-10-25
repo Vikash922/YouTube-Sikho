@@ -49,6 +49,7 @@ import {
   FALLBACK_COURSES,
 } from '../../src/services/courseService';
 import { QuizMetadata, subscribeToCourseQuizzes } from '../../src/services/quizService';
+import { analytics } from '../../src/services/analyticsService';
 
 export default function CourseDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -73,7 +74,9 @@ export default function CourseDetailScreen() {
       doc(firebaseFirestore, 'courses', id),
       (snap) => {
         if (snap.exists()) {
-          setCourse({ id: snap.id, ...snap.data() } as Course);
+          const courseData = { id: snap.id, ...snap.data() } as Course;
+          setCourse(courseData);
+          analytics.logViewCourse(courseData.id, courseData.title, courseData.price);
         } else if (FALLBACK_COURSES[id]) {
           setCourse(FALLBACK_COURSES[id]);
         } else {

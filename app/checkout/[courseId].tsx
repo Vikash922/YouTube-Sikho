@@ -45,6 +45,7 @@ import {
   validateCoupon,
   CouponValidationResult,
 } from '../../src/services/paymentService';
+import { analytics } from '../../src/services/analyticsService';
 
 export default function CheckoutScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
@@ -78,6 +79,9 @@ export default function CheckoutScreen() {
       if (isMounted) {
         setCourse(data);
         setLoadingCourse(false);
+        if (data) {
+          analytics.logBeginCheckout(data.id, data.title, data.discountPrice || data.price);
+        }
       }
     }
     loadData();
@@ -107,6 +111,7 @@ export default function CheckoutScreen() {
     );
 
     setCouponValidating(false);
+    analytics.logApplyCoupon(course?.id || '', couponInput, result.discountAmount || 0, result.valid);
     if (result.valid) {
       setAppliedCoupon(result);
       setAppliedCode(couponInput.trim().toUpperCase());
@@ -166,6 +171,12 @@ export default function CheckoutScreen() {
       });
 
       if (verifyResult.success) {
+        analytics.logPurchaseSuccess(
+          order.orderId,
+          course.id,
+          Math.round((order.amountPaise || order.amount) / 100),
+          rzpResponse.razorpay_payment_id
+        );
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace({
           pathname: '/payment/success',
@@ -181,6 +192,7 @@ export default function CheckoutScreen() {
       }
     } catch (err: any) {
       console.error('[Checkout] Payment flow failed:', err);
+      analytics.logPurchaseFailed(course?.id || '', err?.message || 'Payment failed');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setPaymentError(
         err?.message || 'Payment was cancelled or could not be verified. You can retry anytime.'

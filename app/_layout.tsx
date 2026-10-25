@@ -20,6 +20,9 @@ import { useConfigStore } from '../src/store/useConfigStore';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useNotificationStore } from '../src/store/useNotificationStore';
 import { realtimeManager } from '../src/services/realtimeManager';
+import { ForceUpdateScreen } from '../src/components/common/ForceUpdateScreen';
+import { AnnouncementBanner } from '../src/components/common/AnnouncementBanner';
+import { initializePushNotifications, setupNotificationResponseHandler } from '../src/services/pushNotificationService';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +40,7 @@ export default function RootLayout() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isMaintenanceMode = useConfigStore((state) => state.isMaintenanceMode);
+  const isUpdateRequired = useConfigStore((state) => state.isUpdateRequired);
   const startLiveSync = useConfigStore((state) => state.startLiveSync);
 
   // 1. Start central realtime config sync & notifications
@@ -48,6 +52,20 @@ export default function RootLayout() {
       unsubNotif();
     };
   }, [startLiveSync]);
+
+  // 2. Initialize FCM Push Notifications and Response Tap Handler
+  useEffect(() => {
+    const unsubTapHandler = setupNotificationResponseHandler();
+    return () => {
+      unsubTapHandler();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user?.uid) {
+      initializePushNotifications(user.uid);
+    }
+  }, [user?.uid]);
 
   // 2. Realtime maintenance mode blocker navigation
   useEffect(() => {
@@ -113,27 +131,32 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <StatusBar style={isDark ? 'light' : 'dark'} />
             <ConnectionBanner />
+            <AnnouncementBanner />
             <ToastContainer />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.background },
-                animation: 'slide_from_right',
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="maintenance" options={{ gestureEnabled: false }} />
-              <Stack.Screen name="(auth)" options={{ gestureEnabled: false }} />
-              <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
-              <Stack.Screen name="course/[id]" />
-              <Stack.Screen name="live/[id]" />
-              <Stack.Screen name="player/[lessonId]" />
-              <Stack.Screen name="checkout/[courseId]" />
-              <Stack.Screen name="notifications" />
-              <Stack.Screen name="support" />
-              <Stack.Screen name="payment/success" options={{ gestureEnabled: false }} />
-              <Stack.Screen name="payment/failed" options={{ gestureEnabled: false }} />
-            </Stack>
+            {isUpdateRequired ? (
+              <ForceUpdateScreen />
+            ) : (
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.background },
+                  animation: 'slide_from_right',
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="maintenance" options={{ gestureEnabled: false }} />
+                <Stack.Screen name="(auth)" options={{ gestureEnabled: false }} />
+                <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+                <Stack.Screen name="course/[id]" />
+                <Stack.Screen name="live/[id]" />
+                <Stack.Screen name="player/[lessonId]" />
+                <Stack.Screen name="checkout/[courseId]" />
+                <Stack.Screen name="notifications" />
+                <Stack.Screen name="support" />
+                <Stack.Screen name="payment/success" options={{ gestureEnabled: false }} />
+                <Stack.Screen name="payment/failed" options={{ gestureEnabled: false }} />
+              </Stack>
+            )}
           </QueryClientProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>
