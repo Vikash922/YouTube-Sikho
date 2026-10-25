@@ -1,6 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   initializeAuth,
+  // @ts-ignore - Exported at runtime in React Native Firebase Auth bundle
+  getReactNativePersistence,
   inMemoryPersistence,
   getAuth,
   onAuthStateChanged,
@@ -15,6 +17,7 @@ import {
   updateProfile,
   User,
 } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   initializeFirestore,
   getFirestore,
@@ -44,8 +47,12 @@ const firebaseApp =
 
 let authInstance: any;
 try {
+  const persistence =
+    typeof getReactNativePersistence === 'function' && AsyncStorage
+      ? getReactNativePersistence(AsyncStorage)
+      : inMemoryPersistence;
   authInstance = initializeAuth(firebaseApp, {
-    persistence: inMemoryPersistence,
+    persistence,
   });
 } catch (e) {
   authInstance = getAuth(firebaseApp);
