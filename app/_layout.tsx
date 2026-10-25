@@ -104,7 +104,13 @@ export default function RootLayout() {
     }
 
     const isPublic =
+      pathname === '/login' ||
+      pathname === '/otp' ||
+      pathname === '/profile-setup' ||
       pathname.startsWith('/(auth)') ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/otp') ||
+      pathname.startsWith('/profile-setup') ||
       pathname.startsWith('/legal');
 
     if (!user && !isPublic) {

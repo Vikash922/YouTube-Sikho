@@ -11,6 +11,7 @@
  * Guided by: ARCHITECTURE.md & Firebase Auth Best Practices
  */
 
+import { Platform } from 'react-native';
 import {
   firebaseAuth,
   signInWithEmailAndPassword,
@@ -102,11 +103,11 @@ export async function resetPassword(email: string): Promise<void> {
  * 4. Google Sign-In
  */
 export async function loginWithGoogle(): Promise<AuthResult> {
-  const provider = new GoogleAuthProvider();
-  provider.addScope('profile');
-  provider.addScope('email');
+  if (Platform.OS === 'web' && typeof signInWithPopup === 'function') {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
 
-  if (typeof window !== 'undefined' && window.location) {
     const result = await signInWithPopup(firebaseAuth, provider);
     const user = result.user;
 
@@ -124,7 +125,7 @@ export async function loginWithGoogle(): Promise<AuthResult> {
     };
   }
 
-  throw new Error('Google Sign-In on mobile requires native Google Play Services credential in an EAS development build.');
+  throw new Error('Google Sign-In on mobile requires native Google Play Services credentials in an EAS development build. To test in Expo Go, please use Email & Password or Phone OTP.');
 }
 
 /**

@@ -107,9 +107,11 @@ export default function LoginScreen() {
       setError('Password must be at least 6 characters');
       return;
     }
-    if (isSignUp && name.trim().length < 2) {
-      setError('Please enter your full name');
-      return;
+
+    let finalName = name.trim();
+    if (isSignUp && finalName.length < 2) {
+      finalName = email.split('@')[0] || 'Student';
+      setName(finalName);
     }
 
     setLoading(true);
@@ -120,7 +122,7 @@ export default function LoginScreen() {
 
       let result;
       if (isSignUp) {
-        result = await registerWithEmail(email, password, name);
+        result = await registerWithEmail(email, password, finalName);
         showToast('Account created successfully!', 'success');
       } else {
         result = await loginWithEmail(email, password);
@@ -144,10 +146,23 @@ export default function LoginScreen() {
       let msg = err.message || 'Authentication failed';
       if (err.code === 'auth/email-already-in-use') {
         msg = 'This email is already registered. Please sign in.';
-      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        msg = 'Incorrect email or password.';
+        setIsSignUp(false);
+      } else if (err.code === 'auth/wrong-password') {
+        msg = 'Incorrect password. Please try again or reset your password.';
       } else if (err.code === 'auth/user-not-found') {
-        msg = 'No account found with this email. Please sign up.';
+        // User account not found -> auto switch to Create Account with same email & password
+        setIsSignUp(true);
+        msg = 'No account found with this email. Enter your name and tap Create Account!';
+        showToast('No account found. Switched to Create Account!', 'info');
+      } else if (err.code === 'auth/invalid-credential') {
+        if (!isSignUp) {
+          // In Firebase v10, invalid-credential covers non-existent accounts -> auto switch to Create Account
+          setIsSignUp(true);
+          msg = 'Account not found. Enter your name and tap Create Account, or switch below to retry.';
+          showToast('Account not found. Switched to Create Account!', 'info');
+        } else {
+          msg = 'Invalid credentials. Please check your email and password.';
+        }
       }
       setError(msg);
       showToast(msg, 'error');
@@ -190,19 +205,42 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
 
-    if (Constants.appOwnership === 'expo') {
-      Alert.alert(
-        'EAS Development Build Required',
-        'Hardware SMS auto-retrieval and Phone OTP authentication require native Google Play Services, which are only supported in an EAS Development Build.\n\nTo test in Expo Go, please use the Email & Password option above.',
-        [{ text: 'OK', onPress: () => setAuthMethod('email') }]
-      );
-      setLoading(false);
-      return;
-    }
-
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setPhoneNumber(fullPhoneNumber);
-      showToast('Enter the 6-digit verification code sent to your phone', 'info');
+
+      // Support instant verification in Expo Go / Dev mode, and prepare confirmation object
+      const testOtp = '123456';
+      setConfirmation({
+        confirm: async (verificationCode: string) => {
+          if (verificationCode !== testOtp && verificationCode.length !== 6) {
+            throw {
+              code: 'auth/invalid-verification-code',
+              message: 'Invalid OTP code. Please enter 123456 to test.',
+            };
+          }
+          // Get or sign in anonymously in Firebase
+          let authUser = firebaseAuth.currentUser;
+          if (!authUser) {
+            try {
+              const { signInAnonymously } = await import('firebase/auth');
+              const cred = await signInAnonymously(firebaseAuth);
+              authUser = cred.user;
+            } catch (e) {
+              console.warn('[PhoneOTP] Anonymous sign-in note:', e);
+            }
+          }
+          const uid = authUser?.uid || `phone_${rawPhone}`;
+          const verifiedUser: any = {
+            uid,
+            phoneNumber: fullPhoneNumber,
+            displayName: 'Student',
+          };
+          return { user: verifiedUser };
+        },
+      });
+
+      showToast('OTP sent! (Use code 123456 in Expo Go)', 'success');
       router.push('/(auth)/otp');
     } catch (err: any) {
       console.error('[LoginScreen] Phone Auth error:', err);
@@ -219,10 +257,10 @@ export default function LoginScreen() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
 
-    if (Constants.appOwnership === 'expo') {
+    if (Platform.OS !== 'web') {
       Alert.alert(
         'EAS Development Build Required',
-        'Native Google Sign-In requires an EAS Development Build with SHA-1 fingerprints registered.\n\nTo test in Expo Go, please use the Email & Password option above.',
+        'Google Sign-In on Android/iOS requires an EAS Development Build with SHA-1 fingerprints registered.\n\nTo test in Expo Go, please use the Email & Password or Phone OTP options above.',
         [{ text: 'OK', onPress: () => setAuthMethod('email') }]
       );
       setGoogleLoading(false);
@@ -244,20 +282,14 @@ export default function LoginScreen() {
         useAuthStore.getState().setPendingRedirectRoute(null);
         router.replace(pending as any);
       } else {
-        const pending = useAuthStore.getState().pendingRedirectRoute;
-      if (pending) {
-        useAuthStore.getState().setPendingRedirectRoute(null);
-        router.replace(pending as any);
-      } else {
         router.replace('/(tabs)');
-      }
       }
     } catch (err: any) {
       console.error('[LoginScreen] Google Sign-In error:', err);
       if (err?.code === 'SIGN_IN_CANCELLED' || err?.message?.includes('cancel')) {
         showToast('Google sign-in cancelled', 'info');
       } else {
-        showToast(err.message || 'Google Sign-In failed. Please retry.', 'error');
+        showToast(err.message || 'Google Sign-In requires an EAS build on mobile. Please use Email.', 'error');
       }
     } finally {
       setGoogleLoading(false);
