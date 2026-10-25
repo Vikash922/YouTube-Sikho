@@ -5,6 +5,8 @@
  */
 
 import { defineSecret } from 'firebase-functions/params';
+import Razorpay from 'razorpay';
+import { HttpsError } from 'firebase-functions/v2/https';
 
 export const razorpayKeyId = defineSecret('RAZORPAY_KEY_ID');
 export const razorpayKeySecret = defineSecret('RAZORPAY_KEY_SECRET');
@@ -14,14 +16,22 @@ export const bunnyTokenAuthKey = defineSecret('BUNNY_TOKEN_AUTH_KEY');
 export const bunnyLibraryId = defineSecret('BUNNY_LIBRARY_ID');
 export const bunnyCdnHostname = defineSecret('BUNNY_CDN_HOSTNAME');
 
-export const allSecrets = [
+export const razorpaySecrets = [
   razorpayKeyId,
   razorpayKeySecret,
   razorpayWebhookSecret,
+];
+
+export const bunnySecrets = [
   bunnyApiKey,
   bunnyTokenAuthKey,
   bunnyLibraryId,
   bunnyCdnHostname,
+];
+
+export const allSecrets = [
+  ...razorpaySecrets,
+  ...bunnySecrets,
 ];
 
 export interface AppSecrets {
@@ -34,26 +44,56 @@ export interface AppSecrets {
   RAZORPAY_WEBHOOK_SECRET: string;
 }
 
-const getSecretValue = (secretParam: any, envName: string, fallback: string = ''): string => {
+const getSecretVal = (param: { value: () => string }, envName: string): string => {
   try {
-    const val = secretParam.value();
+    const val = param.value();
     if (val) return val;
   } catch {
-    // Secret not available in local test execution
+    // Falls back to process.env in emulator or test runners
   }
-  return process.env[envName] || fallback;
+  return process.env[envName] || '';
 };
-
-const isEmulatedOrTest = !process.env.K_SERVICE;
 
 export const getSecrets = (): AppSecrets => {
   return {
-    BUNNY_API_KEY: getSecretValue(bunnyApiKey, 'BUNNY_API_KEY', isEmulatedOrTest ? 'test_bunny_api_key' : ''),
-    BUNNY_TOKEN_AUTH_KEY: getSecretValue(bunnyTokenAuthKey, 'BUNNY_TOKEN_AUTH_KEY', isEmulatedOrTest ? 'test_bunny_token_auth_key' : ''),
-    BUNNY_LIBRARY_ID: getSecretValue(bunnyLibraryId, 'BUNNY_LIBRARY_ID', isEmulatedOrTest ? '123456' : ''),
-    BUNNY_CDN_HOSTNAME: getSecretValue(bunnyCdnHostname, 'BUNNY_CDN_HOSTNAME', isEmulatedOrTest ? 'video.youtubesikho.com' : ''),
-    RAZORPAY_KEY_ID: getSecretValue(razorpayKeyId, 'RAZORPAY_KEY_ID', isEmulatedOrTest ? 'rzp_test_placeholder' : ''),
-    RAZORPAY_KEY_SECRET: getSecretValue(razorpayKeySecret, 'RAZORPAY_KEY_SECRET', isEmulatedOrTest ? 'rzp_test_secret_placeholder' : ''),
-    RAZORPAY_WEBHOOK_SECRET: getSecretValue(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET', isEmulatedOrTest ? 'rzp_webhook_secret_placeholder' : ''),
+    BUNNY_API_KEY: getSecretVal(bunnyApiKey, 'BUNNY_API_KEY'),
+    BUNNY_TOKEN_AUTH_KEY: getSecretVal(bunnyTokenAuthKey, 'BUNNY_TOKEN_AUTH_KEY'),
+    BUNNY_LIBRARY_ID: getSecretVal(bunnyLibraryId, 'BUNNY_LIBRARY_ID'),
+    BUNNY_CDN_HOSTNAME: getSecretVal(bunnyCdnHostname, 'BUNNY_CDN_HOSTNAME'),
+    RAZORPAY_KEY_ID: getSecretVal(razorpayKeyId, 'RAZORPAY_KEY_ID'),
+    RAZORPAY_KEY_SECRET: getSecretVal(razorpayKeySecret, 'RAZORPAY_KEY_SECRET'),
+    RAZORPAY_WEBHOOK_SECRET: getSecretVal(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET'),
   };
+};
+
+export const getRazorpaySecrets = (): { keyId: string; keySecret: string } => {
+  const keyId = getSecretVal(razorpayKeyId, 'RAZORPAY_KEY_ID');
+  const keySecret = getSecretVal(razorpayKeySecret, 'RAZORPAY_KEY_SECRET');
+
+  if (!keyId || !keySecret) {
+    throw new HttpsError(
+      'internal',
+      'Razorpay secrets (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) are missing or not bound to the function. Configure them using: firebase functions:secrets:set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET'
+    );
+  }
+
+  return { keyId, keySecret };
+};
+
+export const getRazorpayWebhookSecret = (): string => {
+  const secret = getSecretVal(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET');
+  if (!secret) {
+    throw new Error(
+      'Razorpay webhook secret (RAZORPAY_WEBHOOK_SECRET) is missing or not bound. Configure using: firebase functions:secrets:set RAZORPAY_WEBHOOK_SECRET'
+    );
+  }
+  return secret;
+};
+
+export const getRazorpayClient = (): Razorpay => {
+  const { keyId, keySecret } = getRazorpaySecrets();
+  return new Razorpay({
+    key_id: keyId,
+    key_secret: keySecret,
+  });
 };

@@ -7,7 +7,8 @@ import {
   Palette,
   Phone,
   Loader2,
-  QrCode,
+  CreditCard,
+  ShieldCheck,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { Button } from '../components/common/Button';
@@ -27,7 +28,6 @@ export interface AdminAppSettings {
   minVersion: string;
   privacyUrl: string;
   termsUrl: string;
-  merchantUpiId?: string;
 }
 
 const DEFAULT_SETTINGS: AdminAppSettings = {
@@ -43,7 +43,6 @@ const DEFAULT_SETTINGS: AdminAppSettings = {
   minVersion: '1.0.0',
   privacyUrl: 'https://youtubesikho.com/privacy',
   termsUrl: 'https://youtubesikho.com/terms',
-  merchantUpiId: '7848894498@ibl',
 };
 
 export const Settings: React.FC = () => {
@@ -86,20 +85,7 @@ export const Settings: React.FC = () => {
         },
         { merge: true }
       );
-      if (settings.merchantUpiId) {
-        await setDoc(
-          doc(db, 'appConfig', 'payment'),
-          {
-            merchantUpiId: settings.merchantUpiId.trim(),
-            payeeName: settings.appName || 'YouTube Sikho',
-            gatewayMode: 'direct_upi',
-            zeroCommission: true,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-      }
-      showToast('App configuration & UPI payment gateway settings saved live!', 'success');
+      showToast('App configuration settings saved live!', 'success');
     } catch (err: any) {
       showToast(err.message || 'Failed to save settings', 'error');
     } finally {
@@ -391,28 +377,45 @@ export const Settings: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. Direct UPI Payment Gateway Settings */}
+        {/* 4. Payment Gateway Status (Razorpay) */}
         <div className="bg-white dark:bg-dark-surface rounded-card border border-light-border dark:border-dark-border p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-light-border dark:border-dark-border">
-            <QrCode className="w-5 h-5 text-emerald-500" />
+            <CreditCard className="w-5 h-5 text-brand-600" />
             <h3 className="font-bold font-display text-base text-light-text dark:text-dark-text">
-              Direct UPI Payment Gateway (0% Aggregator Fee)
+              Payments are processed by Razorpay
             </h3>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
-              Active Receiving UPI ID (Where student payments deposit)
-            </label>
-            <input
-              type="text"
-              value={settings.merchantUpiId || '7848894498@ibl'}
-              onChange={(e) => setSettings({ ...settings, merchantUpiId: e.target.value })}
-              className="w-full sm:max-w-md px-3.5 py-2.5 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-light-text dark:text-dark-text text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="7848894498@ibl"
-            />
-            <p className="text-xs text-slate-400 mt-1">
-              Payments from Google Pay, PhonePe, Paytm, BHIM, and QR code scans will directly credit to this VPA.
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 p-3.5 rounded-card bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+              <div className="text-xs space-y-1">
+                <p className="font-bold text-emerald-800 dark:text-emerald-300">
+                  Server-Authoritative Payment Processing
+                </p>
+                <p className="text-emerald-700 dark:text-emerald-400">
+                  Orders, HMAC-SHA256 signatures, and webhooks are verified securely in Firebase Cloud Functions.
+                  Client secrets are safely stored in Google Cloud Secret Manager (<code className="font-mono font-bold">RAZORPAY_KEY_ID</code>, <code className="font-mono font-bold">RAZORPAY_KEY_SECRET</code>, <code className="font-mono font-bold">RAZORPAY_WEBHOOK_SECRET</code>).
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-card bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border">
+                <span className="text-slate-500 block uppercase font-bold text-[10px]">Gateway Provider</span>
+                <span className="font-bold text-light-text dark:text-dark-text text-sm">Razorpay</span>
+              </div>
+              <div className="p-3 rounded-card bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border">
+                <span className="text-slate-500 block uppercase font-bold text-[10px]">Verification Mode</span>
+                <span className="font-bold text-light-text dark:text-dark-text text-sm">HMAC-SHA256 (Server)</span>
+              </div>
+              <div className="p-3 rounded-card bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border">
+                <span className="text-slate-500 block uppercase font-bold text-[10px]">Webhook Sync</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400 text-sm">Active (/razorpayWebhook)</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              To update API keys or webhook secrets, use the Firebase CLI (<code className="font-mono">firebase functions:secrets:set</code>). See <code className="font-mono">BUNNY_RAZORPAY_SETUP.md</code> for full details.
             </p>
           </div>
         </div>

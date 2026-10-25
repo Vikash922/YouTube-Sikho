@@ -16,6 +16,7 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
+  IndianRupee,
 } from 'lucide-react';
 import { db } from '../firebase';
 import { Coupon } from '../types';
@@ -27,15 +28,18 @@ export const Coupons: React.FC = () => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
   const [form, setForm] = useState({
     code: '',
-    discountPercent: 20,
-    maxUses: 100,
-    validUntilDate: '2026-12-31',
+    discountType: 'percent' as 'percent' | 'flat',
+    value: 20,
+    maxUses: 0, // 0 = unlimited
+    expiresAtDate: '',
+    minPrice: '',
     isActive: true,
   });
 
@@ -44,35 +48,42 @@ export const Coupons: React.FC = () => {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const items = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as Coupon[];
+        const items = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const discountType = data.discountType || (data.type === 'flat' ? 'flat' : 'percent');
+          const value = Number(data.value !== undefined ? data.value : (data.discountPercent || 0));
+          const maxUses = Number(data.maxUses !== undefined ? data.maxUses : 0);
+          const usedCount = Number(data.usedCount !== undefined ? data.usedCount : (data.usageCount || 0));
+          const isActive = data.isActive !== undefined ? Boolean(data.isActive) : (data.active !== undefined ? Boolean(data.active) : true);
+          let expiresAt = data.expiresAt || data.validUntil || null;
+          if (expiresAt && typeof expiresAt.toDate === 'function') {
+            expiresAt = expiresAt.toDate().toISOString();
+          }
+
+          return {
+            id: docSnap.id,
+            code: (data.code || docSnap.id).toUpperCase(),
+            discountType,
+            value,
+            maxUses,
+            usedCount,
+            expiresAt,
+            minPrice: data.minPrice ? Number(data.minPrice) : undefined,
+            courseIds: data.courseIds || [],
+            isActive,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          } as Coupon;
+        });
+
         setCoupons(items);
+        setLoadError(null);
         setLoading(false);
       },
       (err) => {
-        console.warn('Coupons onSnapshot error, using demo coupons:', err);
-        setCoupons([
-          {
-            id: 'coup_1',
-            code: 'SIKHO50',
-            discountPercent: 50,
-            maxUses: 500,
-            usedCount: 42,
-            validUntil: new Date('2026-12-31').getTime(),
-            isActive: true,
-          },
-          {
-            id: 'coup_2',
-            code: 'WELCOME20',
-            discountPercent: 20,
-            maxUses: 1000,
-            usedCount: 185,
-            validUntil: new Date('2026-12-31').getTime(),
-            isActive: true,
-          },
-        ]);
+        console.error('Coupons onSnapshot error:', err);
+        setLoadError(err.message || 'Failed to load coupons from Firestore.');
+        setCoupons([]);
         setLoading(false);
       }
     );
@@ -83,9 +94,11 @@ export const Coupons: React.FC = () => {
     setEditingCoupon(null);
     setForm({
       code: '',
-      discountPercent: 20,
-      maxUses: 100,
-      validUntilDate: '2026-12-31',
+      discountType: 'percent',
+      value: 20,
+      maxUses: 0,
+      expiresAtDate: '',
+      minPrice: '',
       isActive: true,
     });
     setIsModalOpen(true);
@@ -93,14 +106,23 @@ export const Coupons: React.FC = () => {
 
   const handleOpenEdit = (coupon: Coupon) => {
     setEditingCoupon(coupon);
-    const dateStr = coupon.validUntil
-      ? new Date(coupon.validUntil).toISOString().split('T')[0]
-      : '2026-12-31';
+    let dateStr = '';
+    if (coupon.expiresAt) {
+      try {
+        const d = new Date(coupon.expiresAt);
+        if (!isNaN(d.getTime())) {
+          dateStr = d.toISOString().split('T')[0];
+        }
+      } catch {}
+    }
+
     setForm({
       code: coupon.code,
-      discountPercent: coupon.discountPercent,
-      maxUses: coupon.maxUses || 100,
-      validUntilDate: dateStr,
+      discountType: coupon.discountType || 'percent',
+      value: coupon.value || 0,
+      maxUses: coupon.maxUses || 0,
+      expiresAtDate: dateStr,
+      minPrice: coupon.minPrice ? String(coupon.minPrice) : '',
       isActive: coupon.isActive,
     });
     setIsModalOpen(true);
@@ -114,33 +136,56 @@ export const Coupons: React.FC = () => {
       return;
     }
 
+    if (form.value <= 0) {
+      showToast('Discount value must be greater than 0', 'error');
+      return;
+    }
+
+    if (form.discountType === 'percent' && form.value > 100) {
+      showToast('Percentage discount cannot exceed 100%', 'error');
+      return;
+    }
+
     try {
-      const validUntil = new Date(form.validUntilDate).getTime();
+      const expiresAt = form.expiresAtDate
+        ? new Date(`${form.expiresAtDate}T23:59:59.999Z`).toISOString()
+        : null;
+
+      const couponPayload = {
+        code: cleanCode,
+        discountType: form.discountType,
+        value: Number(form.value),
+        maxUses: Number(form.maxUses) || 0,
+        expiresAt,
+        minPrice: form.minPrice ? Number(form.minPrice) : null,
+        isActive: form.isActive,
+        updatedAt: new Date().toISOString(),
+      };
+
       if (editingCoupon) {
-        await updateDoc(doc(db, 'coupons', editingCoupon.id), {
-          code: cleanCode,
-          discountPercent: Number(form.discountPercent),
-          maxUses: Number(form.maxUses),
-          validUntil,
-          isActive: form.isActive,
-          updatedAt: new Date().toISOString(),
-        });
-        showToast('Coupon updated successfully!', 'success');
+        // If code changed, delete old and write new
+        if (editingCoupon.id !== cleanCode) {
+          await deleteDoc(doc(db, 'coupons', editingCoupon.id));
+        }
+        await setDoc(
+          doc(db, 'coupons', cleanCode),
+          {
+            ...couponPayload,
+            usedCount: editingCoupon.usedCount || 0,
+            createdAt: editingCoupon.createdAt || new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        showToast(`Coupon ${cleanCode} updated!`, 'success');
       } else {
-        const newId = `coup_${cleanCode}`;
-        await setDoc(doc(db, 'coupons', newId), {
-          id: newId,
-          code: cleanCode,
-          discountPercent: Number(form.discountPercent),
-          maxUses: Number(form.maxUses),
+        await setDoc(doc(db, 'coupons', cleanCode), {
+          ...couponPayload,
           usedCount: 0,
-          validUntil,
-          isActive: form.isActive,
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         });
-        showToast('New coupon created!', 'success');
+        showToast(`Coupon ${cleanCode} created!`, 'success');
       }
+
       setIsModalOpen(false);
     } catch (err: any) {
       console.error('Save coupon error:', err);
@@ -149,7 +194,7 @@ export const Coupons: React.FC = () => {
   };
 
   const handleDeleteCoupon = async (id: string) => {
-    if (!window.confirm('Delete this coupon?')) return;
+    if (!window.confirm(`Delete coupon ${id}?`)) return;
     try {
       await deleteDoc(doc(db, 'coupons', id));
       showToast('Coupon deleted', 'info');
@@ -162,6 +207,7 @@ export const Coupons: React.FC = () => {
     try {
       await updateDoc(doc(db, 'coupons', coupon.id), {
         isActive: !coupon.isActive,
+        updatedAt: new Date().toISOString(),
       });
       showToast(`Coupon marked ${!coupon.isActive ? 'active' : 'inactive'}`, 'success');
     } catch (err: any) {
@@ -183,7 +229,7 @@ export const Coupons: React.FC = () => {
             Coupons & Discounts Manager
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Create promotional codes with percentage discounts, expiry dates, and usage limits.
+            Server-authoritative promotional codes (coupons/&#123;CODE&#125;) with percent/flat discounts and usage caps.
           </p>
         </div>
 
@@ -191,6 +237,12 @@ export const Coupons: React.FC = () => {
           <Plus className="w-4 h-4 mr-2" /> Add New Coupon
         </Button>
       </div>
+
+      {loadError && (
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-xs text-rose-600 dark:text-rose-400">
+          <strong>Database error:</strong> {loadError}
+        </div>
+      )}
 
       {/* Search Input */}
       <div className="relative max-w-md">
@@ -215,7 +267,7 @@ export const Coupons: React.FC = () => {
               No coupons created yet
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Click &quot;Add New Coupon&quot; to offer checkout discounts.
+              Click &quot;Add New Coupon&quot; to offer discounts to learners.
             </p>
           </div>
         ) : (
@@ -227,6 +279,7 @@ export const Coupons: React.FC = () => {
                   <th className="px-5 py-3">Discount</th>
                   <th className="px-5 py-3">Usage</th>
                   <th className="px-5 py-3">Valid Until</th>
+                  <th className="px-5 py-3">Min. Course Price</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
@@ -239,19 +292,32 @@ export const Coupons: React.FC = () => {
                     </td>
 
                     <td className="px-5 py-3 font-bold font-display text-sm text-light-text dark:text-dark-text">
-                      {coupon.discountPercent}% OFF
+                      {coupon.discountType === 'flat' ? (
+                        <span className="flex items-center gap-0.5">
+                          <IndianRupee className="w-3.5 h-3.5" />
+                          {coupon.value} FLAT OFF
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-0.5">
+                          {coupon.value}% OFF
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-5 py-3">
                       <span className="text-slate-600 dark:text-slate-300 font-mono">
-                        {coupon.usedCount || 0} / {coupon.maxUses || '∞'}
+                        {coupon.usedCount || 0} / {coupon.maxUses === 0 ? '∞' : coupon.maxUses}
                       </span>
                     </td>
 
                     <td className="px-5 py-3 text-slate-500 dark:text-slate-400">
-                      {coupon.validUntil
-                        ? new Date(coupon.validUntil).toLocaleDateString()
+                      {coupon.expiresAt
+                        ? new Date(coupon.expiresAt).toLocaleDateString()
                         : 'Never expires'}
+                    </td>
+
+                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400">
+                      {coupon.minPrice ? `₹${coupon.minPrice}` : 'None'}
                     </td>
 
                     <td className="px-5 py-3">
@@ -279,12 +345,14 @@ export const Coupons: React.FC = () => {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => handleOpenEdit(coupon)}
+                          title="Edit"
                           className="p-1.5 rounded text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteCoupon(coupon.id)}
+                          title="Delete"
                           className="p-1.5 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -317,7 +385,7 @@ export const Coupons: React.FC = () => {
                   required
                   value={form.code}
                   onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                  placeholder="e.g. SIKHO50"
+                  placeholder="e.g. SIKHO20"
                   className="w-full px-3 py-2 text-sm font-mono font-bold rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500 uppercase"
                 />
               </div>
@@ -325,31 +393,60 @@ export const Coupons: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Discount Percent (%) *
+                    Discount Type
+                  </label>
+                  <select
+                    value={form.discountType}
+                    onChange={(e) =>
+                      setForm({ ...form, discountType: e.target.value as 'percent' | 'flat' })
+                    }
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="percent">Percentage (%)</option>
+                    <option value="flat">Flat Amount (₹)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Discount Value *
                   </label>
                   <input
                     type="number"
                     min={1}
-                    max={100}
+                    max={form.discountType === 'percent' ? 100 : 100000}
                     required
-                    value={form.discountPercent}
-                    onChange={(e) =>
-                      setForm({ ...form, discountPercent: Number(e.target.value) })
-                    }
+                    value={form.value}
+                    onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Max Uses Limit
+                    Max Uses (0 = unlimited)
                   </label>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     value={form.maxUses}
-                    onChange={(e) =>
-                      setForm({ ...form, maxUses: Number(e.target.value) })
-                    }
+                    onChange={(e) => setForm({ ...form, maxUses: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Min. Course Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Optional"
+                    value={form.minPrice}
+                    onChange={(e) => setForm({ ...form, minPrice: e.target.value })}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
                   />
                 </div>
@@ -357,12 +454,12 @@ export const Coupons: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Valid Until Expiry Date
+                  Valid Until Expiry Date (Optional)
                 </label>
                 <input
                   type="date"
-                  value={form.validUntilDate}
-                  onChange={(e) => setForm({ ...form, validUntilDate: e.target.value })}
+                  value={form.expiresAtDate}
+                  onChange={(e) => setForm({ ...form, expiresAtDate: e.target.value })}
                   className="w-full px-3 py-2 text-sm rounded-xl border border-light-border dark:border-dark-border bg-slate-50 dark:bg-slate-800/50 text-light-text dark:text-dark-text focus:outline-none focus:border-brand-500"
                 />
               </div>

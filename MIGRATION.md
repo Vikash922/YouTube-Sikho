@@ -44,9 +44,30 @@ Students never read `/quizzes/{id}/questions` directly. The mobile app invokes t
 
 ---
 
-## 3. Server-Authoritative Razorpay Migration
+## 3. Server-Authoritative Razorpay & Enrollment Schema Migration
 
-### Orders & Enrollment
-- Direct UPI simulated endpoints (`YouPI`) are removed.
-- Payment flow uses `createOrder` (authenticated student, server price calculation) and `verifyPayment` (HMAC-SHA256 signature verification via `crypto.timingSafeEqual`).
-- Enrollments are written exclusively by Cloud Functions upon signature verification.
+### Orders Schema Standardization
+- Direct UPI simulated endpoints (`YouPI`), manual UTR entries, and client-side pricing are **strictly removed**.
+- Database amounts are stored in integer paise (`amountPaise: number`), eliminating floating-point currency bugs.
+- Order `status` values: `'created' | 'paid' | 'refunded' | 'failed'`.
+- Orders can only be created and updated by Cloud Functions (`createOrder`, `verifyPayment`, `razorpayWebhook`, `refundPayment`) via the Firebase Admin SDK. Client-side write access is completely blocked in `firestore.rules`.
+
+### Enrollments Schema Standardization
+- Field `active: boolean` is migrated to unified lifecycle state: `status: 'active' | 'revoked' | 'expired'`.
+- Key format: `enrollments/{uid}_{courseId}`.
+- Student access checks inspect `status === 'active'`.
+- All writes are restricted to Cloud Functions (`verifyPayment`, `razorpayWebhook`, `manageEnrollment`); client-side direct writes are denied in `firestore.rules`.
+
+### Coupons Schema Standardization
+- Document location: `coupons/{CODE}` (UPPERCASE string document ID).
+- Fields:
+  - `code` (string, uppercase)
+  - `discountType` (`'percent' | 'flat'`)
+  - `value` (number: percent 1-100 or flat INR)
+  - `isActive` (boolean)
+  - `maxUses` (number, 0 = unlimited)
+  - `usedCount` (number, incremented inside atomic transaction)
+  - `expiresAt` (ISO string or timestamp or null)
+  - `minPrice` (optional minimum course price in rupees)
+  - `courseIds` (optional array of restricted course IDs)
+- Client-side reads from mobile are blocked in `firestore.rules`; coupon validation is performed server-side via the `validateCoupon` callable Cloud Function.

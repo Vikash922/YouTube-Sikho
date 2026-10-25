@@ -16,7 +16,6 @@ import {
   Radio,
   FileQuestion,
   LifeBuoy,
-  QrCode,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -27,7 +26,6 @@ export type NavTab =
   | 'quizzes'
   | 'notifications'
   | 'orders'
-  | 'payment-gateway'
   | 'coupons'
   | 'categories'
   | 'home-manager'
@@ -61,7 +59,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'quizzes', label: 'Quizzes & Tests', icon: <FileQuestion className="w-5 h-5" /> },
     { id: 'notifications', label: 'Push Notifications', icon: <Bell className="w-5 h-5" /> },
     { id: 'orders', label: 'Orders & Sales', icon: <CreditCard className="w-5 h-5" /> },
-    { id: 'payment-gateway', label: 'UPI Gateway & QR', icon: <QrCode className="w-5 h-5 text-emerald-500" />, badge: '0%' },
     { id: 'coupons', label: 'Coupons', icon: <Tag className="w-5 h-5" /> },
     { id: 'categories', label: 'Categories', icon: <FolderTree className="w-5 h-5" /> },
     { id: 'home-manager', label: 'Home Manager', icon: <Layers className="w-5 h-5" /> },

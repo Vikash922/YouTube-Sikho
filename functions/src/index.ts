@@ -1,11 +1,12 @@
 import * as admin from 'firebase-admin';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { allSecrets } from './config';
+import { razorpaySecrets, bunnySecrets } from './config';
 import { requireAdmin, setAdminClaimHandler } from './auth';
 import { createOrderHandler } from './payments/createOrder';
 import { verifyPaymentHandler } from './payments/verifyPayment';
-import { youpiWebhookHandler } from './payments/youpiWebhook';
+import { razorpayWebhookHandler } from './payments/razorpayWebhook';
 import { refundPaymentHandler } from './payments/refundPayment';
+import { validateCouponHandler } from './payments/validateCoupon';
 import { getVideoTokenHandler } from './bunny/getVideoToken';
 import { createBunnyUploadHandler } from './bunny/createBunnyUpload';
 import { manageEnrollmentHandler } from './admin/manageEnrollment';
@@ -22,10 +23,26 @@ if (admin.apps.length === 0) {
 const REGION = 'asia-south1';
 
 /**
- * 1. createOrder: Server-Calculated Price & Razorpay Order Creation
+ * 1. validateCoupon: Server-Side Coupon Validation & Discount Calculation
+ */
+export const validateCoupon = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const uid = request.auth?.uid || null;
+    try {
+      return await validateCouponHandler(request.data, uid);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('invalid-argument', err.message || 'Coupon validation failed.');
+    }
+  }
+);
+
+/**
+ * 2. createOrder: Server-Calculated Price & Razorpay Order Creation
  */
 export const createOrder = onCall(
-  { region: REGION, cors: true, secrets: allSecrets },
+  { region: REGION, cors: true, secrets: razorpaySecrets },
   async (request) => {
     const uid = request.auth?.uid || null;
     try {
@@ -38,10 +55,10 @@ export const createOrder = onCall(
 );
 
 /**
- * 2. verifyPayment: Cryptographic HMAC Signature Verification & Enrollment Unlock
+ * 3. verifyPayment: Cryptographic HMAC Signature Verification & Enrollment Unlock
  */
 export const verifyPayment = onCall(
-  { region: REGION, cors: true, secrets: allSecrets },
+  { region: REGION, cors: true, secrets: razorpaySecrets },
   async (request) => {
     const uid = request.auth?.uid || null;
     try {
@@ -54,38 +71,20 @@ export const verifyPayment = onCall(
 );
 
 /**
- * 3. youpiWebhook / razorpayWebhook: Payment Gateway Webhook Handler
+ * 4. razorpayWebhook: Official Payment Gateway Webhook Handler
  */
-export const youpiWebhook = onRequest(
-  { region: REGION, cors: true, secrets: allSecrets },
+export const razorpayWebhook = onRequest(
+  { region: REGION, cors: true, secrets: razorpaySecrets },
   async (req, res) => {
-    if (req.method !== 'POST') {
-      res.status(405).send('Method Not Allowed');
-      return;
-    }
-
-    const signature =
-      (req.headers['x-razorpay-signature'] as string | undefined) ||
-      (req.headers['x-gateway-signature'] as string | undefined);
-    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-
-    try {
-      const result = await youpiWebhookHandler(rawBody, signature);
-      res.status(200).json(result);
-    } catch (err: any) {
-      console.error('Razorpay Webhook processing error:', err.message);
-      res.status(400).send(`Webhook Error: ${err.message}`);
-    }
+    await razorpayWebhookHandler(req, res);
   }
 );
 
-export const razorpayWebhook = youpiWebhook;
-
 /**
- * 4. getVideoToken: Time-Limited Bunny Stream Signed Token HLS Generator
+ * 5. getVideoToken: Time-Limited Bunny Stream Signed Token HLS Generator
  */
 export const getVideoToken = onCall(
-  { region: REGION, cors: true, secrets: allSecrets },
+  { region: REGION, cors: true, secrets: bunnySecrets },
   async (request) => {
     const uid = request.auth?.uid || null;
     try {
@@ -98,10 +97,10 @@ export const getVideoToken = onCall(
 );
 
 /**
- * 5. createBunnyUpload: Admin-Only Video Upload Asset Creation
+ * 6. createBunnyUpload: Admin-Only Video Upload Asset Creation
  */
 export const createBunnyUpload = onCall(
-  { region: REGION, cors: true, secrets: allSecrets },
+  { region: REGION, cors: true, secrets: bunnySecrets },
   async (request) => {
     requireAdmin(request);
     const uid = request.auth!.uid;
@@ -115,10 +114,10 @@ export const createBunnyUpload = onCall(
 );
 
 /**
- * 6. refundPayment: Admin-Only Refund API & Immediate Access Revocation
+ * 7. refundPayment: Admin-Only Refund API & Immediate Access Revocation
  */
 export const refundPayment = onCall(
-  { region: REGION, cors: true, secrets: allSecrets },
+  { region: REGION, cors: true, secrets: razorpaySecrets },
   async (request) => {
     requireAdmin(request);
     const uid = request.auth!.uid;

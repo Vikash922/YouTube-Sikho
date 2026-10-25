@@ -1,171 +1,178 @@
-# Phase 3: Bunny Stream & Razorpay Architecture & Setup Guide
+# 💳 Razorpay & Bunny Stream Integration & Setup Guide
 
 ---
 
-## 1. System Architecture & Security Model
+## 1. System Architecture & Security Boundary
 
 ```
-                    ┌──────────────────────────────────────────────┐
-                    │               CLIENT DEVICES                 │
-                    │   Mobile App (Expo)  /  Admin Web (React)   │
-                    └──────────────┬───────────────────────────────┘
-                                   │
-               HTTPS / Signed Requests (Firebase Auth ID Token)
-                                   │
-                                   ▼
-                    ┌──────────────────────────────────────────────┐
-                    │           FIREBASE CLOUD FUNCTIONS           │
-                    │   (Server-Side Execution & Secret Storage)   │
-                    ├──────────────────────────────────────────────┤
-                    │ • getVideoToken      • createOrder            │
-                    │ • createBunnyUpload  • verifyPayment          │
-                    │ • refundPayment      • razorpayWebhook        │
-                    └──────────────┬───────────────────────────────┘
-                                   │
-                   ┌───────────────┴───────────────┐
-                   ▼                               ▼
-    ┌─────────────────────────────┐ ┌─────────────────────────────┐
-    │     BUNNY STREAM API        │ │      RAZORPAY API           │
-    │  • Video Library Transcode  │ │  • Order Creation           │
-    │  • URL Token Authentication │ │  • HMAC Signature Check     │
-    │  • HLS Stream Delivery      │ │  • Webhook Delivery         │
-    └─────────────────────────────┘ └─────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                     CLIENT APPS                        │
+│   Mobile App (React Native / Expo EAS Dev Build)       │
+│   Admin Panel (React / Vite)                           │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+    Callable Functions (Firebase Auth ID Token)
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│            FIREBASE CLOUD FUNCTIONS (asia-south1)      │
+│   (Server-Authoritative Execution & Secret Manager)    │
+├────────────────────────────────────────────────────────┤
+│ • validateCoupon  • createOrder    • verifyPayment     │
+│ • refundPayment   • razorpayWebhook                   │
+│ • getVideoToken   • createBunnyUpload                  │
+└────────────┬───────────────────────────────┬───────────┘
+             │                               │
+             ▼                               ▼
+┌──────────────────────────┐   ┌─────────────────────────┐
+│     RAZORPAY API         │   │   BUNNY STREAM API      │
+│ • Orders API (amount)    │   │ • Transcoding / Library │
+│ • Fetch Payment Check    │   │ • URL Token HMAC DRM    │
+│ • Refund Processing API  │   │ • HLS CDN Delivery      │
+│ • Webhook Callbacks      │   │                         │
+└──────────────────────────┘   └─────────────────────────┘
 ```
 
 > [!IMPORTANT]
-> **Zero-Trust Security Boundary**:
-> 1. `BUNNY_API_KEY`, `BUNNY_TOKEN_AUTH_KEY`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` **NEVER** enter client-side bundles (neither mobile app nor `/admin`).
-> 2. All video playback URLs are time-limited signed tokens (valid 3600s) generated exclusively on the server after validating student enrollment in Firestore.
-> 3. All payment amounts are calculated **ON THE SERVER** from the database course price and coupon collection. Client-submitted prices are discarded.
-> 4. Payment unlock is **double-secured**: client-side `verifyPayment` signature check + asynchronous `razorpayWebhook` backup. Both operations are strictly idempotent.
+> **Zero-Trust Financial Rules**:
+> 1. All order amounts are computed **on the server in integer paise** (`amountPaise`). Client-submitted price amounts are strictly discarded.
+> 2. `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` **never** touch client code or bundles.
+> 3. Signature verification uses `crypto.timingSafeEqual` with HMAC-SHA256 (`razorpayOrderId|razorpayPaymentId`).
+> 4. Order fulfillment & coupon incrementing execute inside an atomic, idempotent Firestore transaction.
+> 5. Direct client writes to `orders` and `enrollments` are blocked in `firestore.rules`.
 
 ---
 
-## 2. Bunny Stream Video Setup
+## 2. Razorpay Account Setup & KYC
 
-### A. Create Video Library
-1. Log in to [Bunny.net Console](https://dash.bunny.net).
-2. From the left sidebar, navigate to **Stream** > **Add Video Library**.
-3. Set Library Name: `youtube-sikho-library`.
-4. Choose your primary replication region (e.g., `Singapore / India / Frankfurt`).
-5. Click **Create Video Library**.
+### Step A: Account Registration & KYC
+1. Sign up at [https://razorpay.com](https://razorpay.com).
+2. Complete business KYC (Bank Account, PAN, GST if applicable, business registration documents).
+3. Once KYC is submitted, your account has access to **Test Mode** immediately, and **Live Mode** upon approval.
 
-### B. Retrieve Credentials
-Within your Video Library dashboard, click **API & Encoding**:
-- **Library ID**: Numeric ID (e.g., `384920`). Save as `BUNNY_LIBRARY_ID`.
-- **API Key**: Read/Write API key (e.g., `a7c18...`). Save as `BUNNY_API_KEY`.
-- **Pull Zone / CDN Hostname**: Under **Delivery**, note the CDN hostname (e.g., `vz-b78912-892.b-cdn.net`). Save as `BUNNY_CDN_HOSTNAME`.
+### Step B: Generate API Keys
+1. In the [Razorpay Dashboard](https://dashboard.razorpay.com), use the top header to toggle between **Test Mode** and **Live Mode**.
+2. Navigate to **Account & Settings** > **API Keys** (under *Website and app settings*).
+3. Click **Generate Key**.
+4. Securely note down:
+   - `Key ID` (e.g. `rzp_test_...` or `rzp_live_...`)
+   - `Key Secret` (32+ alphanumeric characters)
 
-### C. Configure Token Authentication (Anti-Leech DRM)
-1. In your Video Library, navigate to **Security** > **URL Token Authentication**.
-2. Toggle **Enable Token Authentication** to **ON**.
-3. Generate and copy the **Security Key / URL Token Authentication Key**. Save as `BUNNY_TOKEN_AUTH_KEY`.
-4. Leave **Token Expiration** handling to the Cloud Function (we dynamically calculate 3600 seconds per token).
-5. Toggle **Direct Play URL Access** to **OFF** (forces all playback through tokenized signed requests).
-
-### D. Token Generation Formula (Cloud Function Reference)
-Bunny Stream token authorization is calculated using SHA-256 HMAC:
-```typescript
-import crypto from 'crypto';
-
-export function generateBunnySignedUrl(
-  cdnHostname: string,
-  videoId: string,
-  tokenAuthKey: string,
-  expiresInSeconds: number = 3600
-): { hlsUrl: string; expiresAt: number } {
-  const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds;
-  const path = `/${videoId}/playlist.m3u8`;
-  
-  // Hashable string: tokenAuthKey + path + expiresAt
-  const hashableBase = `${tokenAuthKey}${path}${expiresAt}`;
-  const token = crypto
-    .createHash('sha256')
-    .update(hashableBase)
-    .digest('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-
-  const hlsUrl = `https://${cdnHostname}${path}?token=${token}&expires=${expiresAt}`;
-  return { hlsUrl, expiresAt };
-}
-```
+### Step C: Configure Webhook
+1. In the Razorpay Dashboard, navigate to **Account & Settings** > **Webhooks**.
+2. Click **+ Add New Webhook**.
+3. **Webhook URL**:
+   `https://asia-south1-<your-project-id>.cloudfunctions.net/razorpayWebhook`
+   *(Replace `<your-project-id>` with your Firebase Project ID, e.g. `sikho-77341`).*
+4. **Secret**: Enter a strong random secret string (e.g. `whsec_yt_sikho_production_99812`).
+5. **Alert Email**: Enter your operations/support email address.
+6. **Active Events**: Check the following three events:
+   - `payment.captured` — Triggered when student payment succeeds (fallback fulfillment)
+   - `payment.failed` — Triggered when transaction fails (updates order status)
+   - `refund.processed` — Triggered when Razorpay processes an admin refund (revokes enrollment)
+7. Click **Create Webhook**.
 
 ---
 
-## 3. Razorpay Payment Gateway Setup
+## 3. Configure Cloud Secrets in Firebase
 
-### A. Generate Test API Keys
-1. Log in to the [Razorpay Dashboard](https://dashboard.razorpay.com).
-2. Switch to **Test Mode** (toggle on top navigation bar).
-3. Go to **Settings** > **API Keys** > **Generate Key**.
-4. Save the generated keys:
-   - `RAZORPAY_KEY_ID`: `rzp_test_...` (Exposed to mobile client for checkout modal)
-   - `RAZORPAY_KEY_SECRET`: Secret key (Stored strictly in Firebase Functions Secrets)
+Set the secrets in Google Cloud Secret Manager using the Firebase CLI:
 
-### B. Configure Webhook
-1. Go to **Settings** > **Webhooks** > **Add New Webhook**.
-2. **Webhook URL**:
-   `https://<region>-<project-id>.cloudfunctions.net/razorpayWebhook`
-   (e.g., `https://us-central1-sikho-77341.cloudfunctions.net/razorpayWebhook`).
-3. **Secret**: Enter a strong random secret (e.g., `whsec_yt_sikho_production_99812`). Save as `RAZORPAY_WEBHOOK_SECRET`.
-4. **Alert Email**: Enter administrator email.
-5. **Active Events**: Select the following checkboxes:
-   - `payment.captured` (Primary fulfillment event)
-   - `payment.failed` (Updates order status to failed)
-   - `refund.processed` (Revokes student enrollment upon refund)
-6. Click **Save Webhook**.
-
-### C. Testing in Razorpay TEST Mode
-When using `RAZORPAY_KEY_ID: rzp_test_...`:
-- **Test Cards**:
-  - Number: `4111 1111 1111 1111`
-  - Expiry: Any future date (e.g., `12/30`)
-  - CVV: `123`
-  - OTP: `123456` (Success) or `failure`
-- **Test UPI**:
-  - Success handle: `success@razorpay`
-  - Failure handle: `failure@razorpay`
-- **Test Netbanking**: Select any bank -> click **Success** or **Failure** on the simulated bank page.
-
----
-
-## 4. Complete Package Manifest & EAS Rebuild Matrix
-
-| Package | Purpose | Environment | Requires EAS Rebuild? | Reason & Fallback Strategy |
-| :--- | :--- | :--- | :--- | :--- |
-| **`expo-video`** | Modern hardware-accelerated HLS video player with audio focus and PiP | Mobile App | **YES** | Native AVPlayer (iOS) and ExoPlayer (Android) bindings. Fallback: Mock player UI in Expo Go with standard controls. |
-| **`react-native-razorpay`** | Native Razorpay Android/iOS Checkout SDK wrapper | Mobile App | **YES** | Wraps native Android Razorpay Standard SDK (`com.razorpay.checkout`). Fallback: Web checkout URL / Test simulation. |
-| **`expo-screen-capture`** | Screenshot and screen recording blocking (`preventScreenCaptureAsync`) | Mobile App | **YES** (Included in custom dev client) | Requires native Android `FLAG_SECURE` window attribute. Safe fallback on web/emulators. |
-| **`lottie-react-native`** | Hardware-accelerated celebration animations on payment success | Mobile App | **YES** (Pre-installed in Expo SDK 51) | Native vector renderer. Fallback: Spring SVG pulse icon. |
-| **`firebase-functions`** | Cloud Functions framework (v2 HTTPS & triggers) | Cloud Functions | **No** (Server-side) | Runs on Google Cloud Functions Node 20 runtime. |
-| **`firebase-admin`** | Firebase Admin SDK for privileged Firestore, Auth claims, and Transactions | Cloud Functions | **No** (Server-side) | Server-side only with service account permissions. |
-| **`razorpay`** | Official Razorpay Node.js SDK for server order creation & refund API | Cloud Functions | **No** (Server-side) | REST API client for server endpoints. |
-| **`tus-js-client`** | Resumable chunked video upload client for Bunny Stream | Admin Panel | **No** (Standard browser JS) | Standard browser HTTP Chunked Upload. |
-
----
-
-## 5. Firebase Functions Secrets Configuration
-
-Set the environment secrets via Firebase CLI:
 ```bash
+# 1. Razorpay Key ID
+firebase functions:secrets:set RAZORPAY_KEY_ID
+
+# 2. Razorpay Key Secret
+firebase functions:secrets:set RAZORPAY_KEY_SECRET
+
+# 3. Razorpay Webhook Secret
+firebase functions:secrets:set RAZORPAY_WEBHOOK_SECRET
+
+# 4. Bunny Stream API Keys
 firebase functions:secrets:set BUNNY_API_KEY
 firebase functions:secrets:set BUNNY_TOKEN_AUTH_KEY
 firebase functions:secrets:set BUNNY_LIBRARY_ID
 firebase functions:secrets:set BUNNY_CDN_HOSTNAME
-firebase functions:secrets:set RAZORPAY_KEY_ID
-firebase functions:secrets:set RAZORPAY_KEY_SECRET
-firebase functions:secrets:set RAZORPAY_WEBHOOK_SECRET
 ```
 
-For local testing via Firebase Emulator, store them in `functions/.secret.local`:
+### Local Testing with Emulator
+For local testing via the Firebase Emulator Suite, create `functions/.secret.local`:
 ```env
-BUNNY_API_KEY="test_bunny_api_key"
-BUNNY_TOKEN_AUTH_KEY="test_bunny_token_auth_key"
-BUNNY_LIBRARY_ID="12345"
-BUNNY_CDN_HOSTNAME="vz-test-123.b-cdn.net"
-RAZORPAY_KEY_ID="rzp_test_SAMPLE123456"
-RAZORPAY_KEY_SECRET="SAMPLE_SECRET_KEY_123456"
-RAZORPAY_WEBHOOK_SECRET="whsec_SAMPLE_WEBHOOK_123456"
+RAZORPAY_KEY_ID=rzp_test_YourTestKeyHere
+RAZORPAY_KEY_SECRET=YourTestSecretHere
+RAZORPAY_WEBHOOK_SECRET=whsec_YourWebhookSecretHere
+BUNNY_API_KEY=test_bunny_key
+BUNNY_TOKEN_AUTH_KEY=test_token_key
+BUNNY_LIBRARY_ID=123456
+BUNNY_CDN_HOSTNAME=video.youtubesikho.com
 ```
+
+---
+
+## 4. How to Test Payments in Razorpay TEST Mode
+
+When using `RAZORPAY_KEY_ID: rzp_test_...`:
+
+### A. Test Cards
+- **Card Number**: `4111 1111 1111 1111`
+- **Expiry**: Any future date (e.g., `12/30`)
+- **CVV**: `123`
+- **Name**: Any name
+- **OTP**: `123456` (click **Success**) or click **Failure** to test rejection.
+
+### B. Test UPI
+- **Success VPA**: `success@razorpay`
+- **Failure VPA**: `failure@razorpay`
+
+### C. Test Net Banking
+- Select any listed bank (e.g., HDFC, ICICI, SBI).
+- On the simulated bank page, click **Success** or **Failure**.
+
+---
+
+## 5. How to Test the Webhook Locally
+
+You can test the webhook handler locally using the Firebase CLI and curl / ngrok:
+
+### Method 1: Local Emulator via curl
+```bash
+# Generate HMAC signature
+BODY='{"id":"evt_test_123","event":"payment.captured","payload":{"payment":{"entity":{"id":"pay_test_999","order_id":"order_YOUR_ORDER_ID","amount":49900,"currency":"INR","status":"captured"}}}}'
+SECRET="whsec_YourWebhookSecretHere"
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$SECRET" | sed 's/^.* //')
+
+# Send webhook request
+curl -X POST http://127.0.0.1:5001/<project-id>/asia-south1/razorpayWebhook \
+  -H "Content-Type: application/json" \
+  -H "x-razorpay-signature: $SIG" \
+  -d "$BODY"
+```
+
+### Method 2: Public Tunnel with ngrok
+```bash
+# 1. Start tunnel to your local functions emulator
+ngrok http 5001
+
+# 2. Add temporary ngrok webhook URL in Razorpay Dashboard Test Mode:
+# https://xxxx.ngrok-free.app/<project-id>/asia-south1/razorpayWebhook
+```
+
+---
+
+## 6. Google Play Store Policy Notice (Digital Goods & Payments)
+
+> [!WARNING]
+> **Google Play Billing vs Third-Party Payment Gateways**:
+> - Under Google Play's Payments Policy, digital content and services consumed primarily inside the mobile app (such as pre-recorded courses, in-app digital items, and digital subscriptions) in many regions typically fall under Google Play's billing requirements unless your app qualifies for an exception (such as in India under User Choice Billing / Alternative Billing, or if courses qualify as teacher-led live tuition/education services).
+> - **Action Required**: Verify the current Google Play Developer Policy for your registered country and business category before submitting the production APK/AAB to the Play Store. Ensure you have enabled Alternative Billing / User Choice Billing in Google Play Console if offering third-party gateways like Razorpay in India.
+
+---
+
+## 7. Package Manifest & Build Matrix
+
+| Package | Purpose | Layer | Requires EAS Rebuild? |
+| :--- | :--- | :--- | :--- |
+| **`react-native-razorpay`** | Native Android/iOS Checkout SDK (`com.razorpay.checkout`) | Mobile App | **YES** (`eas build --profile development`) |
+| **`razorpay`** | Server-side Razorpay Node.js SDK for Order creation & Refunds | Cloud Functions | **No** (Server deploy) |
+| **`firebase-functions`** | v2 callable and HTTPS webhook endpoints | Cloud Functions | **No** (Server deploy) |
+| **`firebase-admin`** | Privileged database writes and transactions | Cloud Functions | **No** (Server deploy) |

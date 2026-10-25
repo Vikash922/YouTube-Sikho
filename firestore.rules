@@ -156,27 +156,27 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // 9. STUDENT ENROLLMENTS (Cloud Functions Protected)
+    // 9. STUDENT ENROLLMENTS (Cloud Functions Protected - Admin SDK Only)
     // ===============================================================
     match /enrollments/{enrollmentId} {
       allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow write: if false; // Server-authoritative: written only via Cloud Functions / manageEnrollment
     }
 
     // ===============================================================
-    // 10. ORDERS & BILLING (Cloud Functions Protected)
+    // 10. ORDERS & BILLING (Cloud Functions Protected - Admin SDK Only)
     // ===============================================================
     match /orders/{orderId} {
       allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow write: if false; // Server-authoritative: written only via Cloud Functions
     }
 
     // ===============================================================
-    // 11. DISCOUNT COUPONS (Admin Managed, Student Checkout Read)
+    // 11. DISCOUNT COUPONS (Admin Managed, Server Validated)
     // ===============================================================
     match /coupons/{couponCode} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read: if isAdmin(); // Students validate server-side via validateCoupon callable
+      allow write: if isAdmin();
     }
 
     // ===============================================================

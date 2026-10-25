@@ -21,7 +21,7 @@ export const RevenueChart: React.FC<RevenueChartProps> = ({ orders }) => {
       if (o.status === 'paid' && o.createdAt) {
         const d = new Date(o.createdAt).toISOString().slice(0, 10);
         if (!ordersByDate[d]) ordersByDate[d] = { amount: 0, count: 0 };
-        ordersByDate[d].amount += Number(o.amount) || 0;
+        ordersByDate[d].amount += o.amountPaise !== undefined ? o.amountPaise / 100 : (Number(o.amount) || 0);
         ordersByDate[d].count += 1;
       }
     });

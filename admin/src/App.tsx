@@ -5,7 +5,6 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Courses } from './pages/Courses';
 import { Orders } from './pages/Orders';
-import { PaymentGateway } from './pages/PaymentGateway';
 import { Coupons } from './pages/Coupons';
 import { Notifications } from './pages/Notifications';
 import { LiveClasses } from './pages/LiveClasses';
@@ -15,20 +14,12 @@ import { Settings } from './pages/Settings';
 import { Categories } from './pages/Categories';
 import { HomeManager } from './pages/HomeManager';
 import { Students } from './pages/Students';
-import { WebCheckout } from './pages/WebCheckout';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { NavTab } from './components/layout/Sidebar';
 
 export const App: React.FC = () => {
   const { user, isAdmin, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
-
-  // Direct Public Web Checkout route (?checkout=COURSE_ID) - No separate port 7000 needed!
-  const searchParams = new URLSearchParams(window.location.search);
-  const checkoutCourseId = searchParams.get('checkout');
-  if (checkoutCourseId) {
-    return <WebCheckout courseId={checkoutCourseId} />;
-  }
 
   if (loading) {
     return (
@@ -58,7 +49,6 @@ export const App: React.FC = () => {
       {activeTab === 'live-classes' && <LiveClasses />}
       {activeTab === 'quizzes' && <Quizzes />}
       {activeTab === 'orders' && <Orders />}
-      {activeTab === 'payment-gateway' && <PaymentGateway />}
       {activeTab === 'coupons' && <Coupons />}
       {activeTab === 'notifications' && <Notifications />}
       {activeTab === 'home-manager' && <HomeManager />}

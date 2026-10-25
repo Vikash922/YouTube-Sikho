@@ -8,11 +8,13 @@ export interface CreateOrderResult {
   orderId: string;
   razorpayOrderId?: string;
   amount: number; // in paise (e.g. 49900)
+  amountPaise?: number;
   finalPrice?: number; // in rupees (e.g. 499)
   currency: string;
   keyId: string;
   courseTitle: string;
   discountAmount?: number;
+  discountPaise?: number;
 }
 
 export interface VerifyPaymentResult {
@@ -25,8 +27,11 @@ export interface VerifyPaymentResult {
 export interface CouponValidationResult {
   valid: boolean;
   discountPercent?: number;
-  discountAmount?: number;
-  finalPrice?: number;
+  discountAmount?: number; // in rupees
+  finalPrice?: number; // in rupees
+  discountAmountPaise?: number; // in paise
+  finalPricePaise?: number; // in paise
+  message?: string;
   error?: string;
 }
 
@@ -51,16 +56,13 @@ export interface RazorpaySuccessResponse {
   razorpay_signature: string;
 }
 
-export type YouPICheckoutOptions = RazorpayCheckoutOptions;
-export type YouPISuccessResponse = RazorpaySuccessResponse;
-
 /**
  * Validate a coupon code via Cloud Function (protecting business logic)
  */
 export async function validateCoupon(
   courseId: string,
   couponCode: string,
-  coursePrice: number
+  _coursePrice?: number
 ): Promise<CouponValidationResult> {
   const code = couponCode.trim().toUpperCase();
   if (!code) {
@@ -69,14 +71,22 @@ export async function validateCoupon(
 
   try {
     const validateCouponFn = httpsCallable<
-      { courseId: string; couponCode: string },
-      CouponValidationResult
+      { courseId: string; code: string },
+      { valid: boolean; discountAmountPaise: number; finalPricePaise: number; message: string }
     >(firebaseFunctions, 'validateCoupon');
 
-    const result = await validateCouponFn({ courseId, couponCode: code });
-    return result.data;
+    const result = await validateCouponFn({ courseId, code });
+    const data = result.data;
+    return {
+      valid: data.valid,
+      discountAmount: (data.discountAmountPaise || 0) / 100,
+      finalPrice: (data.finalPricePaise || 0) / 100,
+      discountAmountPaise: data.discountAmountPaise,
+      finalPricePaise: data.finalPricePaise,
+      message: data.message,
+      error: data.valid ? undefined : data.message,
+    };
   } catch (err: any) {
-    // If callable not deployed, perform strict client price check
     return {
       valid: false,
       error: err?.message || 'Unable to validate coupon code.',
@@ -185,8 +195,3 @@ export async function launchRazorpayCheckout(
       });
   });
 }
-
-/**
- * Alias for backward compatibility
- */
-export const launchYouPICheckout = launchRazorpayCheckout;

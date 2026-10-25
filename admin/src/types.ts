@@ -99,6 +99,7 @@ export interface Order {
   courseId: string;
   courseTitle?: string;
   amount: number;
+  amountPaise?: number;
   currency: string;
   status: 'created' | 'paid' | 'refunded' | 'failed';
   paymentId?: string;
@@ -106,6 +107,9 @@ export interface Order {
   gateway?: string;
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
+  razorpayRefundId?: string;
+  refundReason?: string;
+  refundAmount?: number;
   couponCode?: string;
   createdAt: any;
   paidAt?: any;
@@ -113,12 +117,18 @@ export interface Order {
 }
 
 export interface Coupon {
-  id: string;
+  id: string; // The UPPERCASE code
   code: string;
-  discountPercent: number;
-  maxUses?: number;
-  usedCount?: number;
-  validUntil?: number;
+  discountType: 'percent' | 'flat';
+  value: number;
+  discountPercent?: number; // backward compatibility
   isActive: boolean;
-  createdAt?: any;
+  maxUses: number; // 0 = unlimited
+  usedCount: number;
+  expiresAt: string | number | null;
+  validUntil?: number; // backward compatibility
+  minPrice?: number;
+  courseIds?: string[];
+  createdAt: any;
+  updatedAt?: any;
 }

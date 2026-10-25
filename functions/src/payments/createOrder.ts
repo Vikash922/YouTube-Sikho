@@ -1,24 +1,26 @@
 import * as admin from 'firebase-admin';
-import { getSecrets } from '../config';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { getRazorpayClient, getRazorpaySecrets } from '../config';
+import { evaluateCoupon } from './validateCoupon';
 
 export interface CreateOrderRequest {
   courseId: string;
   couponCode?: string;
-  // Intentionally accept a spoofed client price to prove the server ignores it
+  // Intentionally accept a client-submitted price to demonstrate that server ignores it
   clientSubmittedPrice?: number;
 }
 
 export interface CreateOrderResponse {
   orderId: string;
-  paymentId?: string;
-  checkoutUrl?: string;
-  amount: number; // in paise (e.g. 49900)
+  razorpayOrderId: string;
+  amountPaise: number;
+  amount?: number; // alias in paise
+  finalPrice?: number; // in rupees
   currency: string;
   keyId: string;
   courseTitle: string;
-  finalPrice: number; // in rupees (e.g. 499)
-  discountAmount: number;
-  razorpayOrderId?: string; // backward compatibility
+  discountPaise: number;
+  discountAmount?: number; // in rupees
 }
 
 export async function createOrderHandler(
@@ -27,12 +29,12 @@ export async function createOrderHandler(
   db: admin.firestore.Firestore = admin.firestore()
 ): Promise<CreateOrderResponse> {
   if (!uid) {
-    throw new Error('Authentication required to create a course purchase order.');
+    throw new HttpsError('unauthenticated', 'Authentication required to create a course purchase order.');
   }
 
-  const { courseId, couponCode } = data;
+  const { courseId, couponCode } = data || {};
   if (!courseId) {
-    throw new Error('Missing required argument: courseId.');
+    throw new HttpsError('invalid-argument', 'Missing required argument: courseId.');
   }
 
   // 1. Rate Limiting Check (Max 5 order creations per minute per user)
@@ -44,87 +46,76 @@ export async function createOrderHandler(
     .get();
 
   if (recentOrders.size >= 5) {
-    throw new Error('Rate limit exceeded: Too many order attempts. Please wait 1 minute before trying again.');
+    throw new HttpsError(
+      'resource-exhausted',
+      'Rate limit exceeded: Too many order attempts. Please wait 1 minute before trying again.'
+    );
   }
 
   // 2. Fetch Course Data directly from Server (NEVER trust client price)
   const courseDoc = await db.doc(`courses/${courseId}`).get();
   if (!courseDoc.exists) {
-    throw new Error(`Course with ID ${courseId} does not exist.`);
+    throw new HttpsError('not-found', `Course with ID ${courseId} does not exist.`);
   }
 
   const courseData = courseDoc.data() || {};
-  const serverPrice = courseData.discountPrice !== undefined
-    ? Number(courseData.discountPrice)
-    : Number(courseData.price || 0);
+  if (courseData.isPublished === false) {
+    throw new HttpsError('failed-precondition', 'Course is not currently available for purchase.');
+  }
 
-  // 3. Coupon Validation & Calculation
-  let discountAmount = 0;
+  const basePriceInRupees =
+    courseData.discountPrice !== undefined && courseData.discountPrice !== null
+      ? Number(courseData.discountPrice)
+      : Number(courseData.price || 0);
+
+  const basePricePaise = Math.round(basePriceInRupees * 100);
+
+  // 3. Coupon Validation & Calculation (Unified server-side logic)
+  let discountPaise = 0;
+  let finalPaise = basePricePaise;
   let normalizedCouponCode: string | null = null;
 
   if (couponCode && couponCode.trim()) {
-    normalizedCouponCode = couponCode.trim().toUpperCase();
-    const couponDoc = await db.doc(`coupons/${normalizedCouponCode}`).get();
-
-    if (!couponDoc.exists) {
-      throw new Error(`Coupon '${normalizedCouponCode}' is invalid.`);
+    const couponResult = await evaluateCoupon(courseId, couponCode, db);
+    if (!couponResult.valid) {
+      throw new HttpsError('invalid-argument', couponResult.message);
     }
-
-    const coupon = couponDoc.data() || {};
-
-    if (coupon.active === false) {
-      throw new Error(`Coupon '${normalizedCouponCode}' is no longer active.`);
-    }
-
-    if (coupon.expiresAt) {
-      const expiryDate = coupon.expiresAt.toDate ? coupon.expiresAt.toDate() : new Date(coupon.expiresAt);
-      if (expiryDate.getTime() < Date.now()) {
-        throw new Error(`Coupon '${normalizedCouponCode}' has expired.`);
-      }
-    }
-
-    if (coupon.maxUses !== undefined && (coupon.usageCount || 0) >= coupon.maxUses) {
-      throw new Error(`Coupon '${normalizedCouponCode}' usage limit has been reached.`);
-    }
-
-    if (coupon.type === 'percent') {
-      discountAmount = Math.round((serverPrice * Number(coupon.value || 0)) / 100);
-    } else {
-      discountAmount = Number(coupon.value || 0);
-    }
+    discountPaise = couponResult.discountAmountPaise;
+    finalPaise = couponResult.finalPricePaise;
+    normalizedCouponCode = couponResult.couponData?.code || couponCode.trim().toUpperCase();
   }
 
-  const finalPrice = Math.max(0, serverPrice - discountAmount);
-  const amountPaise = Math.round(finalPrice * 100);
+  // 4. Official Razorpay Order Generation (Real Gateway Call)
+  const { keyId } = getRazorpaySecrets();
+  const razorpay = getRazorpayClient();
 
-  // 4. Official Razorpay Order Generation
-  const secrets = getSecrets();
-  let generatedOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const receipt = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  let rzpOrder: any;
 
-  if (secrets.RAZORPAY_KEY_ID && secrets.RAZORPAY_KEY_SECRET) {
-    try {
-      const Razorpay = require('razorpay');
-      const rzp = new Razorpay({
-        key_id: secrets.RAZORPAY_KEY_ID,
-        key_secret: secrets.RAZORPAY_KEY_SECRET,
-      });
-      const rzpOrder = await rzp.orders.create({
-        amount: amountPaise,
-        currency: 'INR',
-        receipt: `rcpt_${Date.now()}`,
-        notes: {
-          uid,
-          courseId,
-          couponCode: normalizedCouponCode || '',
-        },
-      });
-      if (rzpOrder && rzpOrder.id) {
-        generatedOrderId = rzpOrder.id;
-      }
-    } catch (rzpErr: any) {
-      console.warn('Razorpay order creation fallback/mock:', rzpErr.message);
-    }
+  try {
+    rzpOrder = await razorpay.orders.create({
+      amount: finalPaise,
+      currency: 'INR',
+      receipt,
+      notes: {
+        uid,
+        courseId,
+        couponCode: normalizedCouponCode || '',
+      },
+    });
+  } catch (err: any) {
+    console.error('Razorpay order creation failed:', err);
+    throw new HttpsError(
+      'internal',
+      `Payment gateway error: ${err.message || 'Unable to create Razorpay order.'}`
+    );
   }
+
+  if (!rzpOrder || !rzpOrder.id) {
+    throw new HttpsError('internal', 'Razorpay failed to return an order ID.');
+  }
+
+  const generatedOrderId = rzpOrder.id;
 
   // 5. Store Order Document in Firestore with status 'created'
   const orderDocData = {
@@ -133,27 +124,28 @@ export async function createOrderHandler(
     uid,
     courseId,
     courseTitle: courseData.title || 'Course Enrollment',
-    serverPrice,
-    finalPrice,
-    amountPaise,
-    couponCode: normalizedCouponCode,
-    discountAmount,
+    amountPaise: finalPaise,
+    currency: 'INR',
     status: 'created',
-    gateway: 'razorpay',
+    couponCode: normalizedCouponCode,
+    discountPaise,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
   await db.doc(`orders/${generatedOrderId}`).set(orderDocData);
 
+  // Return server-authoritative response
   return {
     orderId: generatedOrderId,
     razorpayOrderId: generatedOrderId,
-    amount: amountPaise,
+    amountPaise: finalPaise,
+    amount: finalPaise,
+    finalPrice: Math.round(finalPaise / 100),
     currency: 'INR',
-    keyId: secrets.RAZORPAY_KEY_ID,
+    keyId,
     courseTitle: courseData.title || 'Course Enrollment',
-    finalPrice,
-    discountAmount,
+    discountPaise,
+    discountAmount: Math.round(discountPaise / 100),
   };
 }

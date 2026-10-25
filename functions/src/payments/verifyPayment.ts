@@ -1,14 +1,12 @@
 import * as crypto from 'crypto';
 import * as admin from 'firebase-admin';
-import { getSecrets } from '../config';
+import { HttpsError } from 'firebase-functions/v2/https';
+import { getRazorpayClient, getRazorpaySecrets } from '../config';
 
 export interface VerifyPaymentRequest {
   orderId: string;
-  paymentId?: string;
-  utr?: string;
-  signature?: string;
-  razorpayPaymentId?: string;
-  razorpaySignature?: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
 }
 
 export interface VerifyPaymentResponse {
@@ -16,10 +14,10 @@ export interface VerifyPaymentResponse {
   orderId: string;
   enrollmentId: string;
   alreadyProcessed?: boolean;
-  utr?: string;
+  message?: string;
 }
 
-export function computeYoupiSignature(
+export function computeRazorpaySignature(
   orderId: string,
   paymentId: string,
   keySecret: string
@@ -30,97 +28,163 @@ export function computeYoupiSignature(
     .digest('hex');
 }
 
-export const computeRazorpaySignature = computeYoupiSignature;
-
 export async function verifyPaymentHandler(
   data: VerifyPaymentRequest,
   uid: string | null,
   db: admin.firestore.Firestore = admin.firestore()
 ): Promise<VerifyPaymentResponse> {
   if (!uid) {
-    throw new Error('Authentication required to verify payment.');
+    throw new HttpsError('unauthenticated', 'Authentication required to verify payment.');
   }
 
-  const orderId = data.orderId;
-  const paymentId = data.paymentId || data.razorpayPaymentId;
-  const signature = data.signature || data.razorpaySignature;
-  const utr = data.utr || '';
-
-  if (!orderId || !paymentId || !signature) {
-    throw new Error('Missing required arguments: orderId, paymentId, and signature.');
+  const { orderId, razorpayPaymentId, razorpaySignature } = data || {};
+  if (!orderId || !razorpayPaymentId || !razorpaySignature) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Missing required arguments: orderId, razorpayPaymentId, and razorpaySignature.'
+    );
   }
 
-  const secrets = getSecrets();
+  const { keySecret } = getRazorpaySecrets();
 
-  // 1. Cryptographic Signature Verification
+  // 1. Cryptographic HMAC-SHA256 Signature Verification
   const expectedSignature = computeRazorpaySignature(
     orderId,
-    paymentId,
-    secrets.RAZORPAY_KEY_SECRET
+    razorpayPaymentId,
+    keySecret
   );
 
-  const sigBuf = Buffer.from(signature, 'utf8');
+  const sigBuf = Buffer.from(razorpaySignature, 'utf8');
   const expBuf = Buffer.from(expectedSignature, 'utf8');
+
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    throw new Error('Payment verification failed: Invalid cryptographic signature.');
+    throw new HttpsError(
+      'permission-denied',
+      'Payment verification failed: Invalid cryptographic signature.'
+    );
   }
 
-  // 2. Atomic Idempotent Transaction
+  // 2. Fetch Order from Firestore and Validate Ownership
   const orderRef = db.doc(`orders/${orderId}`);
-  let enrollmentId = '';
+  const orderDoc = await orderRef.get();
+  if (!orderDoc.exists) {
+    throw new HttpsError('not-found', `Order ${orderId} does not exist.`);
+  }
+
+  const orderData = orderDoc.data() || {};
+  if (orderData.uid !== uid) {
+    throw new HttpsError(
+      'permission-denied',
+      'Security violation: Cannot verify payment for another user.'
+    );
+  }
+
+  // 3. Confirm with Razorpay API (Status, Amount, Currency)
+  const razorpay = getRazorpayClient();
+  let paymentEntity: any;
+
+  try {
+    paymentEntity = await razorpay.payments.fetch(razorpayPaymentId);
+  } catch (err: any) {
+    console.error(`Razorpay payments.fetch failed for ${razorpayPaymentId}:`, err);
+    throw new HttpsError(
+      'internal',
+      `Payment gateway check failed: ${err.message || 'Unable to fetch payment details from Razorpay.'}`
+    );
+  }
+
+  if (!paymentEntity) {
+    throw new HttpsError('not-found', 'Payment not found on Razorpay.');
+  }
+
+  if (paymentEntity.status !== 'captured' && paymentEntity.status !== 'authorized') {
+    throw new HttpsError(
+      'failed-precondition',
+      `Payment is not confirmed. Current status: ${paymentEntity.status}.`
+    );
+  }
+
+  if (paymentEntity.currency !== 'INR') {
+    throw new HttpsError('invalid-argument', `Invalid payment currency: ${paymentEntity.currency}.`);
+  }
+
+  const expectedPaise = Number(orderData.amountPaise !== undefined ? orderData.amountPaise : (orderData.amount || 0));
+  if (paymentEntity.amount !== expectedPaise) {
+    throw new HttpsError(
+      'invalid-argument',
+      `Payment amount mismatch: expected ₹${expectedPaise / 100}, but received ₹${paymentEntity.amount / 100}.`
+    );
+  }
+
+  // 4. Atomic Idempotent Transaction: Order -> paid, Enrollment -> active, Coupon -> usedCount++
+  const courseId = orderData.courseId;
+  const enrollmentId = `${uid}_${courseId}`;
+  const enrollmentRef = db.doc(`enrollments/${enrollmentId}`);
   let alreadyProcessed = false;
 
   await db.runTransaction(async (transaction) => {
-    const orderDoc = await transaction.get(orderRef);
-    if (!orderDoc.exists) {
-      throw new Error(`Order ${orderId} does not exist.`);
+    const currentOrderDoc = await transaction.get(orderRef);
+    if (!currentOrderDoc.exists) {
+      throw new HttpsError('not-found', `Order ${orderId} missing during transaction.`);
     }
 
-    const orderData = orderDoc.data() || {};
-    if (orderData.uid !== uid) {
-      throw new Error('Security violation: Cannot verify payment for another user.');
-    }
+    const currentOrder = currentOrderDoc.data() || {};
+    const currentEnrollmentDoc = await transaction.get(enrollmentRef);
 
-    const courseId = orderData.courseId;
-    enrollmentId = `${uid}_${courseId}`;
-    const enrollmentRef = db.doc(`enrollments/${enrollmentId}`);
-    const enrollmentDoc = await transaction.get(enrollmentRef);
-
-    // Idempotency: If already marked paid and enrollment exists, exit gracefully
-    if (orderData.status === 'paid' && enrollmentDoc.exists) {
+    // Idempotency: If order is already paid and enrollment exists and is active, return immediately
+    if (
+      currentOrder.status === 'paid' &&
+      currentEnrollmentDoc.exists &&
+      currentEnrollmentDoc.data()?.status === 'active'
+    ) {
       alreadyProcessed = true;
       return;
     }
 
-    // 3. Mark Order as Paid
+    // Check Coupon Max Uses inside transaction if a coupon was used
+    let couponRef: admin.firestore.DocumentReference | null = null;
+    if (currentOrder.couponCode) {
+      couponRef = db.doc(`coupons/${currentOrder.couponCode}`);
+      const couponDoc = await transaction.get(couponRef);
+      if (couponDoc.exists) {
+        const cData = couponDoc.data() || {};
+        const maxUses = Number(cData.maxUses || 0);
+        const usedCount = Number(cData.usedCount !== undefined ? cData.usedCount : (cData.usageCount || 0));
+        if (maxUses > 0 && usedCount >= maxUses && currentOrder.status !== 'paid') {
+          throw new HttpsError('resource-exhausted', `Coupon ${currentOrder.couponCode} reached max uses.`);
+        }
+      }
+    }
+
+    // Mark Order as Paid
     transaction.update(orderRef, {
       status: 'paid',
-      paymentId,
-      utr: utr || orderData.utr || '',
-      signature,
-      razorpayPaymentId: paymentId, // backward-compat
-      razorpaySignature: signature, // backward-compat
+      razorpayPaymentId,
+      razorpaySignature,
+      paymentMethod: paymentEntity.method || 'online',
       paidAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // 4. Create Student Enrollment Document
-    transaction.set(enrollmentRef, {
-      uid,
-      courseId,
-      orderId,
-      paymentId,
-      utr: utr || orderData.utr || '',
-      enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
-      active: true,
-      source: 'youpi_direct',
-    }, { merge: true });
+    // Create / Update Enrollment with unified status: 'active'
+    transaction.set(
+      enrollmentRef,
+      {
+        uid,
+        courseId,
+        orderId,
+        razorpayPaymentId,
+        status: 'active',
+        enrolledAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
 
-    // 5. Increment coupon usage if a coupon was used
-    if (orderData.couponCode) {
-      const couponRef = db.doc(`coupons/${orderData.couponCode}`);
+    // Increment coupon usedCount
+    if (couponRef && currentOrder.status !== 'paid') {
       transaction.update(couponRef, {
-        usageCount: admin.firestore.FieldValue.increment(1),
+        usedCount: admin.firestore.FieldValue.increment(1),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -131,5 +195,8 @@ export async function verifyPaymentHandler(
     orderId,
     enrollmentId,
     alreadyProcessed,
+    message: alreadyProcessed
+      ? 'Payment was already verified and enrollment is active.'
+      : 'Payment verified successfully and course access unlocked.',
   };
 }

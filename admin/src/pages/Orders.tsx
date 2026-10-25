@@ -3,8 +3,6 @@ import {
   collection,
   onSnapshot,
   query,
-  doc,
-  updateDoc,
 } from 'firebase/firestore';
 import {
   CreditCard,
@@ -15,7 +13,6 @@ import {
   User,
   ShieldAlert,
   Download,
-  QrCode,
 } from 'lucide-react';
 import { db, functions, httpsCallable } from '../firebase';
 import { Order } from '../types';
@@ -68,43 +65,11 @@ export const Orders: React.FC = () => {
         reason: refundReason,
       });
 
-      // Revoke student course enrollment live
-      if (refundingOrder.uid && refundingOrder.courseId) {
-        const enrollId = `${refundingOrder.uid}_${refundingOrder.courseId}`;
-        await updateDoc(doc(db, 'enrollments', enrollId), {
-          status: 'revoked',
-          active: false,
-          revokedAt: new Date().toISOString(),
-        }).catch(() => {});
-      }
-
       showToast(`Refund processed successfully: ${res.data.refundId || 'Success'}`, 'success');
       setRefundingOrder(null);
     } catch (err: any) {
       console.error('Refund execution error:', err);
-      // In development mode fallback:
-      try {
-        await updateDoc(doc(db, 'orders', refundingOrder.id), {
-          status: 'refunded',
-          refundedAt: new Date().toISOString(),
-          refundReason,
-        });
-
-        // Revoke student course enrollment live
-        if (refundingOrder.uid && refundingOrder.courseId) {
-          const enrollId = `${refundingOrder.uid}_${refundingOrder.courseId}`;
-          await updateDoc(doc(db, 'enrollments', enrollId), {
-            status: 'revoked',
-            active: false,
-            revokedAt: new Date().toISOString(),
-          }).catch(() => {});
-        }
-
-        showToast('Order marked refunded and access revoked live!', 'success');
-        setRefundingOrder(null);
-      } catch (localErr: any) {
-        showToast(err.message || 'Refund processing failed', 'error');
-      }
+      showToast(err.message || 'Refund processing failed', 'error');
     } finally {
       setProcessingRefund(false);
     }
@@ -125,12 +90,12 @@ export const Orders: React.FC = () => {
       showToast('No orders to export', 'error');
       return;
     }
-    const headers = ['Order ID', 'Student UID', 'Course Title', 'Amount', 'Status', 'Date', 'YouPI Payment ID / UTR'];
+    const headers = ['Order ID', 'Student UID', 'Course Title', 'Amount', 'Status', 'Date', 'Payment ID / UTR'];
     const rows = filteredOrders.map((o) => [
       o.id,
       o.uid || '',
       o.courseTitle || '',
-      o.amount,
+      o.amountPaise !== undefined ? o.amountPaise / 100 : o.amount,
       o.status,
       o.createdAt ? new Date(o.createdAt).toISOString() : '',
       o.utr ? `UTR: ${o.utr}` : (o.paymentId || o.razorpayPaymentId || ''),
@@ -161,7 +126,7 @@ export const Orders: React.FC = () => {
             Orders & Payment Gateway History
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Real-time server-verified transactions, YouPI gateway references, and one-click refund handling.
+            Real-time server-verified transactions, Razorpay gateway references, and one-click refund handling.
           </p>
         </div>
 
@@ -173,31 +138,6 @@ export const Orders: React.FC = () => {
         >
           Export CSV ({filteredOrders.length})
         </Button>
-      </div>
-
-      {/* Active UPI Settlement Banner */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-            <QrCode className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-light-text dark:text-dark-text">
-                Direct UPI Receiver:{' '}
-                <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                  7848894498@ibl
-                </span>
-              </span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                0% Fee
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Student payments from GPay, PhonePe, Paytm, and BHIM settle directly into 7848894498@ibl.
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -296,7 +236,7 @@ export const Orders: React.FC = () => {
                     </td>
 
                     <td className="px-5 py-3 font-bold font-display text-sm text-light-text dark:text-dark-text">
-                      ₹{order.amount}
+                      ₹{order.amountPaise !== undefined ? order.amountPaise / 100 : (order.amount || 0)}
                     </td>
 
                     <td className="px-5 py-3">
@@ -351,12 +291,12 @@ export const Orders: React.FC = () => {
             <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
               <ShieldAlert className="w-6 h-6" />
               <h3 className="font-bold font-display text-base text-light-text dark:text-dark-text">
-                Confirm YouPI Refund
+                Confirm Razorpay Refund
               </h3>
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Initiating a refund will automatically reverse or record the transaction via YouPI Gateway and
+              Initiating a refund will automatically process the transaction via Razorpay API and
               immediately revoke the student&apos;s access to the course in Firestore.
             </p>
 
@@ -365,7 +305,7 @@ export const Orders: React.FC = () => {
                 <strong>Order ID:</strong> {refundingOrder.id}
               </div>
               <div>
-                <strong>Amount:</strong> ₹{refundingOrder.amount}
+                <strong>Amount:</strong> ₹{refundingOrder.amountPaise !== undefined ? refundingOrder.amountPaise / 100 : (refundingOrder.amount || 0)}
               </div>
               <div>
                 <strong>Student UID:</strong> {refundingOrder.uid}

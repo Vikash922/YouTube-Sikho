@@ -22,7 +22,6 @@ import {
   Lock,
   Sparkles,
   WifiOff,
-  QrCode,
   Zap,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -42,7 +41,6 @@ import {
 import {
   createOrder,
   verifyPayment,
-  launchYouPICheckout,
   launchRazorpayCheckout,
   validateCoupon,
   CouponValidationResult,
@@ -69,28 +67,7 @@ export default function CheckoutScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState<string>('');
   const [isOffline] = useState(false);
-
-  // Direct UPI Gateway State
-  const [merchantUpiId, setMerchantUpiId] = useState(
-    '7848894498@ibl'
-  );
-  const [showQrCode, setShowQrCode] = useState(false);
-  const [utrInput, setUtrInput] = useState('');
-
-  // Real-time synchronization of merchant UPI ID from Admin Panel
-  useEffect(() => {
-    const unsub = onSnapshot(
-      doc(firebaseFirestore, 'appConfig', 'payment'),
-      (snap) => {
-        if (snap.exists()) {
-          const d = snap.data();
-          if (d?.merchantUpiId) setMerchantUpiId(d.merchantUpiId);
-        }
-      },
-      () => {}
-    );
-    return () => unsub();
-  }, []);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -156,10 +133,11 @@ export default function CheckoutScreen() {
 
     try {
       setIsProcessing(true);
+      setPaymentError(null);
       setProcessingStep('Creating secure order...');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // 1. Server calculates final price & generates YouPI Gateway Order
+      // 1. Server calculates final price & generates Razorpay Order
       const order = await createOrder(course.id, appliedCoupon ? couponCode : undefined);
 
       setProcessingStep('Opening payment gateway...');
@@ -168,7 +146,7 @@ export default function CheckoutScreen() {
       const rzpResponse = await launchRazorpayCheckout({
         keyId: order.keyId,
         orderId: order.razorpayOrderId || order.orderId,
-        amount: order.amount, // in paise
+        amount: order.amountPaise || order.amount, // in paise
         name: clientConfig.appName,
         description: `Enrollment: ${course.title}`,
         prefill: {
@@ -195,7 +173,7 @@ export default function CheckoutScreen() {
             orderId: order.orderId,
             courseId: course.id,
             courseTitle: course.title,
-            amount: String(order.amount),
+            amount: String(Math.round((order.amountPaise || order.amount) / 100)),
           },
         });
       } else {
@@ -204,14 +182,9 @@ export default function CheckoutScreen() {
     } catch (err: any) {
       console.error('[Checkout] Payment flow failed:', err);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      router.push({
-        pathname: '/payment/failed',
-        params: {
-          courseId: course?.id || '',
-          orderId: `err_${Date.now()}`,
-          error: err?.message || 'Payment was cancelled or failed.',
-        },
-      });
+      setPaymentError(
+        err?.message || 'Payment was cancelled or could not be verified. You can retry anytime.'
+      );
     } finally {
       setIsProcessing(false);
       setProcessingStep('');
@@ -356,7 +329,7 @@ export default function CheckoutScreen() {
                     {couponCode} APPLIED
                   </Text>
                   <Text style={[typography.caption, { color: colors.textMuted }]}>
-                    {appliedCoupon.discountPercent}% OFF • You save ₹{appliedCoupon.discountAmount}
+                    {appliedCoupon.discountPercent ? `${appliedCoupon.discountPercent}% OFF • ` : ''}You save ₹{appliedCoupon.discountAmount}
                   </Text>
                 </View>
               </View>
@@ -482,7 +455,7 @@ export default function CheckoutScreen() {
             {couponDiscount > 0 && (
               <View style={styles.breakdownRow}>
                 <Text style={[typography.body, { color: colors.textMuted }]}>
-                  Coupon Discount ({appliedCoupon?.discountPercent}%)
+                  Coupon Discount {appliedCoupon?.discountPercent ? `(${appliedCoupon.discountPercent}%)` : ''}
                 </Text>
                 <Text style={[typography.body, typography.tabular, { color: colors.success, fontWeight: '600' }]}>
                   -₹{couponDiscount.toLocaleString('en-IN')}
@@ -504,7 +477,7 @@ export default function CheckoutScreen() {
           </Card>
         </Animated.View>
 
-        {/* 5. Direct UPI Payment Method Card */}
+        {/* 5. Razorpay Secure Payment Method Card */}
         <Animated.View entering={FadeInDown.duration(400).delay(250)} style={{ marginTop: spacing.lg }}>
           <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs, textTransform: 'uppercase' }]}>
             Payment Method
@@ -512,99 +485,68 @@ export default function CheckoutScreen() {
           <Card style={[styles.upiCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.upiHeaderRow}>
               <View style={[styles.upiIconBox, { backgroundColor: colors.primary + '20' }]}>
-                <Zap size={20} color={colors.primary} />
+                <Lock size={20} color={colors.primary} />
               </View>
               <View style={{ flex: 1, marginLeft: spacing.sm }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={[typography.title, { color: colors.text, fontSize: 15 }]}>
-                    Direct UPI Transfer
+                    Razorpay Secure Checkout
                   </Text>
-                  <View style={[styles.zeroFeePill, { backgroundColor: colors.success + '20' }]}>
-                    <Text style={[typography.caption, { color: colors.success, fontSize: 10, fontWeight: '700' }]}>
-                      0% Fees
+                  <View style={[styles.zeroFeePill, { backgroundColor: colors.primary + '20' }]}>
+                    <Text style={[typography.caption, { color: colors.primary, fontSize: 10, fontWeight: '700' }]}>
+                      Instant Access
                     </Text>
                   </View>
                 </View>
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
-                  Receiving UPI ID:{' '}
-                  <Text style={{ color: colors.text, fontWeight: '700' }}>{merchantUpiId}</Text>
+                  All payment modes supported: UPI, Cards, NetBanking & Wallets
                 </Text>
               </View>
             </View>
 
             {/* Supported App Badges */}
             <View style={styles.appBadgesRow}>
-              {['Google Pay', 'PhonePe', 'Paytm', 'BHIM UPI'].map((app) => (
-                <View key={app} style={[styles.appBadge, { borderColor: colors.border, backgroundColor: colors.background }]}>
+              {['UPI (GPay, PhonePe, Paytm)', 'Cards', 'Net Banking', 'Wallets'].map((method) => (
+                <View key={method} style={[styles.appBadge, { borderColor: colors.border, backgroundColor: colors.background }]}>
                   <Text style={[typography.caption, { color: colors.text, fontSize: 10, fontWeight: '600' }]}>
-                    {app}
+                    {method}
                   </Text>
                 </View>
               ))}
             </View>
-
-            {/* QR Code Toggle Button */}
-            <TouchableOpacity
-              onPress={() => {
-                setShowQrCode(!showQrCode);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-              style={[styles.qrToggleBtn, { borderColor: colors.border, backgroundColor: colors.background }]}
-            >
-              <QrCode size={16} color={colors.primary} />
-              <Text style={[typography.caption, { color: colors.primary, marginLeft: 8, fontWeight: '600' }]}>
-                {showQrCode ? 'Hide QR Code' : 'Scan & Pay via QR Code'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Dynamic QR Code Expanded View */}
-            {showQrCode && (
-              <View style={[styles.qrExpandedBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <Image
-                  source={{
-                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=${encodeURIComponent(
-                      `upi://pay?pa=${merchantUpiId}&pn=YouTube%20Sikho&am=${finalPayable.toFixed(
-                        2
-                      )}&cu=INR&tn=Course%20Enrollment`
-                    )}`,
-                  }}
-                  style={styles.qrImage}
-                  contentFit="contain"
-                />
-                <Text style={[typography.caption, { color: colors.text, fontWeight: '700', marginTop: 4 }]}>
-                  {merchantUpiId}
-                </Text>
-                <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>
-                  Payable: ₹{finalPayable.toLocaleString('en-IN')}
-                </Text>
-                <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10, textAlign: 'center', marginTop: 2 }]}>
-                  Scan using GPay, PhonePe, Paytm, or BHIM on any device
-                </Text>
-              </View>
-            )}
-
-            {/* Optional UTR Input Field */}
-            <View style={styles.utrInputContainer}>
-              <Text style={[typography.caption, { color: colors.textMuted, marginBottom: 4 }]}>
-                Paid via QR or another app? Enter 12-Digit Bank UTR (Optional)
-              </Text>
-              <TextInput
-                value={utrInput}
-                onChangeText={(text) => setUtrInput(text.replace(/\D/g, ''))}
-                maxLength={12}
-                keyboardType="numeric"
-                placeholder="e.g. 429812984124"
-                placeholderTextColor={colors.textMuted}
-                style={[
-                  styles.utrTextInput,
-                  { borderColor: colors.border, color: colors.text, backgroundColor: colors.background },
-                ]}
-              />
-            </View>
           </Card>
         </Animated.View>
 
-        {/* 6. Trust & Security Badge Pill */}
+        {/* 6. Payment Error Banner (if any) */}
+        {paymentError && (
+          <View
+            style={{
+              marginTop: spacing.md,
+              padding: spacing.md,
+              borderRadius: 12,
+              backgroundColor: colors.error + '15',
+              borderWidth: 1,
+              borderColor: colors.error + '40',
+              flexDirection: 'row',
+              alignItems: 'flex-start',
+            }}
+          >
+            <AlertCircle size={18} color={colors.error} style={{ marginTop: 2, marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.caption, { color: colors.error, fontWeight: '700' }]}>
+                Payment Failed or Cancelled
+              </Text>
+              <Text style={[typography.caption, { color: colors.text, marginTop: 2 }]}>
+                {paymentError}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setPaymentError(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <X size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* 7. Trust & Security Badge Pill */}
         <View style={[styles.trustPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <ShieldCheck size={16} color={colors.primary} strokeWidth={2} />
           <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 8, fontWeight: '600' }]}>
@@ -640,7 +582,7 @@ export default function CheckoutScreen() {
             disabled={isProcessing || isOffline}
             onPress={handlePaySecurely}
             accessibilityRole="button"
-            accessibilityLabel="Pay securely with Direct UPI"
+            accessibilityLabel="Pay securely with Razorpay"
             style={styles.payButton}
           />
         </View>
@@ -853,39 +795,5 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-  },
-  qrToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  qrExpandedBox: {
-    alignItems: 'center',
-    marginTop: 12,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  qrImage: {
-    width: 180,
-    height: 180,
-  },
-  utrInputContainer: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(150, 150, 150, 0.2)',
-  },
-  utrTextInput: {
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

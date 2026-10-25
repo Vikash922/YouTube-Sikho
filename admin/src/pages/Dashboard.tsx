@@ -65,11 +65,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       setMetrics((prev) => ({ ...prev, activeBanners: activeCount }));
     });
 
-    // 5. Live listener for orders & sales
+    // 5. Live listener for orders & sales (Server-authoritative status: 'paid')
     const unsubOrders = onSnapshot(collection(db, 'orders'), (snap) => {
       const orders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const paidOrders = orders.filter((o: any) => o.status === 'paid');
-      const revenue = paidOrders.reduce((sum, o: any) => sum + (Number(o.amount) || 0), 0);
+      // Revenue = sum of amountPaise for status "paid" (excluding refunded) shown in rupees
+      const revenue = paidOrders.reduce((sum, o: any) => {
+        const orderPaise = o.amountPaise !== undefined ? Number(o.amountPaise) : (Number(o.amount) || 0) * 100;
+        return sum + Math.round(orderPaise / 100);
+      }, 0);
       setOrdersList(orders);
       setMetrics((prev) => ({
         ...prev,

@@ -17,7 +17,6 @@ import {
   Moon,
   ArrowRight,
   Command,
-  QrCode,
 } from 'lucide-react';
 import { NavTab } from '../layout/Sidebar';
 import { useTheme } from '../../context/ThemeContext';
@@ -105,22 +104,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     {
       id: 'nav-orders',
       title: 'Orders & Sales Ledger',
-      subtitle: 'Inspect student payments, YouPI IDs, and refunds',
+      subtitle: 'Inspect student payments, Razorpay IDs, and refunds',
       category: 'Navigation',
       icon: <CreditCard className="w-4 h-4 text-emerald-500" />,
       action: () => {
         onSelectTab('orders');
-        onClose();
-      },
-    },
-    {
-      id: 'nav-payment-gateway',
-      title: 'UPI Payment Gateway & QR',
-      subtitle: 'Manage merchant UPI ID (7848894498@ibl), dynamic QR codes, and UTR verification',
-      category: 'Navigation',
-      icon: <QrCode className="w-4 h-4 text-emerald-500" />,
-      action: () => {
-        onSelectTab('payment-gateway');
         onClose();
       },
     },
