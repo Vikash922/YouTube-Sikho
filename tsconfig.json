@@ -18,6 +18,7 @@
     "skipLibCheck": true,
     "target": "ESNext",
     "strict": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": [

@@ -48,7 +48,7 @@ const DirectVideoPlayerView: React.FC<{ url: string }> = ({ url }) => {
   return (
     <VideoView
       player={player}
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
       nativeControls={true}
     />
   );
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',

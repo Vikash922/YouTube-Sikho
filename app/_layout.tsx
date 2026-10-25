@@ -95,7 +95,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={styles.root}>
         <SafeAreaProvider>
           <QueryClientProvider client={queryClient}>
-            <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={colors.background} />
+            <StatusBar style={isDark ? 'light' : 'dark'} />
             <ConnectionBanner />
             <ToastContainer />
             <Stack

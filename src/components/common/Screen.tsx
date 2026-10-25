@@ -40,7 +40,6 @@ export const Screen: React.FC<ScreenProps> = ({
     >
       <StatusBar
         barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
       />
       <OfflineBanner />
       {children}

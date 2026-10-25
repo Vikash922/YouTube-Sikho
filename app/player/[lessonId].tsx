@@ -470,7 +470,7 @@ export default function VideoPlayerScreen() {
         {hlsStreamUrl && Platform.OS !== 'web' ? (
           <VideoView
             player={player}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             nativeControls={false}
             allowsPictureInPicture
           />
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   screenCaptureCover: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1065,13 +1065,13 @@ const styles = StyleSheet.create({
     zIndex: 9999,
   },
   bufferingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   errorOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
@@ -1088,7 +1088,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   hudOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(11, 16, 32, 0.72)',
     justifyContent: 'space-between',
     padding: 12,
@@ -1218,7 +1218,7 @@ const styles = StyleSheet.create({
     marginVertical: 14,
   },
   sheetOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',

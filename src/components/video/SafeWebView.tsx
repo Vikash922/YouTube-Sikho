@@ -146,7 +146,7 @@ export const SafeWebView: React.FC<SafeWebViewProps> = ({
       {thumbUrl ? (
         <Image
           source={{ uri: thumbUrl }}
-          style={StyleSheet.absoluteFillObject}
+          style={StyleSheet.absoluteFill}
           contentFit="cover"
         />
       ) : null}
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',

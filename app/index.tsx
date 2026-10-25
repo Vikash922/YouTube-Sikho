@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   ambientGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   centerBox: {
     alignItems: 'center',

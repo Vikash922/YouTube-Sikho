@@ -38,7 +38,7 @@ export default function OtpScreen() {
   const [loading, setLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [timer, setTimer] = useState(30);
-  const inputRefs = useRef<Array<TextInput | null>>([]);
+  const inputRefs = useRef<Array<any>>([]);
 
   const shakeX = useSharedValue(0);
 
