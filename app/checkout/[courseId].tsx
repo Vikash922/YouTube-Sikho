@@ -28,6 +28,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
 import { clientConfig } from '../../src/config/client.config';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
@@ -53,6 +54,7 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const { colors, typography, spacing } = useTheme();
   const profile = useAuthStore((state) => state.profile);
+  const t = useLanguageStore((state) => state.t);
 
   const [course, setCourse] = useState<Course | null>(null);
   const [loadingCourse, setLoadingCourse] = useState(true);
@@ -262,7 +264,7 @@ export default function CheckoutScreen() {
           <ArrowLeft size={20} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
         <Text style={[typography.title, { color: colors.text, flex: 1, marginLeft: spacing.sm }]}>
-          Checkout
+          {t('checkout')}
         </Text>
         <View style={styles.secureHeaderBadge}>
           <Lock size={14} color={colors.success} strokeWidth={1.75} />
@@ -324,7 +326,7 @@ export default function CheckoutScreen() {
         {/* 3. Coupon Code Input Section */}
         <Animated.View entering={FadeInDown.duration(400).delay(140)} style={{ marginTop: spacing.lg }}>
           <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs, textTransform: 'uppercase' }]}>
-            Have a Discount Coupon?
+            {t('haveCoupon')}
           </Text>
 
           {appliedCoupon ? (
@@ -367,7 +369,7 @@ export default function CheckoutScreen() {
                     setCouponInput(text);
                     if (couponError) setCouponError(null);
                   }}
-                  placeholder="Enter coupon (e.g. SIKHO50)"
+                  placeholder={t('enterCouponCode')}
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="characters"
                   autoCorrect={false}
@@ -401,7 +403,7 @@ export default function CheckoutScreen() {
                         { color: couponInput.trim() ? colors.surface : colors.textMuted, fontWeight: '700' },
                       ]}
                     >
-                      Apply
+                      {t('apply')}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -437,11 +439,11 @@ export default function CheckoutScreen() {
         {/* 4. Price Breakdown Card */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={{ marginTop: spacing.lg }}>
           <Text style={[typography.caption, { color: colors.textMuted, marginBottom: spacing.xs, textTransform: 'uppercase' }]}>
-            Price Breakdown
+            {t('orderSummary')}
           </Text>
           <Card style={[styles.breakdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.breakdownRow}>
-              <Text style={[typography.body, { color: colors.textMuted }]}>Original Price</Text>
+              <Text style={[typography.body, { color: colors.textMuted }]}>{t('originalPrice')}</Text>
               <Text
                 style={[
                   typography.body,
@@ -457,7 +459,7 @@ export default function CheckoutScreen() {
 
             {courseDiscount > 0 && (
               <View style={styles.breakdownRow}>
-                <Text style={[typography.body, { color: colors.textMuted }]}>Course Discount</Text>
+                <Text style={[typography.body, { color: colors.textMuted }]}>{t('discount')}</Text>
                 <Text style={[typography.body, typography.tabular, { color: colors.success, fontWeight: '600' }]}>
                   -₹{courseDiscount.toLocaleString('en-IN')}
                 </Text>
@@ -467,7 +469,7 @@ export default function CheckoutScreen() {
             {couponDiscount > 0 && (
               <View style={styles.breakdownRow}>
                 <Text style={[typography.body, { color: colors.textMuted }]}>
-                  Coupon Discount {appliedCoupon?.discountPercent ? `(${appliedCoupon.discountPercent}%)` : ''}
+                  {t('couponDiscount')} {appliedCoupon?.discountPercent ? `(${appliedCoupon.discountPercent}%)` : ''}
                 </Text>
                 <Text style={[typography.body, typography.tabular, { color: colors.success, fontWeight: '600' }]}>
                   -₹{couponDiscount.toLocaleString('en-IN')}
@@ -479,7 +481,7 @@ export default function CheckoutScreen() {
 
             <View style={styles.totalRow}>
               <View>
-                <Text style={[typography.heading, { color: colors.text }]}>Total Amount</Text>
+                <Text style={[typography.heading, { color: colors.text }]}>{t('totalPayable')}</Text>
                 <Text style={[typography.caption, { color: colors.textMuted }]}>Inclusive of all taxes</Text>
               </View>
               <Text style={[typography.display, typography.tabular, { color: colors.primary, fontWeight: '700' }]}>
@@ -580,7 +582,7 @@ export default function CheckoutScreen() {
         ]}
       >
         <View style={styles.stickyPriceColumn}>
-          <Text style={[typography.caption, { color: colors.textMuted }]}>Payable Now</Text>
+          <Text style={[typography.caption, { color: colors.textMuted }]}>{t('totalPayable')}</Text>
           <Text style={[typography.heading, typography.tabular, { color: colors.text, fontWeight: '700' }]}>
             ₹{finalPayable.toLocaleString('en-IN')}
           </Text>
@@ -588,7 +590,7 @@ export default function CheckoutScreen() {
 
         <View style={{ flex: 1, marginLeft: spacing.md }}>
           <Button
-            title={isProcessing ? processingStep || 'Processing...' : 'Pay Securely'}
+            title={isProcessing ? processingStep || 'Processing...' : t('paySecurely')}
             variant="primary"
             loading={isProcessing}
             disabled={isProcessing || isOffline}

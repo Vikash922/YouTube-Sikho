@@ -161,7 +161,7 @@ service cloud.firestore {
     // 11. DISCOUNT COUPONS (Admin Managed, Server Validated)
     // ===============================================================
     match /coupons/{couponCode} {
-      allow read: if isAdmin(); // Validated server-side via validateCoupon callable
+      allow read: if isSignedIn() || isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

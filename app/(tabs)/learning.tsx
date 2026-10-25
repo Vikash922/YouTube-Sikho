@@ -31,6 +31,7 @@ import { firebaseFirestore } from '../../src/services/firebase';
 import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 import { Screen } from '../../src/components/common/Screen';
 import { Header } from '../../src/components/common/Header';
 import { EmptyState } from '../../src/components/common/EmptyState';
@@ -57,6 +58,7 @@ export default function MyLearningScreen() {
   const router = useRouter();
   const { colors, typography, spacing, radius } = useTheme();
   const user = useAuthStore((state) => state.user);
+  const t = useLanguageStore((state) => state.t);
 
   const [enrolledList, setEnrolledList] = useState<EnrolledCourseItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,8 +137,8 @@ export default function MyLearningScreen() {
   return (
     <Screen withTopInset>
       <Header
-        title="My Learning"
-        subtitle="Resume your enrolled video courses & study notes"
+        title={t('myLearning')}
+        subtitle={t('myLearningSubtitle')}
       />
 
       <ScrollView
@@ -151,15 +153,15 @@ export default function MyLearningScreen() {
           <View style={styles.loaderBox}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[typography.caption, { color: colors.textMuted, marginTop: spacing.sm }]}>
-              Syncing enrolled courses...
+              {t('syncingCourses')}
             </Text>
           </View>
         ) : enrolledList.length === 0 ? (
           <EmptyState
             icon={<PlayCircle size={36} color={colors.primary} strokeWidth={1.75} />}
-            title="No courses enrolled yet"
-            description="Explore our curated catalog and start mastering YouTube growth today."
-            actionTitle="Browse Courses"
+            title={t('noCoursesEnrolled')}
+            description={t('noCoursesEnrolledDesc')}
+            actionTitle={t('browseCourses')}
             onAction={() => router.push('/(tabs)/courses')}
           />
         ) : (
@@ -199,12 +201,12 @@ export default function MyLearningScreen() {
                       <View style={styles.completedBadge}>
                         <CheckCircle2 size={13} color={colors.success} strokeWidth={2} />
                         <Text style={[typography.caption, { color: colors.success, marginLeft: 4, fontWeight: '700' }]}>
-                          Completed
+                          {t('completed')}
                         </Text>
                       </View>
                     ) : (
                       <Text style={[typography.caption, typography.tabular, { color: colors.primary, fontWeight: '700' }]}>
-                        {item.percentComplete}% Complete
+                        {item.percentComplete}% {t('complete')}
                       </Text>
                     )}
                   </View>
@@ -217,7 +219,7 @@ export default function MyLearningScreen() {
                   </Text>
 
                   <Text style={[typography.small, { color: colors.textMuted, marginTop: 2 }]}>
-                    Instructor: {item.course.instructor}
+                    {t('instructor')}: {item.course.instructor}
                   </Text>
 
                   {/* Progress Bar */}
@@ -229,18 +231,18 @@ export default function MyLearningScreen() {
                   <View style={[styles.cardFooter, { borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm }]}>
                     <View style={{ flex: 1, marginRight: spacing.sm }}>
                       <Text style={[typography.caption, { color: colors.textMuted }]}>
-                        Next Lesson
+                        {t('nextLesson')}
                       </Text>
                       <Text
                         style={[typography.small, { color: colors.text, fontWeight: '600' }]}
                         numberOfLines={1}
                       >
-                        {item.lastLessonTitle || 'Start Lesson 1'}
+                        {item.lastLessonTitle || t('startLesson')}
                       </Text>
                     </View>
 
                     <Button
-                      title="Resume"
+                      title={t('resume')}
                       size="sm"
                       variant="primary"
                       onPress={() => handleResume(item)}

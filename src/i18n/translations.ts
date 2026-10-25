@@ -9,6 +9,63 @@ export const translations = {
     tabLive: 'Live',
     tabProfile: 'Profile',
 
+    // Greetings
+    goodMorning: 'Good morning',
+    goodAfternoon: 'Good afternoon',
+    goodEvening: 'Good evening',
+    goodNight: 'Good night',
+    student: 'Student',
+
+    // Home Screen
+    searchHomePlaceholder: 'Search courses, mentors, lessons...',
+    featured: 'FEATURED',
+    bestseller: 'BESTSELLER',
+    newBadge: 'NEW',
+    liveStreamNow: 'LIVE STREAMING NOW',
+    joinNow: 'JOIN NOW',
+    dayStreak: 'Day Streak',
+    onTrack: 'ON TRACK',
+    watchStreakDesc: 'Watch 1 lesson today to keep your streak alive!',
+    weeklyGoal: 'Weekly Goal',
+    popularCourses: 'Popular Courses',
+    seeAll: 'See all',
+    lessonsCount: 'Lessons',
+    enrolled: 'Enrolled',
+
+    // Courses Screen
+    exploreCourses: 'Explore Courses',
+    exploreCoursesSubtitle: 'Discover masterclasses curated for creators',
+    searchCoursesPlaceholder: 'Search by title or mentor...',
+    allCategories: 'All',
+    noCoursesFound: 'No courses found',
+    noCoursesDescription: 'Try searching with a different keyword or category.',
+    clearFilter: 'Clear Filter',
+
+    // Learning Screen
+    myLearning: 'My Learning',
+    myLearningSubtitle: 'Resume your enrolled video courses & study notes',
+    syncingCourses: 'Syncing enrolled courses...',
+    noCoursesEnrolled: 'No courses enrolled yet',
+    noCoursesEnrolledDesc: 'Explore our curated catalog and start mastering YouTube growth today.',
+    browseCourses: 'Browse Courses',
+    completed: 'Completed',
+    complete: 'Complete',
+    nextLesson: 'Next Lesson',
+    startLesson: 'Start Lesson 1',
+    instructor: 'Instructor',
+
+    // Live Screen
+    liveMasterclasses: 'Live Masterclasses',
+    liveMasterclassesSubtitle: 'Join real-time interactive mentoring sessions',
+    liveNow: 'Live Now',
+    upcoming: 'Upcoming Sessions',
+    pastRecordings: 'Past Recordings',
+    noLiveClasses: 'No live sessions scheduled right now',
+    noLiveClassesDesc: 'Scheduled live workshops and Q&A sessions will appear here.',
+    setReminder: 'Set Reminder',
+    reminderSet: 'Reminder Set',
+    locked: 'Enroll to Access',
+
     // Profile & Settings
     myAccount: 'My Account',
     accountSubtitle: 'Manage your preferences and support',
@@ -64,6 +121,22 @@ export const translations = {
     overview: 'Overview',
     retryStream: 'Retry Stream',
 
+    // Checkout
+    checkout: 'Checkout',
+    completeEnrollment: 'Complete Enrollment',
+    haveCoupon: 'Have a Discount Coupon?',
+    applyCoupon: 'Apply Coupon',
+    enterCouponCode: 'Enter coupon code',
+    apply: 'Apply',
+    remove: 'Remove',
+    orderSummary: 'Order Summary',
+    originalPrice: 'Original Price',
+    discount: 'Discount',
+    couponDiscount: 'Coupon Discount',
+    totalPayable: 'Total Payable',
+    payNow: 'Pay Now',
+    securePayment: '100% Secure Payment',
+
     // Feedback
     success: 'Success',
     error: 'Error',
@@ -75,6 +148,63 @@ export const translations = {
     tabLearning: 'माई लर्निंग',
     tabLive: 'लाइव',
     tabProfile: 'प्रोफाइल',
+
+    // Greetings
+    goodMorning: 'शुभ प्रभात',
+    goodAfternoon: 'शुभ दोपहर',
+    goodEvening: 'शुभ संध्या',
+    goodNight: 'शुभ रात्रि',
+    student: 'विद्यार्थी',
+
+    // Home Screen
+    searchHomePlaceholder: 'कोर्स, शिक्षक या पाठ खोजें...',
+    featured: 'विशेष',
+    bestseller: 'बेस्टसेलर',
+    newBadge: 'नया',
+    liveStreamNow: 'लाइव स्ट्रीम चालू है',
+    joinNow: 'अभी जुड़ें',
+    dayStreak: 'दिन का स्ट्रीक',
+    onTrack: 'जारी है',
+    watchStreakDesc: 'अपनी स्ट्रीक बनाए रखने के लिए आज 1 पाठ देखें!',
+    weeklyGoal: 'साप्ताहिक लक्ष्य',
+    popularCourses: 'लोकप्रिय कोर्सेस',
+    seeAll: 'सभी देखें',
+    lessonsCount: 'पाठ',
+    enrolled: 'नामांकित',
+
+    // Courses Screen
+    exploreCourses: 'कोर्सेस खोजें',
+    exploreCoursesSubtitle: 'क्रिएटर्स के लिए बेहतरीन मास्टरक्लास खोजें',
+    searchCoursesPlaceholder: 'शीर्षक या शिक्षक द्वारा खोजें...',
+    allCategories: 'सभी',
+    noCoursesFound: 'कोई कोर्स नहीं मिला',
+    noCoursesDescription: 'किसी भिन्न शब्द या श्रेणी से खोजें।',
+    clearFilter: 'फ़िल्टर हटाएं',
+
+    // Learning Screen
+    myLearning: 'मेरी पढ़ाई',
+    myLearningSubtitle: 'अपने नामांकित वीडियो कोर्सेस और नोट्स जारी रखें',
+    syncingCourses: 'नामांकित कोर्सेस लोड हो रहे हैं...',
+    noCoursesEnrolled: 'अभी तक कोई कोर्स नामांकित नहीं है',
+    noCoursesEnrolledDesc: 'हमारा कैटलॉग देखें और आज ही यूट्यूब विकास में महारत हासिल करें।',
+    browseCourses: 'कोर्स देखें',
+    completed: 'पूर्ण',
+    complete: 'पूर्ण',
+    nextLesson: 'अगला पाठ',
+    startLesson: 'पाठ 1 शुरू करें',
+    instructor: 'शिक्षक',
+
+    // Live Screen
+    liveMasterclasses: 'लाइव मास्टरक्लास',
+    liveMasterclassesSubtitle: 'रियल-टाइम में लाइव मेंटरिंग सेशन से जुड़ें',
+    liveNow: 'अभी लाइव है',
+    upcoming: 'आगामी सेशन्स',
+    pastRecordings: 'पिछली रिकॉर्डिंग्स',
+    noLiveClasses: 'अभी कोई लाइव सेशन निर्धारित नहीं है',
+    noLiveClassesDesc: 'आगामी लाइव वर्कशॉप और सवाल-जवाब सत्र यहां दिखाई देंगे।',
+    setReminder: 'रिमाइंडर लगाएं',
+    reminderSet: 'रिमाइंडर सेट है',
+    locked: 'एक्सेस के लिए इनरोल करें',
 
     // Profile & Settings
     myAccount: 'मेरा खाता',
@@ -130,6 +260,22 @@ export const translations = {
     curriculum: 'सिलेबस',
     overview: 'विवरण',
     retryStream: 'पुनः प्रयास करें',
+
+    // Checkout
+    checkout: 'चेकआउट',
+    completeEnrollment: 'नामांकन पूरा करें',
+    haveCoupon: 'क्या आपके पास डिस्काउंट कूपन है?',
+    applyCoupon: 'कूपन लागू करें',
+    enterCouponCode: 'कूपन कोड डालें',
+    apply: 'लागू करें',
+    remove: 'हटाएं',
+    orderSummary: 'ऑर्डर सारांश',
+    originalPrice: 'मूल मूल्य',
+    discount: 'छूट',
+    couponDiscount: 'कूपन छूट',
+    totalPayable: 'कुल देय राशि',
+    payNow: 'अभी भुगतान करें',
+    securePayment: '100% सुरक्षित भुगतान',
 
     // Feedback
     success: 'सफलता',

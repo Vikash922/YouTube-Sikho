@@ -25,10 +25,12 @@ import {
 } from '../../src/services/courseService';
 import { subscribeToCategories } from '../../src/services/categoryService';
 import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 
 export default function CoursesScreen() {
   const router = useRouter();
   const { colors, typography, radius, spacing, shadows } = useTheme();
+  const t = useLanguageStore((state) => state.t);
   const [courses, setCourses] = useState<Course[]>([]);
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +76,7 @@ export default function CoursesScreen() {
 
   return (
     <Screen withTopInset>
-      <Header title="Explore Courses" subtitle="Discover masterclasses curated for creators" />
+      <Header title={t('exploreCourses')} subtitle={t('exploreCoursesSubtitle')} />
 
       {/* Search Input */}
       <View style={{ paddingHorizontal: spacing.screen }}>
@@ -91,7 +93,7 @@ export default function CoursesScreen() {
         >
           <Search size={18} color={colors.textMuted} strokeWidth={1.75} style={{ marginRight: 10 }} />
           <TextInput
-            placeholder="Search by title or mentor..."
+            placeholder={t('searchCoursesPlaceholder')}
             placeholderTextColor={colors.textMuted}
             style={[
               typography.body,
@@ -114,7 +116,7 @@ export default function CoursesScreen() {
           {categories.map((cat) => (
             <Chip
               key={cat}
-              label={cat}
+              label={cat === 'All' ? t('allCategories') : cat}
               selected={selectedCategory === cat}
               onPress={() => setSelectedCategory(cat)}
             />
@@ -139,9 +141,9 @@ export default function CoursesScreen() {
         ) : filteredCourses.length === 0 ? (
           <EmptyState
             icon={<BookOpen size={32} color={colors.primary} strokeWidth={1.75} />}
-            title="No courses found"
-            description="Try searching with a different keyword or category."
-            actionTitle="Clear Filter"
+            title={t('noCoursesFound')}
+            description={t('noCoursesDescription')}
+            actionTitle={t('clearFilter')}
             onAction={() => {
               setSelectedCategory('All');
               setSearchQuery('');

@@ -31,6 +31,7 @@ import Animated, {
 import { useTheme } from '../../src/theme';
 import { Screen } from '../../src/components/common/Screen';
 import { Header } from '../../src/components/common/Header';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 import { firebaseAuth } from '../../src/services/firebase';
 import {
   subscribeToLiveClasses,
@@ -42,6 +43,7 @@ export default function LiveScreen() {
   const router = useRouter();
   const { colors, spacing, typography, radius, shadows } = useTheme();
   const shouldReduceMotion = useReducedMotion();
+  const t = useLanguageStore((state) => state.t);
 
   const [classes, setClasses] = useState<LiveClassData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -133,8 +135,8 @@ export default function LiveScreen() {
   return (
     <Screen withTopInset>
       <Header
-        title="Live Masterclasses"
-        subtitle="Interactive sessions & live doubt clearing"
+        title={t('liveMasterclasses')}
+        subtitle={t('liveMasterclassesSubtitle')}
         showBack={false}
       />
 
@@ -172,7 +174,7 @@ export default function LiveScreen() {
                   />
                 </View>
                 <Text style={[typography.heading, { color: colors.text, fontWeight: '700' }]}>
-                  Live Now
+                  {t('liveNow')}
                 </Text>
               </View>
 
@@ -236,7 +238,7 @@ export default function LiveScreen() {
                   >
                     <Play size={18} color={colors.surface} />
                     <Text style={[styles.joinBtnText, { color: colors.surface }]}>
-                      Join Live Room
+                      {t('joinNow')}
                     </Text>
                   </TouchableOpacity>
                 </Animated.View>
@@ -247,7 +249,7 @@ export default function LiveScreen() {
           {/* 2. UPCOMING SESSIONS */}
           <View style={{ marginBottom: spacing.xl }}>
             <Text style={[typography.heading, { color: colors.text, fontWeight: '700', marginBottom: 12 }]}>
-              Upcoming Schedules
+              {t('upcoming')}
             </Text>
 
             {upcoming.length === 0 ? (
@@ -259,10 +261,10 @@ export default function LiveScreen() {
               >
                 <Clock size={32} color={colors.textMuted} />
                 <Text style={[typography.body, { color: colors.text, fontWeight: '600', marginTop: 8 }]}>
-                  No upcoming sessions right now
+                  {t('noLiveClasses')}
                 </Text>
                 <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', marginTop: 4 }]}>
-                  New masterclasses are announced weekly. You will receive an alert when a class is scheduled.
+                  {t('noLiveClassesDesc')}
                 </Text>
               </View>
             ) : (
@@ -330,7 +332,7 @@ export default function LiveScreen() {
                             { color: isReminderSet ? colors.primary : colors.text },
                           ]}
                         >
-                          {isReminderSet ? 'Reminder Active' : 'Remind Me'}
+                          {isReminderSet ? t('reminderSet') : t('setReminder')}
                         </Text>
                       </TouchableOpacity>
                     </View>

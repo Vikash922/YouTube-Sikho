@@ -40,11 +40,13 @@ import {
 } from '../../src/services/bannerService';
 import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 import { Linking } from 'react-native';
+import { useLanguageStore } from '../../src/store/useLanguageStore';
 
 export default function HomeScreen() {
   const router = useRouter();
   const { colors, typography, radius, spacing, shadows } = useTheme();
   const profile = useAuthStore((state) => state.profile);
+  const t = useLanguageStore((state) => state.t);
 
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<Course[]>(Object.values(FALLBACK_COURSES));
@@ -103,12 +105,12 @@ export default function HomeScreen() {
   const currentHour = new Date().getHours();
   const timeOfDayGreeting =
     currentHour >= 5 && currentHour < 12
-      ? 'Good morning'
+      ? t('goodMorning')
       : currentHour >= 12 && currentHour < 17
-      ? 'Good afternoon'
+      ? t('goodAfternoon')
       : currentHour >= 17 && currentHour < 22
-      ? 'Good evening'
-      : 'Good night';
+      ? t('goodEvening')
+      : t('goodNight');
 
   const isLiveSectionVisible =
     homeSections.find((s) => s.type === 'live_stream')?.isVisible !== false;
@@ -139,7 +141,7 @@ export default function HomeScreen() {
               ]}
               numberOfLines={1}
             >
-              {profile?.name || 'Student'}
+              {profile?.name || t('student')}
             </Text>
           </View>
 
@@ -207,7 +209,7 @@ export default function HomeScreen() {
         >
           <Search size={18} color={colors.textMuted} strokeWidth={1.75} style={{ marginRight: 10 }} />
           <TextInput
-            placeholder="Search courses, mentors, lessons..."
+            placeholder={t('searchHomePlaceholder')}
             placeholderTextColor={colors.textMuted}
             style={[
               typography.body,
@@ -317,10 +319,10 @@ export default function HomeScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Radio size={16} color={colors.error} strokeWidth={2.5} />
                   <Text style={[typography.heading, { color: colors.error, fontSize: 13 }]}>
-                    LIVE STREAMING NOW
+                    {t('liveStreamNow')}
                   </Text>
                 </View>
-                <Badge label="JOIN NOW" variant="error" size="sm" />
+                <Badge label={t('joinNow')} variant="error" size="sm" />
               </View>
               <Text
                 style={[
@@ -354,16 +356,16 @@ export default function HomeScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Flame size={18} color={colors.accent} strokeWidth={1.75} />
                   <Text style={[typography.heading, { color: colors.text, marginLeft: 6 }]}>
-                    3-Day Streak
+                    {`3-${t('dayStreak')}`}
                   </Text>
                 </View>
-                <Badge label="ON TRACK" variant="success" size="sm" />
+                <Badge label={t('onTrack')} variant="success" size="sm" />
               </View>
               <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                Watch 1 lesson today to keep your streak alive!
+                {t('watchStreakDesc')}
               </Text>
               <View style={{ marginTop: spacing.md }}>
-                <ProgressBar value={60} label="Weekly Goal" />
+                <ProgressBar value={60} label={t('weeklyGoal')} />
               </View>
             </Card>
           </Animated.View>
@@ -377,14 +379,14 @@ export default function HomeScreen() {
           >
           <View style={styles.sectionHeader}>
             <Text style={[typography.heading, { color: colors.text }]}>
-              Popular Courses
+              {t('popularCourses')}
             </Text>
             <TouchableOpacity
               onPress={() => router.push('/(tabs)/courses')}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
-                See all
+                {t('seeAll')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -404,7 +406,7 @@ export default function HomeScreen() {
                   ? `₹${course.price.toLocaleString('en-IN')}`
                   : course.price;
                 const displayBadge =
-                  course.isFeatured ? 'FEATURED' : course.isNew ? 'NEW' : 'BESTSELLER';
+                  course.isFeatured ? t('featured') : course.isNew ? t('newBadge') : t('bestseller');
 
                 return (
                   <Card

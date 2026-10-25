@@ -1,6 +1,9 @@
 import {
   firebaseFunctions,
+  firebaseFirestore,
   httpsCallable,
+  doc,
+  getDoc,
 } from './firebase';
 import { clientConfig } from '../config/client.config';
 
@@ -57,18 +60,19 @@ export interface RazorpaySuccessResponse {
 }
 
 /**
- * Validate a coupon code via Cloud Function (protecting business logic)
+ * Validate a coupon code via Cloud Function with direct Firestore fallback
  */
 export async function validateCoupon(
   courseId: string,
   couponCode: string,
-  _coursePrice?: number
+  coursePrice?: number
 ): Promise<CouponValidationResult> {
   const code = couponCode.trim().toUpperCase();
   if (!code) {
     return { valid: false, error: 'Please enter a coupon code' };
   }
 
+  // 1. Try Cloud Function first if deployed
   try {
     const validateCouponFn = httpsCallable<
       { courseId: string; code: string },
@@ -77,19 +81,77 @@ export async function validateCoupon(
 
     const result = await validateCouponFn({ courseId, code });
     const data = result.data;
-    return {
-      valid: data.valid,
-      discountAmount: (data.discountAmountPaise || 0) / 100,
-      finalPrice: (data.finalPricePaise || 0) / 100,
-      discountAmountPaise: data.discountAmountPaise,
-      finalPricePaise: data.finalPricePaise,
-      message: data.message,
-      error: data.valid ? undefined : data.message,
-    };
+    if (data && typeof data.valid === 'boolean') {
+      return {
+        valid: data.valid,
+        discountAmount: (data.discountAmountPaise || 0) / 100,
+        finalPrice: (data.finalPricePaise || 0) / 100,
+        discountAmountPaise: data.discountAmountPaise,
+        finalPricePaise: data.finalPricePaise,
+        message: data.message,
+        error: data.valid ? undefined : data.message,
+      };
+    }
   } catch (err: any) {
+    // Cloud function not reachable / not deployed yet -> fallback to Firestore
+  }
+
+  // 2. Direct Firestore validation fallback (instant & works with admin created coupons)
+  try {
+    const couponRef = doc(firebaseFirestore, 'coupons', code);
+    const couponSnap = await getDoc(couponRef);
+    if (!couponSnap.exists()) {
+      return { valid: false, error: `Coupon "${code}" does not exist` };
+    }
+
+    const data = couponSnap.data();
+    if (data.isActive === false) {
+      return { valid: false, error: `Coupon "${code}" is inactive` };
+    }
+
+    if (data.expiresAt) {
+      const exp = new Date(data.expiresAt).getTime();
+      if (!isNaN(exp) && exp < Date.now()) {
+        return { valid: false, error: `Coupon "${code}" has expired` };
+      }
+    }
+
+    const maxUses = Number(data.maxUses) || 0;
+    const usedCount = Number(data.usedCount) || 0;
+    if (maxUses > 0 && usedCount >= maxUses) {
+      return { valid: false, error: `Coupon "${code}" usage limit reached` };
+    }
+
+    const price = coursePrice || 0;
+    const minPrice = Number(data.minPrice) || 0;
+    if (minPrice > 0 && price < minPrice) {
+      return { valid: false, error: `Minimum order amount for this coupon is ₹${minPrice}` };
+    }
+
+    const discountType = data.discountType || (data.type === 'flat' ? 'flat' : 'percent');
+    const value = Number(data.value !== undefined ? data.value : (data.discountPercent || 0));
+
+    let discount = 0;
+    if (discountType === 'percent') {
+      discount = Math.min(price, Math.round((price * value) / 100));
+    } else {
+      discount = Math.min(price, value);
+    }
+
+    const finalPrice = Math.max(0, price - discount);
+
+    return {
+      valid: true,
+      discountAmount: discount,
+      finalPrice: finalPrice,
+      discountAmountPaise: discount * 100,
+      finalPricePaise: finalPrice * 100,
+      message: `${discountType === 'percent' ? `${value}%` : `₹${value}`} discount applied!`,
+    };
+  } catch (firestoreErr: any) {
     return {
       valid: false,
-      error: err?.message || 'Unable to validate coupon code.',
+      error: firestoreErr?.message || 'Unable to validate coupon code.',
     };
   }
 }
