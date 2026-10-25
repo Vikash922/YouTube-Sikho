@@ -139,7 +139,18 @@ async function runMigration() {
       lessons.forEach((les, lIdx) => {
         totalLessonsCount++;
         const lessonId = les.id || `les_${lIdx + 1}_${Date.now().toString(36)}`;
-        const durationSec = Number(les.durationSeconds || (les.duration ? Number(les.duration) : 0));
+        let durationSec = 0;
+        if (typeof les.durationSeconds === 'number' && !isNaN(les.durationSeconds)) {
+          durationSec = les.durationSeconds;
+        } else if (typeof les.duration === 'number' && !isNaN(les.duration)) {
+          durationSec = les.duration;
+        } else if (typeof les.duration === 'string') {
+          const parsed = parseFloat(les.duration);
+          durationSec = !isNaN(parsed) ? parsed : 0;
+        }
+        if (isNaN(durationSec) || !isFinite(durationSec)) {
+          durationSec = 0;
+        }
         totalDurationSeconds += durationSec;
 
         const publicLesson = {
