@@ -91,8 +91,8 @@ export const clientConfig: ClientConfig = {
     success: "#16A34A",
   },
 
-  supportPhone: "+919876543210",
-  supportWhatsApp: "+919876543210",
+  supportPhone: "",
+  supportWhatsApp: "",
   supportEmail: "support@example.com",
 
   companyLegalName: "Creator Academy Private Limited",
