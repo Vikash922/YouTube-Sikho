@@ -23,8 +23,8 @@ service cloud.firestore {
 
     function isEnrolled(courseId) {
       return isSignedIn() && (
-        exists(/databases/$(database)/documents/enrollments/$(request.auth.uid)_$(courseId)) &&
-        get(/databases/$(database)/documents/enrollments/$(request.auth.uid)_$(courseId)).data.status == 'active'
+        exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)) &&
+        get(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)).data.status == 'active'
       );
     }
 
