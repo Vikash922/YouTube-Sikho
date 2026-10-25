@@ -323,7 +323,11 @@ export const Courses: React.FC = () => {
           batch.set(mediaRef, {
             provider: 'youtube',
             videoId: les.videoId || '',
-            pdfPath: les.videoId || '',
+            privacyStatus: les.privacyStatus || 'unlisted',
+            embeddable: les.embeddable !== false,
+            title: les.title || '',
+            durationSeconds: les.durationSeconds || 0,
+            checkedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           }, { merge: true });
         });

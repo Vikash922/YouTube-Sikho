@@ -11,6 +11,7 @@ import { HttpsError } from 'firebase-functions/v2/https';
 export const razorpayKeyId = defineSecret('RAZORPAY_KEY_ID');
 export const razorpayKeySecret = defineSecret('RAZORPAY_KEY_SECRET');
 export const razorpayWebhookSecret = defineSecret('RAZORPAY_WEBHOOK_SECRET');
+export const youtubeApiKey = defineSecret('YOUTUBE_API_KEY');
 
 export const razorpaySecrets = [
   razorpayKeyId,
@@ -18,14 +19,20 @@ export const razorpaySecrets = [
   razorpayWebhookSecret,
 ];
 
+export const youtubeSecrets = [
+  youtubeApiKey,
+];
+
 export const allSecrets = [
   ...razorpaySecrets,
+  ...youtubeSecrets,
 ];
 
 export interface AppSecrets {
   RAZORPAY_KEY_ID: string;
   RAZORPAY_KEY_SECRET: string;
   RAZORPAY_WEBHOOK_SECRET: string;
+  YOUTUBE_API_KEY: string;
 }
 
 const getSecretVal = (param: { value: () => string }, envName: string): string => {
@@ -43,6 +50,7 @@ export const getSecrets = (): AppSecrets => {
     RAZORPAY_KEY_ID: getSecretVal(razorpayKeyId, 'RAZORPAY_KEY_ID'),
     RAZORPAY_KEY_SECRET: getSecretVal(razorpayKeySecret, 'RAZORPAY_KEY_SECRET'),
     RAZORPAY_WEBHOOK_SECRET: getSecretVal(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET'),
+    YOUTUBE_API_KEY: getSecretVal(youtubeApiKey, 'YOUTUBE_API_KEY'),
   };
 };
 

@@ -27,6 +27,11 @@ export interface Lesson {
   provider?: 'youtube' | string;
   videoId?: string; // transient in admin form while editing, saved to private/media
   youtubeUrl?: string; // input field for YouTube link
+  thumbnailUrl?: string;
+  privacyStatus?: 'unlisted' | 'public' | 'private';
+  embeddable?: boolean;
+  madeForKids?: boolean;
+  pdfUrl?: string;
 }
 
 export interface LessonPrivateMedia {

@@ -1,7 +1,8 @@
 import * as admin from 'firebase-admin';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { razorpaySecrets } from './config';
+import { razorpaySecrets, youtubeSecrets } from './config';
 import { requireAdmin, setAdminClaimHandler } from './auth';
+import { validateYoutubeVideoHandler } from './youtube/validateYoutubeVideo';
 import { createOrderHandler } from './payments/createOrder';
 import { verifyPaymentHandler } from './payments/verifyPayment';
 import { razorpayWebhookHandler } from './payments/razorpayWebhook';
@@ -98,6 +99,22 @@ export const refundPayment = onCall(
     } catch (err: any) {
       if (err instanceof HttpsError) throw err;
       throw new HttpsError('permission-denied', err.message || 'Refund processing failed.');
+    }
+  }
+);
+
+/**
+ * 6. validateYoutubeVideo: Server-Side Unlisted YouTube Video Verification
+ */
+export const validateYoutubeVideo = onCall(
+  { region: REGION, cors: true, secrets: youtubeSecrets },
+  async (request) => {
+    requireAdmin(request);
+    try {
+      return await validateYoutubeVideoHandler(request.data);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('invalid-argument', err.message || 'YouTube validation failed.');
     }
   }
 );
