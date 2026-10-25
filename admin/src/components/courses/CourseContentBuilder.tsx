@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Plus,
   Trash2,
   Video,
   FileText,
   HelpCircle,
-  Upload,
   ArrowUp,
   ArrowDown,
   Eye,
@@ -15,7 +14,6 @@ import {
 } from 'lucide-react';
 import { Section, Lesson } from '../../types';
 import { Button } from '../common/Button';
-import { VideoUploadModal } from '../video/VideoUploadModal';
 
 interface CourseContentBuilderProps {
   sections: Section[];
@@ -30,12 +28,6 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
   onSave,
   saving,
 }) => {
-  const [activeUploadLesson, setActiveUploadLesson] = useState<{
-    sectionId: string;
-    lessonId: string;
-    title: string;
-  } | null>(null);
-
   // Section Handlers
   const handleAddSection = () => {
     const newSection: Section = {
@@ -142,7 +134,7 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
             Curriculum Builder (Sections & Lessons)
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Organize modules, upload videos directly to Bunny Stream, and mark free preview lessons.
+            Organize modules, manage YouTube unlisted video lessons, and mark free preview lessons.
           </p>
         </div>
 
@@ -239,7 +231,7 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
 
                     {/* Lesson Meta Controls */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Video specific: Bunny Video GUID input, Duration & Upload */}
+                      {/* Video specific: YouTube link input & Duration */}
                       {les.type === 'video' && (
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <input
@@ -248,8 +240,8 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
                             onChange={(e) =>
                               handleUpdateLesson(sec.id, les.id, { videoId: e.target.value.trim() })
                             }
-                            placeholder="Bunny Video GUID"
-                            className="px-2 py-1 rounded-none bg-white dark:bg-dark-surface border border-slate-300 dark:border-slate-700 text-[11px] w-48 focus:outline-none focus:border-brand-500"
+                            placeholder="YouTube Video ID / URL"
+                            className="px-2 py-1 rounded-none bg-white dark:bg-dark-surface border border-slate-300 dark:border-slate-700 text-[11px] w-56 focus:outline-none focus:border-brand-500"
                           />
                           <input
                             type="text"
@@ -260,27 +252,6 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
                             placeholder="Duration (12:30)"
                             className="px-2 py-1 rounded-none bg-white dark:bg-dark-surface border border-slate-300 dark:border-slate-700 text-[11px] w-24 focus:outline-none focus:border-brand-500"
                           />
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setActiveUploadLesson({
-                                sectionId: sec.id,
-                                lessonId: les.id,
-                                title: les.title,
-                              })
-                            }
-                            className="px-2.5 py-1 rounded-none bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/60 text-brand-600 dark:text-brand-400 font-bold uppercase tracking-wider border border-brand-500/30 flex items-center gap-1 text-[10px] transition-colors"
-                          >
-                            <Upload className="w-3 h-3" />
-                            <span>Upload to Bunny</span>
-                          </button>
-
-                          {les.videoId && (les.videoId.includes('youtube.com') || les.videoId.includes('youtu.be')) && (
-                            <span className="text-[10px] text-amber-500 font-semibold px-2 py-0.5 bg-amber-500/10 rounded">
-                              ⚠️ YouTube link detected (deprecated). Please upload via Bunny Stream.
-                            </span>
-                          )}
                         </div>
                       )}
 
@@ -368,22 +339,6 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
             </div>
           ))}
         </div>
-      )}
-
-      {/* Video Upload Modal */}
-      {activeUploadLesson && (
-        <VideoUploadModal
-          isOpen={true}
-          onClose={() => setActiveUploadLesson(null)}
-          lessonTitle={activeUploadLesson.title}
-          onUploadSuccess={({ videoId, duration }) => {
-            handleUpdateLesson(activeUploadLesson.sectionId, activeUploadLesson.lessonId, {
-              videoId,
-              duration,
-            });
-            setActiveUploadLesson(null);
-          }}
-        />
       )}
     </div>
   );

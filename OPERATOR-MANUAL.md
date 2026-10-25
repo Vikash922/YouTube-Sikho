@@ -20,7 +20,7 @@ A day-to-day guide for the non-technical course creator and operations team to m
    - Under that section, click **+ Add Lesson**.
    - Select type: **Video** or **PDF Notes**.
    - Enter lesson title, video duration, and toggle **Free Preview** if you want this video unlocked for non-paying users as a free sample.
-   - Upload video directly via Bunny.net Stream or paste a direct video ID.
+   - Paste your unlisted YouTube link. The video title and duration are validated and saved securely in private media.
 6. Toggle **Publish** when ready. The course immediately appears on the mobile app.
 
 ---
@@ -33,8 +33,8 @@ A day-to-day guide for the non-technical course creator and operations team to m
    - **Title**: E.g., *"Weekly Doubt Clearing & Channel Reviews"*.
    - **Course**: Choose a specific course or select *"Free for all students"*.
    - **Date & Start Time**: E.g., Saturday at 7:00 PM.
-   - **Stream Source**: Select **YouTube Live** or **Bunny Stream**.
-   - **Stream Link / Video ID**: Enter your unlisted YouTube stream URL or Bunny stream URL.
+   - **Stream Source**: **YouTube Live (Unlisted)**.
+   - **Stream Link**: Enter your unlisted YouTube live stream URL.
    - **Live Chat**: Toggle ON to enable real-time student messaging.
 4. **When Starting the Class**:
    - Open the Live Classes page and click the green **Go Live** button.

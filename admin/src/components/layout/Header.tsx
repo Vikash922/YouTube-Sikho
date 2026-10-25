@@ -16,7 +16,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onOpenMobileSidebar, 
 
   const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
     dashboard: { title: 'Dashboard Overview', subtitle: 'Real-time performance and system metrics' },
-    courses: { title: 'Course Catalog & Bunny Stream', subtitle: 'Manage curriculum, video uploads, and pricing' },
+    courses: { title: 'Course Catalog & Video Content', subtitle: 'Manage curriculum, lessons, and pricing' },
     'live-classes': { title: 'Live Streaming Classes', subtitle: 'Schedule, broadcast, and moderate live interactive sessions' },
     quizzes: { title: 'Quizzes & Question Bank', subtitle: 'MCQ tests, negative marking, and student performance' },
     notifications: { title: 'Push Notifications & Alerts', subtitle: 'Broadcast FCM push and in-app updates to student cohorts' },

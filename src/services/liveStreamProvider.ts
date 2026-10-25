@@ -8,12 +8,22 @@ export interface LiveClassData {
   instructorName?: string;
   scheduledAt: any;
   status: 'scheduled' | 'live' | 'ended';
-  streamUrl: string;
-  streamProvider: StreamProviderType;
+  streamUrl?: string; // legacy or admin preview
+  streamProvider?: StreamProviderType;
+  provider: StreamProviderType;
   chatEnabled: boolean;
   viewerCount?: number;
   recordingUrl?: string;
   description?: string;
+}
+
+export interface LiveClassPrivateStream {
+  provider: StreamProviderType;
+  videoId: string;
+  privacyStatus?: 'unlisted' | 'public' | 'private';
+  embeddable?: boolean;
+  checkedAt?: string | number;
+  updatedAt?: string | number;
 }
 
 export interface LiveStreamProvider {

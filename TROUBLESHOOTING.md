@@ -7,12 +7,11 @@ The top 10 production issues that may arise, root causes, and step-by-step resol
 ### 1. Video Fails to Play in Mobile Player
 - **Symptoms**: Video player shows a loading spinner continuously or displays "Playback Error".
 - **Root Cause**:
-  1. The signed Bunny Stream token has expired (default validity: 4 hours).
-  2. The student's device IP changed (e.g. switched from Wi-Fi to mobile data) while token was IP-locked.
-  3. Bunny CDN Video ID or Library ID mismatch.
+  1. The playback session has expired or the student account was logged in on too many active devices.
+  2. The unlisted YouTube video has embedding disabled in YouTube Studio or was marked Private.
 - **Fix**:
-  1. Have student back out and re-tap the lesson; `getVideoToken` generates a fresh signed token with their current IP.
-  2. Verify that `BUNNY_LIBRARY_ID` and `BUNNY_TOKEN_AUTH_KEY` match your Bunny.net Stream settings.
+  1. Have student back out and re-tap the lesson; `getLessonPlayback` generates a fresh active session.
+  2. Verify in YouTube Studio that the video visibility is set to **Unlisted** and **Allow embedding** is checked.
 
 ---
 

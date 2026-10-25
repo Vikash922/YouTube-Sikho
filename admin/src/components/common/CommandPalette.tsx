@@ -70,8 +70,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     },
     {
       id: 'nav-courses',
-      title: 'Course Catalog & Bunny Stream',
-      subtitle: 'Manage curriculum, lessons, pricing, and video tokens',
+      title: 'Course Catalog & Video Lessons',
+      subtitle: 'Manage curriculum, lessons, pricing, and video content',
       category: 'Navigation',
       icon: <BookOpen className="w-4 h-4 text-indigo-500" />,
       action: () => {

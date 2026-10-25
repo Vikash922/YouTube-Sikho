@@ -19,10 +19,25 @@ export interface Lesson {
   id: string;
   title: string;
   type: 'video' | 'pdf' | 'quiz';
-  videoId: string;
-  duration?: string;
   order: number;
+  duration?: string;
+  durationSeconds?: number;
   isFreePreview: boolean;
+  hasMedia?: boolean;
+  provider?: 'youtube' | string;
+  videoId?: string; // transient in admin form while editing, saved to private/media
+  youtubeUrl?: string; // input field for YouTube link
+}
+
+export interface LessonPrivateMedia {
+  provider: 'youtube' | string;
+  videoId: string;
+  privacyStatus?: 'unlisted' | 'public' | 'private';
+  embeddable?: boolean;
+  title?: string;
+  durationSeconds?: number;
+  checkedAt?: string | number;
+  updatedAt?: string | number;
 }
 
 export interface Section {

@@ -426,7 +426,7 @@ export const Settings: React.FC = () => {
               </div>
             </div>
             <p className="text-[11px] text-slate-400">
-              To update API keys or webhook secrets, use the Firebase CLI (<code className="font-mono">firebase functions:secrets:set</code>). See <code className="font-mono">BUNNY_RAZORPAY_SETUP.md</code> for full details.
+              To update API keys or webhook secrets, use the Firebase CLI (<code className="font-mono">firebase functions:secrets:set</code>). See <code className="font-mono">RAZORPAY_SETUP.md</code> for full details.
             </p>
           </div>
         </div>

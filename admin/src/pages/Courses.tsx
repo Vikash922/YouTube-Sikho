@@ -312,12 +312,16 @@ export const Courses: React.FC = () => {
             order: lesIdx + 1,
             type: les.type,
             duration: les.duration || '',
+            durationSeconds: les.durationSeconds || 0,
             isFreePreview: !!les.isFreePreview,
+            hasMedia: !!les.videoId,
+            provider: 'youtube',
             updatedAt: serverTimestamp(),
           }, { merge: true });
 
           const mediaRef = doc(db, 'courses', courseId, 'sections', sec.id, 'lessons', les.id, 'private', 'media');
           batch.set(mediaRef, {
+            provider: 'youtube',
             videoId: les.videoId || '',
             pdfPath: les.videoId || '',
             updatedAt: serverTimestamp(),
@@ -363,7 +367,7 @@ export const Courses: React.FC = () => {
               {activeCurriculumCourse.title}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Editing course content and Bunny Stream video assets
+              Editing course curriculum and video content
             </p>
           </div>
         </div>

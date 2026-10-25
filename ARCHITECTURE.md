@@ -23,8 +23,7 @@ flowchart TD
 
     subgraph External Infrastructure
         Razorpay["Razorpay Gateway (UPI, Cards, NetBanking)"]
-        BunnyCDN["Bunny.net Stream & Tokenized CDN"]
-        YouTube["YouTube Live Stream Engine"]
+        YouTube["YouTube Video & Live Engine (Unlisted / Embedded)"]
     end
 
     MobileApp <--> |Realtime onSnapshot / Offline Cache| Firestore
@@ -34,11 +33,10 @@ flowchart TD
     AdminWeb --> |Admin Custom Claims| Auth
 
     MobileApp --> |Signed Callable Requests| Functions
-    AdminWeb --> |Refunds / Video Uploads / Grants| Functions
+    AdminWeb --> |Refunds / Video Links / Grants| Functions
 
     Functions --> |HMAC Verification & Webhooks| Razorpay
-    Functions --> |Signed SHA-256 Video Tokens| BunnyCDN
-    MobileApp --> |Low-Latency HLS Playback| BunnyCDN
+    MobileApp --> |Official IFrame Player (youtube-nocookie.com)| YouTube
     MobileApp --> |Live Embed / Chat| YouTube
     Functions --> |Targeted Notification Push| FCM
     FCM --> |Push Alert Delivery| MobileApp
@@ -59,12 +57,12 @@ flowchart TD
 
 ---
 
-### B. Secure Tokenized Video Playback
+### B. Secure Unlisted YouTube Video Playback
 1. **Lesson Access Check**: Student taps a video lesson in [`app/player/[lessonId].tsx`](app/player/[lessonId].tsx).
-2. **Access Verification**: Client invokes `getVideoToken` Cloud Function providing `courseId` and `lessonId`.
-3. **Authorization**: Server confirms caller has an active enrollment in `/enrollments/{uid}_{courseId}`.
-4. **Token Generation**: Cloud Function generates a time-limited SHA-256 signed Bunny Stream token (valid for 4 hours), locking the stream to the student's IP address.
-5. **Secure Stream**: Player initializes low-latency HLS stream (`.m3u8`). Video cannot be downloaded, shared, or played outside the authorized session.
+2. **Access Verification**: Client invokes `getLessonPlayback` Cloud Function providing `courseId`, `sectionId`, and `lessonId`.
+3. **Authorization**: Server confirms caller has an active enrollment in `/enrollments/{uid}_{courseId}` or `isFreePreview: true`.
+4. **ID Resolution**: Function reads `videoId` from the admin-only subcollection `/courses/{courseId}/sections/{s}/lessons/{l}/private/media` via the Admin SDK.
+5. **Secure Stream**: Player embeds the official YouTube IFrame player using `youtube-nocookie.com`. Session sends `playbackHeartbeat` every 60 seconds; revoking enrollment or exceeding 2 active devices terminates the playback session.
 
 ---
 
@@ -108,8 +106,9 @@ flowchart TD
 | `verifyPayment` | `onCall` (HTTPS) | `{ orderId, razorpayPaymentId, razorpaySignature }` | `{ success: true, enrollmentId }` | Authenticated Student |
 | `razorpayWebhook` | `onRequest` (Webhook) | Razorpay Webhook Payload & `X-Razorpay-Signature` | `{ status: "ok" }` | HMAC Webhook Secret Verification |
 | `refundPayment` | `onCall` (HTTPS) | `{ orderId, reason }` | `{ success: true, refundId }` | Admin Role Required (`request.auth.token.admin`) |
-| `getVideoToken` | `onCall` (HTTPS) | `{ courseId, lessonId }` | `{ videoUrl, token, expiresIn }` | Enrolled Student or Course Admin |
-| `createBunnyUpload` | `onCall` (HTTPS) | `{ title }` | `{ videoId, uploadUrl, libraryId }` | Admin Role Required |
+| `validateYoutubeVideo` | `onCall` (HTTPS) | `{ url }` | `{ videoId, title, durationSeconds, privacyStatus, embeddable }` | Admin Role Required |
+| `getLessonPlayback` | `onCall` (HTTPS) | `{ courseId, sectionId, lessonId }` | `{ provider: "youtube", videoId, startSeconds, sessionId, expiresAt }` | Enrolled Student or Free Preview |
+| `playbackHeartbeat` | `onCall` (HTTPS) | `{ sessionId }` | `{ status: "ok", active: boolean }` | Authenticated Active Student |
 | `submitQuiz` | `onCall` (HTTPS) | `{ quizId, answers, timeTakenSeconds }` | `{ resultId, score, percentage, passed }` | Authenticated Student |
 | `sendNotification` | `onCall` (HTTPS) | `{ title, body, target, targetCourseId? }` | `{ success: true, count }` | Admin Role Required |
 | `manageEnrollment` | `onCall` (HTTPS) | `{ uid, courseId, action: "grant" \| "revoke" }` | `{ success: true }` | Admin Role Required |

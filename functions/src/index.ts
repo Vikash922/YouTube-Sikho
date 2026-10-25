@@ -1,14 +1,12 @@
 import * as admin from 'firebase-admin';
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
-import { razorpaySecrets, bunnySecrets } from './config';
+import { razorpaySecrets } from './config';
 import { requireAdmin, setAdminClaimHandler } from './auth';
 import { createOrderHandler } from './payments/createOrder';
 import { verifyPaymentHandler } from './payments/verifyPayment';
 import { razorpayWebhookHandler } from './payments/razorpayWebhook';
 import { refundPaymentHandler } from './payments/refundPayment';
 import { validateCouponHandler } from './payments/validateCoupon';
-import { getVideoTokenHandler } from './bunny/getVideoToken';
-import { createBunnyUploadHandler } from './bunny/createBunnyUpload';
 import { manageEnrollmentHandler } from './admin/manageEnrollment';
 import { sendNotificationHandler } from './notifications/sendNotification';
 import { deleteAccountHandler } from './user/deleteAccount';
@@ -88,40 +86,7 @@ export const razorpayWebhook = onRequest(
 );
 
 /**
- * 5. getVideoToken: Time-Limited Bunny Stream Signed Token HLS Generator
- */
-export const getVideoToken = onCall(
-  { region: REGION, cors: true, secrets: bunnySecrets },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    try {
-      return await getVideoTokenHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Could not retrieve video playback token.');
-    }
-  }
-);
-
-/**
- * 6. createBunnyUpload: Admin-Only Video Upload Asset Creation
- */
-export const createBunnyUpload = onCall(
-  { region: REGION, cors: true, secrets: bunnySecrets },
-  async (request) => {
-    requireAdmin(request);
-    const uid = request.auth!.uid;
-    try {
-      return await createBunnyUploadHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Could not initialize video upload.');
-    }
-  }
-);
-
-/**
- * 7. refundPayment: Admin-Only Refund API & Immediate Access Revocation
+ * 5. refundPayment: Admin-Only Refund API & Immediate Access Revocation
  */
 export const refundPayment = onCall(
   { region: REGION, cors: true, secrets: razorpaySecrets },

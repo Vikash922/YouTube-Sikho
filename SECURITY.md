@@ -67,7 +67,22 @@ Verify system resilience against known threat vectors:
 
 ---
 
-## 3. Secret Management & Deployment Configuration
+## 3. Video Architecture & Unlisted YouTube Model
+
+### Unlisted Video Model & Limitations
+- **Model**: Course videos are hosted on YouTube as **Unlisted** videos.
+- **Limitation**: An unlisted YouTube video ID is not a secret once an enrolled student receives it to play. A determined user with developer tools or packet inspection could extract the video ID and view it outside the app on YouTube.
+- **Mitigations**:
+  1. The video ID is never stored in public Firestore documents; it is quarantined in the admin-only `private/media` subcollection.
+  2. The ID is only issued to students with an active, unblocked enrollment via the server-side `getLessonPlayback` Cloud Function.
+  3. Playback sessions require regular 60-second heartbeats (`playbackHeartbeat`); revoking an enrollment or blocking an account cuts off playback.
+  4. Device session limits (default 2 active devices) detect and curtail account sharing.
+  5. Screen capture is blocked on Android and detected on iOS.
+  6. Admins have a one-click "Replace video" action in the admin console if a link leaks.
+
+---
+
+## 4. Secret Management & Deployment Configuration
 
 All Cloud Functions are deployed in the **`asia-south1`** (Mumbai) region.
 
@@ -75,18 +90,12 @@ Required Google Cloud Secret Manager secrets:
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
-- `BUNNY_API_KEY`
-- `BUNNY_TOKEN_AUTH_KEY`
-- `BUNNY_LIBRARY_ID`
-- `BUNNY_CDN_HOSTNAME`
+- `YOUTUBE_API_KEY` (for server-side video validation in Step Y2)
 
 Set these secrets using the Firebase CLI:
 ```bash
 firebase functions:secrets:set RAZORPAY_KEY_ID
 firebase functions:secrets:set RAZORPAY_KEY_SECRET
 firebase functions:secrets:set RAZORPAY_WEBHOOK_SECRET
-firebase functions:secrets:set BUNNY_API_KEY
-firebase functions:secrets:set BUNNY_TOKEN_AUTH_KEY
-firebase functions:secrets:set BUNNY_LIBRARY_ID
-firebase functions:secrets:set BUNNY_CDN_HOSTNAME
+firebase functions:secrets:set YOUTUBE_API_KEY
 ```

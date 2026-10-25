@@ -4,21 +4,19 @@ This guide documents the database schema and media asset migrations required to 
 
 ---
 
-## 1. Video Player & Media Assets (Bunny Stream Migration)
+## 1. Video Player & Media Assets (Unlisted YouTube Architecture)
 
 ### Problem
-Previously, lessons stored YouTube video IDs or direct URLs in the publicly readable lesson document (`courses/{courseId}/sections/{sectionId}/lessons/{lessonId}`), which bypassed paid enrollment checks and allowed any user to inspect and play videos directly.
+Previously, lessons stored video IDs or URLs in the publicly readable lesson document (`courses/{courseId}/sections/{sectionId}/lessons/{lessonId}`), which bypassed paid enrollment checks and allowed any user to inspect and play videos directly.
 
 ### Migration Action
 1. **Recorded Lessons**:
-   - YouTube links for recorded lessons are **strictly deprecated**.
-   - Admin must upload all lesson videos through the Admin Dashboard using the Bunny Stream modal.
-   - Each uploaded video generates a unique Bunny Video GUID (e.g. `9f8e7d6c-5b4a-3210-fedc-ba9876543210`).
+   - Recorded lessons use **Unlisted** YouTube videos pasted as a link in the admin panel and validated with the YouTube Data API v3.
 2. **Private Media Document Protection**:
-   - The video GUID and master playback parameters are written to the private subcollection:
+   - The video ID and playback parameters are written to the private subcollection:
      `/courses/{courseId}/sections/{sectionId}/lessons/{lessonId}/private/media`
-   - Public lesson documents retain only `title`, `duration`, `isFreePreview`, and `order`.
-   - The mobile app requests time-limited signed `.m3u8` tokens from the `getVideoToken` Cloud Function, which verifies active enrollment before signing.
+   - Public lesson documents retain only `title`, `duration`, `isFreePreview`, `order`, `hasMedia`, and `provider: 'youtube'`.
+   - The mobile app requests the video ID via the `getLessonPlayback` Cloud Function, which verifies active enrollment before returning the ID.
 
 ---
 

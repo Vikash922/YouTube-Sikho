@@ -719,7 +719,7 @@ export default function VideoPlayerScreen() {
               variant="primary"
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                const url = (currentLesson as any).pdfUrl || currentLesson.videoId;
+                const url = currentLesson.pdfUrl;
                 if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
                   Linking.openURL(url);
                 } else {

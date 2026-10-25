@@ -15,11 +15,24 @@ export interface Lesson {
   id: string;
   title: string;
   type: 'video' | 'pdf' | 'quiz';
-  videoId?: string; // legacy support only; canonical video is isolated in private/media
-  pdfUrl?: string;
-  duration?: number | string; // in seconds or "12:30"
-  isFreePreview?: boolean;
   order: number;
+  durationSeconds?: number;
+  duration?: number | string;
+  isFreePreview?: boolean;
+  hasMedia?: boolean;
+  provider?: 'youtube' | string;
+  pdfUrl?: string;
+}
+
+export interface LessonPrivateMedia {
+  provider: 'youtube' | string;
+  videoId: string;
+  privacyStatus?: 'unlisted' | 'public' | 'private';
+  embeddable?: boolean;
+  title?: string;
+  durationSeconds?: number;
+  checkedAt?: string | number;
+  updatedAt?: string | number;
 }
 
 export interface Section {

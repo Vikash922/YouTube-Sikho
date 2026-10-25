@@ -76,9 +76,9 @@ Tests defined in `functions/__tests__/`:
    - Rejects payloads with invalid `X-Razorpay-Signature`.
    - Handles parallel or duplicate `payment.captured` events idempotently.
 4. **`getVideoToken` Access Control**:
-   - Denies non-enrolled students requesting paid lesson HLS tokens.
+   - Denies non-enrolled students requesting paid lesson playback.
    - Allows enrolled students and lessons marked with `isFreePreview: true`.
-   - Returns valid Bunny signed token with 3600s expiration.
+   - Returns valid playback session and video ID.
 5. **`refundPayment` Access Revocation**:
    - Calls Razorpay Refund API and immediately deletes `/enrollments/{uid_courseId}` document upon confirmation.
 
@@ -141,7 +141,7 @@ Execute the following checklist on a physical Android/iOS phone:
 - Runs 21 end-to-end backend function tests across 9 test suites:
   - `createOrder`: Server-side price calculation, coupon validation (expiry, usage limits).
   - `verifyPayment` & `razorpayWebhook`: Cryptographic HMAC signatures, idempotency, parallel webhook events.
-  - `getVideoToken`: Bunny Stream signed playback token authorization (free preview vs enrolled).
+  - `getLessonPlayback`: Playback authorization (free preview vs enrolled), session tracking, and private media resolution.
   - `refundPayment` & `manageEnrollment`: Immediate access revocation and manual enroll/revoke.
   - `sendNotification`: Multi-audience targeting (`all`, `course`, `user`), FCM multicast, user feed population.
   - `submitQuiz`: Server scoring, negative marking penalties, and retry prevention.

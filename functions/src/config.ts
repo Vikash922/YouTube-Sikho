@@ -11,10 +11,6 @@ import { HttpsError } from 'firebase-functions/v2/https';
 export const razorpayKeyId = defineSecret('RAZORPAY_KEY_ID');
 export const razorpayKeySecret = defineSecret('RAZORPAY_KEY_SECRET');
 export const razorpayWebhookSecret = defineSecret('RAZORPAY_WEBHOOK_SECRET');
-export const bunnyApiKey = defineSecret('BUNNY_API_KEY');
-export const bunnyTokenAuthKey = defineSecret('BUNNY_TOKEN_AUTH_KEY');
-export const bunnyLibraryId = defineSecret('BUNNY_LIBRARY_ID');
-export const bunnyCdnHostname = defineSecret('BUNNY_CDN_HOSTNAME');
 
 export const razorpaySecrets = [
   razorpayKeyId,
@@ -22,23 +18,11 @@ export const razorpaySecrets = [
   razorpayWebhookSecret,
 ];
 
-export const bunnySecrets = [
-  bunnyApiKey,
-  bunnyTokenAuthKey,
-  bunnyLibraryId,
-  bunnyCdnHostname,
-];
-
 export const allSecrets = [
   ...razorpaySecrets,
-  ...bunnySecrets,
 ];
 
 export interface AppSecrets {
-  BUNNY_API_KEY: string;
-  BUNNY_TOKEN_AUTH_KEY: string;
-  BUNNY_LIBRARY_ID: string;
-  BUNNY_CDN_HOSTNAME: string;
   RAZORPAY_KEY_ID: string;
   RAZORPAY_KEY_SECRET: string;
   RAZORPAY_WEBHOOK_SECRET: string;
@@ -56,10 +40,6 @@ const getSecretVal = (param: { value: () => string }, envName: string): string =
 
 export const getSecrets = (): AppSecrets => {
   return {
-    BUNNY_API_KEY: getSecretVal(bunnyApiKey, 'BUNNY_API_KEY'),
-    BUNNY_TOKEN_AUTH_KEY: getSecretVal(bunnyTokenAuthKey, 'BUNNY_TOKEN_AUTH_KEY'),
-    BUNNY_LIBRARY_ID: getSecretVal(bunnyLibraryId, 'BUNNY_LIBRARY_ID'),
-    BUNNY_CDN_HOSTNAME: getSecretVal(bunnyCdnHostname, 'BUNNY_CDN_HOSTNAME'),
     RAZORPAY_KEY_ID: getSecretVal(razorpayKeyId, 'RAZORPAY_KEY_ID'),
     RAZORPAY_KEY_SECRET: getSecretVal(razorpayKeySecret, 'RAZORPAY_KEY_SECRET'),
     RAZORPAY_WEBHOOK_SECRET: getSecretVal(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET'),

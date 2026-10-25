@@ -59,8 +59,7 @@ This creates a new configuration file at `clients/rohit-academy/client.config.ts
    - `accent`: Gold/Amber highlight color (`#F59E0B`).
 3. **Payment & Video Keys**:
    - `razorpayKeyId`: Client's Razorpay Key ID (`rzp_live_...`).
-   - `bunnyLibraryId`: Bunny.net Stream Library ID.
-   - `bunnyCdnHostname`: Bunny CDN pull zone host.
+   - `youtubeApiKey`: Google Cloud API Key for YouTube Data API v3 (set in Cloud Functions secrets).
 4. **Firebase Credentials**:
    - Paste the `firebaseConfig` object copied from Step 1.
 5. **Support Contacts**:
