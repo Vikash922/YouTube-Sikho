@@ -21,9 +21,11 @@ import {
   BookOpen,
   CheckCircle2,
   Search,
+  ShieldAlert,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
+import { useScreenProtection } from '../../src/hooks/useScreenProtection';
 import { Card } from '../../src/components/common/Card';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
@@ -44,6 +46,7 @@ export default function CourseMaterialsScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
   const router = useRouter();
   const { colors, typography, radius, spacing } = useTheme();
+  const { isScreenCaptured } = useScreenProtection(`materials_${courseId}`);
 
   const [loading, setLoading] = useState(true);
   const [materials, setMaterials] = useState<StudyMaterial[]>([]);
@@ -316,11 +319,31 @@ export default function CourseMaterialsScreen() {
           }}
         />
       )}
+
+      {isScreenCaptured && (
+        <View style={styles.screenCaptureCover}>
+          <ShieldAlert size={44} color={colors.error} strokeWidth={2} />
+          <Text style={[typography.headline, { color: colors.text, marginTop: 12 }]}>
+            Protected Study Materials
+          </Text>
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, textAlign: 'center' }]}>
+            Screenshots and recordings of proprietary course materials are prohibited.
+          </Text>
+        </View>
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screenCaptureCover: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 9999,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

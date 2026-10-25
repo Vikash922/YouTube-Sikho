@@ -35,7 +35,7 @@ This document details the security posture, threat mitigation strategies, and ve
     `/courses/{courseId}/sections/{sectionId}/lessons/{lessonId}/private/media`
   - Students cannot read this subcollection directly.
   - The `getVideoToken` Cloud Function verifies active enrollment and generates a time-limited signed `.m3u8` token URL.
-  - `expo-screen-capture` activates Android `FLAG_SECURE` on mount and blurs video during screen capture attempts on iOS.
+  - Screen capture is blocked on Android and detected on iOS.
 
 ### D. Anti-Cheat Quiz Protection
 - **Previous Risk**: Storing questions and correct option indices in client-readable Firestore collections exposed answers via network inspection.

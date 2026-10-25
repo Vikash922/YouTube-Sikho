@@ -19,10 +19,12 @@ import {
   CheckCircle,
   ShieldCheck,
   Sparkles,
+  ShieldAlert,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { useScreenProtection } from '../../src/hooks/useScreenProtection';
 import { clientConfig } from '../../src/config/client.config';
 import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
@@ -33,6 +35,7 @@ export default function CertificateScreen() {
   const router = useRouter();
   const { colors, typography, radius, spacing } = useTheme();
   const { profile, user } = useAuthStore();
+  const { isScreenCaptured } = useScreenProtection(`certificate_${courseId}`);
 
   const [downloading, setDownloading] = useState(false);
 
@@ -268,11 +271,31 @@ export default function CertificateScreen() {
           </View>
         </Animated.View>
       </ScrollView>
+
+      {isScreenCaptured && (
+        <View style={styles.screenCaptureCover}>
+          <ShieldAlert size={44} color={colors.error} strokeWidth={2} />
+          <Text style={[typography.headline, { color: colors.text, marginTop: 12 }]}>
+            Protected Credential
+          </Text>
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, textAlign: 'center' }]}>
+            Unauthorized screen capture of completion certificates is prohibited.
+          </Text>
+        </View>
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screenCaptureCover: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 9999,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

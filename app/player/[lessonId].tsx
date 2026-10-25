@@ -48,7 +48,7 @@ import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import * as ScreenCapture from 'expo-screen-capture';
+import { useScreenProtection } from '../../src/hooks/useScreenProtection';
 import {
   getCourseById,
   getCourseCurriculum,
@@ -112,32 +112,8 @@ export default function VideoPlayerScreen() {
   // Anti-Piracy Watermark State (Shifting position every 20s)
   const [watermarkPos, setWatermarkPos] = useState({ top: 20, left: 20 });
 
-  // Screen Protection (Android FLAG_SECURE + iOS screen recording listener)
-  const [isScreenCaptured, setIsScreenCaptured] = useState(false);
-
-  useEffect(() => {
-    let sub: any = null;
-    async function activateProtection() {
-      try {
-        await ScreenCapture.preventScreenCaptureAsync();
-      } catch (e) {
-        // Dev build / unsupported platform limit
-      }
-      try {
-        sub = ScreenCapture.addScreenshotListener(() => {
-          setIsScreenCaptured(true);
-          setTimeout(() => setIsScreenCaptured(false), 4000);
-        });
-      } catch (e) {}
-    }
-    activateProtection();
-    return () => {
-      try {
-        ScreenCapture.allowScreenCaptureAsync();
-      } catch (e) {}
-      if (sub && sub.remove) sub.remove();
-    };
-  }, []);
+  // Screen Protection (Android FLAG_SECURE + iOS screen recording/screenshot listener)
+  const { isScreenCaptured } = useScreenProtection(`player_${lessonId}`);
 
   // Real expo-video instance for Bunny HLS Stream
   const player = useVideoPlayer(hlsStreamUrl || '', (p: any) => {

@@ -57,7 +57,7 @@ const LEGAL_DOCS: Record<string, LegalDoc> = {
       },
       {
         heading: '3. Screen Recording & Copyright Protection',
-        body: 'All course videos, PDFs, and tests are protected under applicable copyright laws. Dynamic watermarking with the learner’s verified identity is displayed during playback. In standalone mobile app builds, screen capturing is restricted via Android FLAG_SECURE and iOS recording detection.',
+        body: 'All course videos, materials, and certificates are protected under applicable copyright laws. Screen capture is blocked on Android and detected on iOS.',
       },
       {
         heading: '4. Code of Conduct in Live Classes',
