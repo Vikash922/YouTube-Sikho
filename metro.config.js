@@ -3,11 +3,15 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Strictly anchor to the root admin and functions subdirectories so npm packages (like firebase/functions) are NEVER blocked!
+// Strictly block non-app subdirectories from Metro watcher to prevent ENOSPC watcher exhaustion
 config.resolver.blockList = [
   new RegExp(`^${path.resolve(__dirname, 'admin')}/.*`),
   new RegExp(`^${path.resolve(__dirname, 'functions')}/.*`),
+  new RegExp(`^${path.resolve(__dirname, 'gateway')}/.*`),
   new RegExp(`^${path.resolve(__dirname, '.git')}/.*`),
+  new RegExp(`^${path.resolve(__dirname, '.expo')}/.*`),
+  new RegExp(`^${path.resolve(__dirname, 'node_modules/@react-native/debugger-frontend')}/.*`),
+  new RegExp(`^${path.resolve(__dirname, 'node_modules/chrome-devtools-frontend')}/.*`),
 ];
 
 module.exports = config;
