@@ -20,25 +20,111 @@ Previously, lessons stored video IDs or URLs in the publicly readable lesson doc
 
 ---
 
-## 2. Quiz Anti-Cheat & Schema Alignment
+## 2. Quiz Anti-Cheat & Canonical Schema Alignment (Part 6.1)
 
-### Schema Standardization
-Fields across Firestore, Admin, Cloud Functions, and Mobile App are aligned to:
-- `title` (string)
-- `courseId` (string)
-- `passingPercentage` (number)
-- `timeLimitMinutes` (number)
-- `questionCount` (number)
-- Subcollection `/questions/{questionId}`:
-  - `question` (string)
-  - `options` (array of strings)
-  - `correctAnswerIndex` (number, 0-indexed)
-  - `explanation` (string)
-  - `marks` (number)
-  - `order` (number)
+### Canonical Schema (`ARCHITECTURE.md`)
+- **Parent Document**: `/quizzes/{quizId}`
+  - `title` (string, required)
+  - `courseId` (string, required)
+  - `lessonId` (string, optional)
+  - `timeLimitMinutes` (number, > 0)
+  - `passingPercentage` (number, 1-100)
+  - `questionCount` (number, kept in sync with questions subcollection)
+  - `allowRetries` (boolean)
+  - `maxAttempts` (number, 0 = unlimited)
+  - `negativeMarkingEnabled` (boolean)
+  - `negativeMarkingRate` (number, e.g. 0.25)
+  - `showAnswersAfterSubmit` (boolean, default false)
+  - `isPublished` (boolean)
+  - `createdAt` (server timestamp)
+  - `updatedAt` (server timestamp)
 
-### Client Fetching
-Students never read `/quizzes/{id}/questions` directly. The mobile app invokes the `getQuizQuestions` Cloud Function, which returns question prompts and options without the answer keys.
+- **Questions Subcollection**: `/quizzes/{quizId}/questions/{questionId}`
+  - `question` (string, required)
+  - `imageUrl` (string, optional)
+  - `options` (array of strings, 2 to 6 options)
+  - `correctAnswerIndex` (number, 0-indexed, 0 <= index < options.length)
+  - `marks` (number, > 0)
+  - `explanation` (string, shown only when answers permitted)
+  - `order` (number, 1-indexed sequential integer)
+
+> [!CAUTION]
+> Students are strictly DENIED read access to `/quizzes/{id}/questions` in `firestore.rules`.
+> Mobile apps must retrieve question prompts via `getQuizQuestions` Cloud Function (Step 6.2).
+
+### Legacy Field Name Mapping
+| Target Canonical Field | Legacy Field Names | Auto-Migration / Compatibility Handling |
+| :--- | :--- | :--- |
+| `timeLimitMinutes` | `durationMinutes` | `raw.timeLimitMinutes ?? raw.durationMinutes ?? 15` |
+| `passingPercentage` | `passMarks` & `totalMarks` | `raw.passingPercentage ?? Math.round((raw.passMarks / raw.totalMarks) * 100)` |
+| `questionCount` | `questionsCount` | `raw.questionCount ?? raw.questionsCount ?? 0` |
+| `question` | `questionText` | `raw.question || raw.questionText` |
+| `correctAnswerIndex` | `correctOptionIndex` | `raw.correctAnswerIndex ?? raw.correctOptionIndex ?? 0` |
+| `order` | *(missing)* | Sequential integer assigned based on position `(index + 1)` |
+
+### Standalone Migration Script
+To backfill legacy quiz documents in Firestore, run:
+```javascript
+// scripts/migrate-quizzes.js
+const admin = require('firebase-admin');
+if (!admin.apps.length) admin.initializeApp();
+const db = admin.firestore();
+
+async function migrateQuizzes() {
+  const quizzesSnap = await db.collection('quizzes').get();
+  console.log(`Found ${quizzesSnap.size} quizzes to check.`);
+
+  for (const qDoc of quizzesSnap.docs) {
+    const data = qDoc.data();
+    const updates = {};
+
+    if (data.timeLimitMinutes === undefined && data.durationMinutes !== undefined) {
+      updates.timeLimitMinutes = Number(data.durationMinutes);
+    }
+    if (data.passingPercentage === undefined && data.passMarks !== undefined) {
+      const total = data.totalMarks || 10;
+      updates.passingPercentage = Math.round((Number(data.passMarks) / total) * 100);
+    }
+    if (data.allowRetries === undefined) updates.allowRetries = true;
+    if (data.maxAttempts === undefined) updates.maxAttempts = 0;
+    if (data.negativeMarkingEnabled === undefined) {
+      updates.negativeMarkingEnabled = (data.negativeMarkingRate || 0) > 0;
+    }
+    if (data.showAnswersAfterSubmit === undefined) updates.showAnswersAfterSubmit = false;
+
+    // Check questions
+    const questionsSnap = await db.collection('quizzes').doc(qDoc.id).collection('questions').get();
+    let qCount = questionsSnap.size;
+    updates.questionCount = qCount;
+
+    if (Object.keys(updates).length > 0) {
+      await qDoc.ref.update(updates);
+      console.log(`Updated quiz ${qDoc.id}`);
+    }
+
+    let order = 1;
+    for (const q of questionsSnap.docs) {
+      const qData = q.data();
+      const qUpdates = {};
+      if (qData.question === undefined && qData.questionText) {
+        qUpdates.question = qData.questionText;
+      }
+      if (qData.correctAnswerIndex === undefined && qData.correctOptionIndex !== undefined) {
+        qUpdates.correctAnswerIndex = Number(qData.correctOptionIndex);
+      }
+      if (qData.order === undefined) {
+        qUpdates.order = order;
+      }
+      if (Object.keys(qUpdates).length > 0) {
+        await q.ref.update(qUpdates);
+      }
+      order++;
+    }
+  }
+  console.log('Quiz migration complete.');
+}
+migrateQuizzes();
+```
 
 ---
 

@@ -155,3 +155,33 @@ export interface Coupon {
   createdAt: any;
   updatedAt?: any;
 }
+
+export interface Quiz {
+  id: string;
+  title: string;
+  courseId: string;
+  courseTitle?: string;
+  lessonId?: string;
+  timeLimitMinutes: number;
+  passingPercentage: number;
+  questionCount: number;
+  allowRetries: boolean;
+  maxAttempts: number; // 0 = unlimited
+  negativeMarkingEnabled: boolean;
+  negativeMarkingRate: number;
+  showAnswersAfterSubmit: boolean;
+  isPublished: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question: string;
+  imageUrl?: string;
+  options: string[];
+  correctAnswerIndex: number;
+  marks: number;
+  explanation: string;
+  order: number;
+}
