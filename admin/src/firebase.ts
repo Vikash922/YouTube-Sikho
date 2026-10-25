@@ -12,7 +12,7 @@ export const firebaseConfig = {
   projectId: "sikho-77341",
   storageBucket: "sikho-77341.firebasestorage.app",
   messagingSenderId: "202721234137",
-  appId: "1:202721234137:android:0f96cea8ee5c0f29efc2c8",
+  appId: "1:202721234137:android:1188f0afdaa07568efc2c8",
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

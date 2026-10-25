@@ -1,23 +1,24 @@
 {
   "project_info": {
     "project_number": "202721234137",
+    "firebase_url": "https://sikho-77341-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "sikho-77341",
     "storage_bucket": "sikho-77341.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:202721234137:android:0f96cea8ee5c0f29efc2c8",
+        "mobilesdk_app_id": "1:202721234137:android:1188f0afdaa07568efc2c8",
         "android_client_info": {
-          "package_name": "YouTube_sikho.com"
+          "package_name": "com.youtubesikho.academy"
         }
       },
       "oauth_client": [
         {
-          "client_id": "202721234137-20q3mpmha4jd2i1jq1ponsmrd48tbjb2.apps.googleusercontent.com",
+          "client_id": "202721234137-cp9vra16s0ng0rkle67agf4v092veffk.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "YouTube_sikho.com",
+            "package_name": "com.youtubesikho.academy",
             "certificate_hash": "8e7fb2eaf1cec47308705143968aefce4bacb77c"
           }
         },
