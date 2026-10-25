@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter, useNavigation } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -131,7 +131,10 @@ function AnimatedTabItem({
   );
 }
 
-function CustomTabBar({ state, descriptors, navigation }: any) {
+function CustomTabBar({ state, descriptors, navigation: navFromProps, emitter, navigateToTab }: any) {
+  const router = useRouter();
+  const navigationHook = useNavigation<any>();
+  const navigation = navFromProps || navigationHook;
   const { colors, radius, typography, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const shouldReduceMotion = useReducedMotion();
@@ -204,15 +207,37 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         {state.routes.map((route: any, index: number) => {
           const isFocused = state.index === index;
           const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-            if (!isFocused && !event.defaultPrevented) {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              navigation.navigate(route.name);
+            let defaultPrevented = false;
+            try {
+              if (emitter?.emit) {
+                const event = emitter.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                defaultPrevented = event?.defaultPrevented || false;
+              } else if (navigation?.emit) {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                defaultPrevented = event?.defaultPrevented || false;
+              }
+            } catch (emitErr) {
+              // Ignore event emitter errors
+            }
+
+            if (!isFocused && !defaultPrevented) {
+              if (typeof navigateToTab === 'function') {
+                navigateToTab(route.key);
+              } else if (navigation?.navigate) {
+                navigation.navigate(route.name);
+              } else {
+                router.push(`/(tabs)/${route.name}` as any);
+              }
             }
           };
 
