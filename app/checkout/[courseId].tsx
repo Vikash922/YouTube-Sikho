@@ -72,7 +72,7 @@ export default function CheckoutScreen() {
 
   // Direct UPI Gateway State
   const [merchantUpiId, setMerchantUpiId] = useState(
-    clientConfig.merchantUpiVpa || '7848894498@ibl'
+    '7848894498@ibl'
   );
   const [showQrCode, setShowQrCode] = useState(false);
   const [utrInput, setUtrInput] = useState('');
@@ -162,39 +162,29 @@ export default function CheckoutScreen() {
       // 1. Server calculates final price & generates YouPI Gateway Order
       const order = await createOrder(course.id, appliedCoupon ? couponCode : undefined);
 
-      setProcessingStep('Opening YouPI UPI gateway...');
+      setProcessingStep('Opening payment gateway...');
 
-      // 2. Launch Direct YouPI UPI Checkout
-      const checkoutOptions = {
-        orderId: order.orderId,
-        paymentId: order.paymentId,
-        checkoutUrl: order.checkoutUrl,
-        amount: order.finalPrice !== undefined ? order.finalPrice : order.amount / 100,
-        currency: order.currency || 'INR',
+      // 2. Launch Native Razorpay Checkout
+      const rzpResponse = await launchRazorpayCheckout({
+        keyId: order.keyId,
+        orderId: order.razorpayOrderId || order.orderId,
+        amount: order.amount, // in paise
         name: clientConfig.appName,
         description: `Enrollment: ${course.title}`,
-        customer: {
-          name: profile?.name || 'Student',
-          phone: profile?.phone || '',
-          email: `${profile?.uid || 'student'}@youtubesikho.com`,
+        prefill: {
+          name: profile?.name || '',
+          contact: profile?.phone || '',
+          email: profile?.email || '',
         },
-        upiVpa: merchantUpiId,
-        theme: {
-          color: colors.primary,
-        },
-      };
-
-      const youpiResponse = await launchYouPICheckout(checkoutOptions);
+        themeColor: colors.primary,
+      });
 
       // 3. Cryptographic Signature Verification via Cloud Function
-      setProcessingStep('Verifying UPI payment & unlocking course...');
+      setProcessingStep('Verifying payment & unlocking course...');
       const verifyResult = await verifyPayment({
         orderId: order.orderId,
-        paymentId: youpiResponse.paymentId,
-        signature: youpiResponse.signature,
-        utr: utrInput.trim() || youpiResponse.utr,
-        razorpayPaymentId: youpiResponse.paymentId,
-        razorpaySignature: youpiResponse.signature,
+        razorpayPaymentId: rzpResponse.razorpay_payment_id,
+        razorpaySignature: rzpResponse.razorpay_signature,
       });
 
       if (verifyResult.success) {

@@ -239,16 +239,16 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
 
                     {/* Lesson Meta Controls */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Video specific: URL/ID input, Duration & Upload */}
+                      {/* Video specific: Bunny Video GUID input, Duration & Upload */}
                       {les.type === 'video' && (
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <input
                             type="text"
                             value={les.videoId || ''}
                             onChange={(e) =>
-                              handleUpdateLesson(sec.id, les.id, { videoId: e.target.value })
+                              handleUpdateLesson(sec.id, les.id, { videoId: e.target.value.trim() })
                             }
-                            placeholder="YouTube link, MP4 URL, or Bunny ID"
+                            placeholder="Bunny Video GUID"
                             className="px-2 py-1 rounded-none bg-white dark:bg-dark-surface border border-slate-300 dark:border-slate-700 text-[11px] w-48 focus:outline-none focus:border-brand-500"
                           />
                           <input
@@ -273,8 +273,14 @@ export const CourseContentBuilder: React.FC<CourseContentBuilderProps> = ({
                             className="px-2.5 py-1 rounded-none bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/60 text-brand-600 dark:text-brand-400 font-bold uppercase tracking-wider border border-brand-500/30 flex items-center gap-1 text-[10px] transition-colors"
                           >
                             <Upload className="w-3 h-3" />
-                            <span>Upload File</span>
+                            <span>Upload to Bunny</span>
                           </button>
+
+                          {les.videoId && (les.videoId.includes('youtube.com') || les.videoId.includes('youtu.be')) && (
+                            <span className="text-[10px] text-amber-500 font-semibold px-2 py-0.5 bg-amber-500/10 rounded">
+                              ⚠️ YouTube link detected (deprecated). Please upload via Bunny Stream.
+                            </span>
+                          )}
                         </div>
                       )}
 

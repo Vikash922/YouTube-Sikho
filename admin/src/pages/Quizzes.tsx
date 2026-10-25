@@ -154,7 +154,9 @@ export const Quizzes: React.FC = () => {
       title: title.trim(),
       courseId,
       courseTitle: selectedCourse?.title || '',
+      timeLimitMinutes: Number(durationMinutes),
       durationMinutes: Number(durationMinutes),
+      passingPercentage: Math.round((Number(passMarks) / 10) * 100),
       passMarks: Number(passMarks),
       negativeMarkingRate: Number(negativeMarkingRate),
       allowRetries,
@@ -192,9 +194,11 @@ export const Quizzes: React.FC = () => {
     }
 
     setSaving(true);
-    const newQuestion: AdminQuestion = {
+    const newQuestion = {
+      question: questionText.trim(),
       questionText: questionText.trim(),
       options: options.map((o) => o.trim()),
+      correctAnswerIndex: correctOptionIndex,
       correctOptionIndex,
       marks: Number(questionMarks),
       explanation: explanation.trim(),

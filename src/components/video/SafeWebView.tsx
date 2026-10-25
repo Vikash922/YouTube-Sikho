@@ -72,15 +72,41 @@ export const SafeWebView: React.FC<SafeWebViewProps> = ({
   // 2. Native Platform with linked RNCWebView
   const NativeWebViewComponent = getNativeWebView();
   if (NativeWebViewComponent) {
+    const isHttpsOnly = !source.uri || source.uri.startsWith('https://');
+    if (!isHttpsOnly) {
+      return (
+        <View style={[styles.fallbackContainer, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.fallbackTitle, { color: colors.error }]}>Insecure stream URL blocked</Text>
+        </View>
+      );
+    }
+
     return (
       <NativeWebViewComponent
-        originWhitelist={['*']}
+        originWhitelist={['https://www.youtube.com/*', 'https://www.youtube-nocookie.com/*', 'https://youtu.be/*']}
         source={source}
         allowsInlineMediaPlayback={true}
         mediaPlaybackRequiresUserAction={false}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        allowFileAccess={false}
+        allowFileAccessFromFileURLs={false}
+        allowUniversalAccessFromFileURLs={false}
+        mixedContentMode="never"
         scalesPageToFit={true}
+        onShouldStartLoadWithRequest={(request: any) => {
+          const url = (request.url || '').toLowerCase();
+          if (
+            url.startsWith('https://www.youtube.com/') ||
+            url.startsWith('https://www.youtube-nocookie.com/') ||
+            url.startsWith('https://youtu.be/') ||
+            url.startsWith('about:blank') ||
+            url.startsWith('data:')
+          ) {
+            return true;
+          }
+          return false;
+        }}
         style={style}
       />
     );
@@ -190,5 +216,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
+  },
+  fallbackTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

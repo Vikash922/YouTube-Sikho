@@ -74,10 +74,6 @@ export default function SettingsScreen() {
     try {
       const deleteFn = httpsCallable(firebaseFunctions, 'deleteAccount');
       await deleteFn({});
-    } catch (err: any) {
-      console.warn('[Settings] Cloud Function deleteAccount fallback:', err.message);
-    } finally {
-      setIsDeleting(false);
       setDeleteModalVisible(false);
       await logout();
       Alert.alert(
@@ -90,6 +86,15 @@ export default function SettingsScreen() {
           },
         ]
       );
+    } catch (err: any) {
+      console.error('[Settings] Cloud Function deleteAccount error:', err.message);
+      setDeleteModalVisible(false);
+      Alert.alert(
+        'Account Deletion Failed',
+        err.message || 'Recent login required. Please sign in again and retry deleting your account.'
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 

@@ -1,117 +1,185 @@
 /**
- * FIRST ADMIN SETUP SCRIPT
+ * FIRST ADMIN SETUP SCRIPT (SECURE ADMIN SDK)
  * -------------------------------------------------------------
- * Usage:
- *   1. Using UID (Recommended if Email/Password provider is pending in Console):
- *      node scripts/set-first-admin.js --uid <UID> [email]
- *      Example: node scripts/set-first-admin.js --uid 4kL89sDjsa92 admin@youtubesikho.com
+ * Sets the `{ admin: true }` custom claim on a Firebase Auth user
+ * and registers them in Firestore `/admins/{uid}` and `/users/{uid}`.
  *
- *   2. Using Email & Password (Requires Email/Password provider enabled in Console):
- *      node scripts/set-first-admin.js [email] [password]
- *      Example: node scripts/set-first-admin.js admin@youtubesikho.com Admin@123456
+ * Usage:
+ *   node scripts/set-first-admin.js --service-account <path-to-key.json> --email <user-email>
+ *   node scripts/set-first-admin.js --service-account <path-to-key.json> --uid <user-uid>
+ *
+ * Environment variable alternative:
+ *   export GOOGLE_APPLICATION_CREDENTIALS="path/to/serviceAccountKey.json"
+ *   node scripts/set-first-admin.js --email <user-email>
  */
 
-const { initializeApp } = require('firebase/app');
-const {
-  getAuth,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-} = require('firebase/auth');
-const { getFirestore, doc, setDoc, serverTimestamp } = require('firebase/firestore');
-const { clientConfig } = require('../src/config/client.config.js');
+const fs = require('fs');
+const path = require('path');
 
-const app = initializeApp(clientConfig.firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-const args = process.argv.slice(2);
-
-async function bootstrapAdmin() {
-  console.log('═════════════════════════════════════════════════════════════════');
-  console.log('               BOOTSTRAPPING FIRST ADMIN ACCOUNT                ');
-  console.log('═════════════════════════════════════════════════════════════════\n');
-
-  let uid = null;
-  let email = 'admin@youtubesikho.com';
-
-  if (args[0] === '--uid') {
-    uid = args[1];
-    email = args[2] || 'admin@youtubesikho.com';
-    if (!uid) {
-      console.error('Error: Please provide a UID: node scripts/set-first-admin.js --uid <UID>');
+// Resolve firebase-admin safely
+let admin;
+try {
+  admin = require('firebase-admin');
+} catch (e) {
+  try {
+    admin = require('../functions/node_modules/firebase-admin');
+  } catch (e2) {
+    try {
+      admin = require('./functions/node_modules/firebase-admin');
+    } catch (e3) {
+      console.error('Error: firebase-admin is required. Please install it or run from repo root.');
       process.exit(1);
     }
-    console.log(`▶ Using direct UID: ${uid} (Email: ${email})`);
-  } else {
-    email = args[0] || 'admin@youtubesikho.com';
-    const password = args[1] || 'Admin@123456';
-    console.log(`▶ Target Email: ${email}`);
-
-    try {
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        uid = userCredential.user.uid;
-        console.log(`✓ Admin user created in Firebase Auth with UID: ${uid}`);
-      } catch (createErr) {
-        if (createErr.code === 'auth/email-already-in-use') {
-          console.log('ℹ Account exists. Signing in to retrieve UID...');
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          uid = userCredential.user.uid;
-          console.log(`✓ Signed in existing admin user with UID: ${uid}`);
-        } else {
-          throw createErr;
-        }
-      }
-    } catch (authErr) {
-      if (authErr.code === 'auth/operation-not-allowed') {
-        console.warn('\n⚠️  NOTICE: Firebase Email/Password provider is not yet enabled in Firebase Console.');
-        console.warn('👉 To enable it: Go to Firebase Console > Authentication > Sign-in method > Enable Email/Password');
-        console.warn('   URL: https://console.firebase.google.com/project/sikho-77341/authentication/providers\n');
-        console.warn('💡 You can also promote your existing Phone or Google Sign-In UID directly:');
-        console.warn('   node scripts/set-first-admin.js --uid <YOUR_UID>\n');
-
-        // Provision a default admin UID placeholder so the database admin collection is initialized
-        uid = 'admin_bootstrap_default';
-        console.log(`ℹ Provisioning bootstrap admin document with fallback ID: ${uid}...`);
-      } else {
-        throw authErr;
-      }
-    }
-  }
-
-  try {
-    // 1. Write to /admins/{uid}
-    console.log(`▶ Granting admin rights in Firestore: /admins/${uid}...`);
-    await setDoc(doc(db, 'admins', uid), {
-      email,
-      role: 'admin',
-      active: true,
-      promotedAt: serverTimestamp(),
-      systemBootstrap: true,
-    }, { merge: true });
-    console.log(`✓ Document /admins/${uid} written successfully.`);
-
-    // 2. Write / update /users/{uid}
-    console.log(`▶ Updating user profile in /users/${uid}...`);
-    await setDoc(doc(db, 'users', uid), {
-      name: 'Super Admin',
-      email,
-      role: 'admin',
-      isBlocked: false,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    console.log(`✓ Document /users/${uid} updated.`);
-
-    console.log('\n═════════════════════════════════════════════════════════════════');
-    console.log('🎉 FIRST ADMIN SETUP COMPLETE!');
-    console.log(`Email: ${email}`);
-    console.log(`UID:   ${uid}`);
-    console.log('═════════════════════════════════════════════════════════════════\n');
-    process.exit(0);
-  } catch (dbErr) {
-    console.error('✗ Failed to write admin document to Firestore:', dbErr.message || dbErr);
-    process.exit(1);
   }
 }
 
-bootstrapAdmin();
+const { clientConfig } = require('./load-client-config');
+
+// Parse CLI flags
+const args = process.argv.slice(2);
+let serviceAccountPath = null;
+let targetEmail = null;
+let targetUid = null;
+
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg === '--service-account' || arg === '-s') {
+    serviceAccountPath = args[++i];
+  } else if (arg === '--email' || arg === '-e') {
+    targetEmail = args[++i];
+  } else if (arg === '--uid' || arg === '-u') {
+    targetUid = args[++i];
+  } else if (!targetEmail && !targetUid && !arg.startsWith('-')) {
+    if (arg.includes('@')) {
+      targetEmail = arg;
+    } else {
+      targetUid = arg;
+    }
+  }
+}
+
+async function main() {
+  console.log('═════════════════════════════════════════════════════════════════');
+  console.log('            FIREBASE ADMIN ROLE PROMOTION TOOL                  ');
+  console.log('═════════════════════════════════════════════════════════════════\n');
+
+  if (!targetEmail && !targetUid) {
+    console.error('Error: You must provide a target user email or UID.');
+    console.log('\nUsage Examples:');
+    console.log('  node scripts/set-first-admin.js --service-account serviceAccountKey.json --email admin@example.com');
+    console.log('  node scripts/set-first-admin.js --service-account serviceAccountKey.json --uid <USER_UID>');
+    console.log('\nHow to obtain a Service Account Key:');
+    console.log('  1. Open Firebase Console: https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk');
+    console.log('  2. Click "Generate new private key".');
+    console.log('  3. Save the JSON file and pass its path using --service-account <path>.\n');
+    process.exit(1);
+  }
+
+  // Determine credentials
+  const credPath = serviceAccountPath || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  let credential;
+
+  if (credPath) {
+    const absPath = path.resolve(process.cwd(), credPath);
+    if (!fs.existsSync(absPath)) {
+      console.error(`Error: Service account key file not found at: ${absPath}`);
+      process.exit(1);
+    }
+    try {
+      const serviceAccount = JSON.parse(fs.readFileSync(absPath, 'utf8'));
+      credential = admin.credential.cert(serviceAccount);
+      console.log(`✓ Loaded service account credentials from: ${absPath}`);
+    } catch (parseErr) {
+      console.error(`Error parsing service account JSON: ${parseErr.message}`);
+      process.exit(1);
+    }
+  } else {
+    console.log('ℹ No --service-account specified. Attempting Application Default Credentials (ADC)...');
+    try {
+      credential = admin.credential.applicationDefault();
+    } catch (adcErr) {
+      console.error('Error: Missing service account credentials.');
+      console.error('Provide a service account key using: --service-account <path-to-json>');
+      process.exit(1);
+    }
+  }
+
+  // Initialize Admin App
+  if (admin.apps.length === 0) {
+    admin.initializeApp({
+      credential,
+      projectId: clientConfig?.firebaseConfig?.projectId,
+    });
+  }
+
+  const auth = admin.auth();
+  const db = admin.firestore();
+
+  // Find target user
+  let userRecord;
+  try {
+    if (targetUid) {
+      console.log(`▶ Looking up user by UID: ${targetUid}...`);
+      userRecord = await auth.getUser(targetUid);
+    } else if (targetEmail) {
+      console.log(`▶ Looking up user by Email: ${targetEmail}...`);
+      userRecord = await auth.getUserByEmail(targetEmail);
+    }
+  } catch (lookupErr) {
+    console.error(`✗ User lookup failed: ${lookupErr.message}`);
+    console.error('Make sure the user has already registered or logged in at least once.');
+    process.exit(1);
+  }
+
+  const uid = userRecord.uid;
+  const email = userRecord.email || targetEmail || 'unknown@domain';
+
+  console.log(`✓ User found: UID=${uid}, Email=${email}`);
+
+  // 1. Set Custom Claim: { admin: true }
+  console.log('▶ Setting custom claim { admin: true }...');
+  const currentClaims = userRecord.customClaims || {};
+  await auth.setCustomUserClaims(uid, {
+    ...currentClaims,
+    admin: true,
+  });
+  console.log('✓ Firebase Auth custom claim { admin: true } granted successfully.');
+
+  // 2. Set Firestore /admins/{uid}
+  console.log(`▶ Writing /admins/${uid} document...`);
+  await db.collection('admins').doc(uid).set(
+    {
+      email,
+      role: 'admin',
+      active: true,
+      promotedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  console.log(`✓ Document /admins/${uid} updated.`);
+
+  // 3. Update /users/{uid}
+  console.log(`▶ Updating /users/${uid} profile...`);
+  await db.collection('users').doc(uid).set(
+    {
+      role: 'admin',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  console.log(`✓ Document /users/${uid} updated.`);
+
+  console.log('\n═════════════════════════════════════════════════════════════════');
+  console.log('🎉 ADMIN PROMOTION COMPLETE!');
+  console.log(`User: ${email} (UID: ${uid})`);
+  console.log('IMPORTANT: The user must sign out and sign back in for the new');
+  console.log('custom claim token to take effect in their session.');
+  console.log('═════════════════════════════════════════════════════════════════\n');
+  process.exit(0);
+}
+
+main().catch((err) => {
+  console.error('Fatal execution error:', err.message || err);
+  process.exit(1);
+});

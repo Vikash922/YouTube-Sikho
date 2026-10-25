@@ -1,9 +1,7 @@
-import { doc, getDoc, collection, getDocs, orderBy, query, onSnapshot, where } from 'firebase/firestore';
+import { doc, getDoc, collection, query, onSnapshot, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { firebaseFirestore, functions } from './firebase';
-
-// In-memory fallback cache for autosaved quiz progress across screen transitions
-const localQuizProgressStore: Record<string, string> = {};
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { firebaseFirestore, functions, firebaseAuth } from './firebase';
 
 /**
  * Real-time listener for Quizzes belonging to a specific course
@@ -86,47 +84,46 @@ export async function fetchQuizMetadata(quizId: string): Promise<QuizMetadata | 
 }
 
 /**
- * Fetch Questions sanitized for the client (answers omitted)
+ * Fetch Questions sanitized for the client via Cloud Function (anti-cheat: answers omitted)
  */
 export async function fetchQuizQuestions(quizId: string): Promise<QuizQuestionClient[]> {
-  const qSnap = await getDocs(
-    query(collection(firebaseFirestore, 'quizzes', quizId, 'questions'), orderBy('order', 'asc'))
-  );
+  const getQuestionsFn = httpsCallable<{ quizId: string }, any>(functions, 'getQuizQuestions');
+  const res = await getQuestionsFn({ quizId });
+  const list = res.data?.questions || [];
 
-  return qSnap.docs.map((d) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      questionText: data.questionText || '',
-      options: data.options || [],
-      marks: data.marks || 1,
-      order: data.order || 0,
-    };
-  });
+  return list.map((q: any) => ({
+    id: q.id,
+    questionText: q.question || q.questionText || '',
+    options: q.options || [],
+    marks: q.marks || 1,
+    order: q.order || 0,
+  }));
 }
 
 /**
- * Autosave quiz state to prevent loss on app kill or crash
+ * Autosave quiz state to AsyncStorage to prevent loss on app kill or crash
  */
 export async function saveLocalQuizProgress(
   quizId: string,
   state: { answers: Record<string, number>; markedForReview: string[]; remainingSeconds: number }
 ): Promise<void> {
   try {
-    localQuizProgressStore[`@quiz_progress_${quizId}`] = JSON.stringify(state);
+    const uid = firebaseAuth.currentUser?.uid || 'guest';
+    await AsyncStorage.setItem(`@quiz_progress_${uid}_${quizId}`, JSON.stringify(state));
   } catch (err) {
     console.warn('Autosave error:', err);
   }
 }
 
 /**
- * Restore autosaved quiz state
+ * Restore autosaved quiz state from AsyncStorage
  */
 export async function restoreLocalQuizProgress(
   quizId: string
 ): Promise<{ answers: Record<string, number>; markedForReview: string[]; remainingSeconds: number } | null> {
   try {
-    const raw = localQuizProgressStore[`@quiz_progress_${quizId}`];
+    const uid = firebaseAuth.currentUser?.uid || 'guest';
+    const raw = await AsyncStorage.getItem(`@quiz_progress_${uid}_${quizId}`);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -138,7 +135,8 @@ export async function restoreLocalQuizProgress(
  */
 export async function clearLocalQuizProgress(quizId: string): Promise<void> {
   try {
-    delete localQuizProgressStore[`@quiz_progress_${quizId}`];
+    const uid = firebaseAuth.currentUser?.uid || 'guest';
+    await AsyncStorage.removeItem(`@quiz_progress_${uid}_${quizId}`);
   } catch {}
 }
 

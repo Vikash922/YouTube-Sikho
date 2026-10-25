@@ -62,7 +62,7 @@ try {
 
 export const firebaseAuth = authInstance;
 export const firebaseFirestore = firestoreInstance;
-export const firebaseFunctions = getFunctions(firebaseApp);
+export const firebaseFunctions = getFunctions(firebaseApp, 'asia-south1');
 export const functions = firebaseFunctions;
 
 // Messaging placeholder for Expo Go

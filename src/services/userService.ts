@@ -11,6 +11,8 @@ export interface UserProfile {
   uid: string;
   name: string;
   phone: string;
+  email?: string;
+  role?: string;
   photoUrl?: string;
   fcmToken?: string;
   isBlocked: boolean;

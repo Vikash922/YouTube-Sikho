@@ -47,8 +47,8 @@ import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
-import { SafeWebView } from '../../src/components/video/SafeWebView';
-import { extractYouTubeId } from '../../src/components/video/InAppStreamPlayer';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import * as ScreenCapture from 'expo-screen-capture';
 import {
   getCourseById,
   checkCourseEnrollment,
@@ -109,6 +109,81 @@ export default function VideoPlayerScreen() {
 
   // Anti-Piracy Watermark State (Shifting position every 20s)
   const [watermarkPos, setWatermarkPos] = useState({ top: 20, left: 20 });
+
+  // Screen Protection (Android FLAG_SECURE + iOS screen recording listener)
+  const [isScreenCaptured, setIsScreenCaptured] = useState(false);
+
+  useEffect(() => {
+    let sub: any = null;
+    async function activateProtection() {
+      try {
+        await ScreenCapture.preventScreenCaptureAsync();
+      } catch (e) {
+        // Dev build / unsupported platform limit
+      }
+      try {
+        sub = ScreenCapture.addScreenshotListener(() => {
+          setIsScreenCaptured(true);
+          setTimeout(() => setIsScreenCaptured(false), 4000);
+        });
+      } catch (e) {}
+    }
+    activateProtection();
+    return () => {
+      try {
+        ScreenCapture.allowScreenCaptureAsync();
+      } catch (e) {}
+      if (sub && sub.remove) sub.remove();
+    };
+  }, []);
+
+  // Real expo-video instance for Bunny HLS Stream
+  const player = useVideoPlayer(hlsStreamUrl || '', (p: any) => {
+    p.loop = false;
+    if (hlsStreamUrl) p.play();
+  });
+
+  useEffect(() => {
+    if (!player) return;
+    try {
+      player.playbackRate = playbackSpeed;
+    } catch (e) {}
+  }, [player, playbackSpeed]);
+
+  useEffect(() => {
+    if (!player) return;
+    const timeSub = player.addListener('timeUpdate', (event: any) => {
+      if (event?.currentTime !== undefined) {
+        setCurrentTime(event.currentTime);
+        if (user?.uid && courseId && currentLesson && Math.floor(event.currentTime) % 10 === 0) {
+          queueProgressSave(user.uid, courseId, currentLesson.id, event.currentTime, duration);
+        }
+      }
+      if (event?.currentDuration && event.currentDuration > 0) {
+        setDuration(event.currentDuration);
+      }
+    });
+
+    const statusSub = player.addListener('statusChange', (event: any) => {
+      if (event?.status === 'error') {
+        setPlaybackError(event.error?.message || 'Secure Bunny HLS stream unavailable.');
+      } else if (event?.status === 'idle') {
+        setIsBuffering(true);
+      } else if (event?.status === 'readyToPlay') {
+        setIsBuffering(false);
+      }
+    });
+
+    const playSub = player.addListener('playingChange', (event: any) => {
+      setIsPlaying(event?.isPlaying ?? false);
+    });
+
+    return () => {
+      timeSub.remove();
+      statusSub.remove();
+      playSub.remove();
+    };
+  }, [player, courseId, currentLesson, duration, user?.uid]);
 
   // Fullscreen / Landscape StatusBar handler
   useEffect(() => {
@@ -273,16 +348,33 @@ export default function VideoPlayerScreen() {
 
   const handleTogglePlay = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsPlaying((prev) => !prev);
+    if (player) {
+      try {
+        if (player.playing) {
+          player.pause();
+        } else {
+          player.play();
+        }
+      } catch (e) {
+        setIsPlaying((prev) => !prev);
+      }
+    } else {
+      setIsPlaying((prev) => !prev);
+    }
     resetControlsTimer();
   };
 
   const handleSeek = (secondsDelta: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCurrentTime((prev) => {
-      const target = Math.max(0, Math.min(duration, prev + secondsDelta));
-      return target;
-    });
+    if (player) {
+      try {
+        player.seekBy(secondsDelta);
+      } catch (e) {
+        setCurrentTime((prev) => Math.max(0, Math.min(duration, prev + secondsDelta)));
+      }
+    } else {
+      setCurrentTime((prev) => Math.max(0, Math.min(duration, prev + secondsDelta)));
+    }
     resetControlsTimer();
   };
 
@@ -354,6 +446,13 @@ export default function VideoPlayerScreen() {
     ? completedLessons.includes(currentLesson.id)
     : false;
 
+  // Real Verified Student Identity for Anti-Piracy Watermark (No fake fallback)
+  const studentIdentity = profile?.phone || profile?.email || user?.email || user?.phoneNumber;
+  const shortUid = user?.uid ? user.uid.substring(0, 8) : '';
+  const watermarkText = studentIdentity
+    ? `${studentIdentity} • ${shortUid}`
+    : (shortUid ? `ID: ${shortUid}` : '');
+
   return (
     <Screen>
       {/* 1. Video Player HUD Canvas (16:9 Aspect Ratio / Fullscreen Landscape) */}
@@ -367,64 +466,64 @@ export default function VideoPlayerScreen() {
           isFullscreen && styles.playerFullscreenContainer,
         ]}
       >
-        {/* Real Embedded Video Playback Layer */}
-        {(() => {
-          const ytId = extractYouTubeId(currentLesson?.videoId);
-          if (Platform.OS === 'web') {
-            if (ytId) {
-              return (
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&playsinline=1&rel=0&modestbranding=1`}
-                  style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', top: 0, left: 0 }}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              );
-            }
-            if (currentLesson?.videoId?.startsWith('http')) {
-              return (
-                <video
-                  src={currentLesson.videoId}
-                  autoPlay
-                  controls
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'contain', position: 'absolute', top: 0, left: 0, backgroundColor: '#000000' }}
-                />
-              );
-            }
-            return null;
-          }
+        {/* Tokenized Bunny Stream HLS Playback Layer (expo-video / HLS Web) */}
+        {hlsStreamUrl && Platform.OS !== 'web' ? (
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFillObject}
+            nativeControls={false}
+            allowsPictureInPicture
+          />
+        ) : hlsStreamUrl && Platform.OS === 'web' ? (
+          <video
+            src={hlsStreamUrl}
+            autoPlay
+            controls={false}
+            playsInline
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              backgroundColor: 'black',
+            }}
+          />
+        ) : null}
 
-          if (ytId) {
-            const html = `
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-                  <style>
-                    * { margin:0; padding:0; box-sizing:border-box; background:#000; }
-                    html, body { width:100%; height:100%; overflow:hidden; }
-                    iframe { width:100%; height:100%; border:none; }
-                  </style>
-                </head>
-                <body>
-                  <iframe src="https://www.youtube.com/embed/${ytId}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1" allowfullscreen></iframe>
-                </body>
-              </html>
-            `;
-            return (
-              <View style={StyleSheet.absoluteFillObject}>
-                <SafeWebView
-                  source={{ html, uri: `https://www.youtube.com/embed/${ytId}` }}
-                  ytId={ytId}
-                  title={currentLesson?.title}
-                  style={{ flex: 1, backgroundColor: '#000000' }}
-                />
-              </View>
-            );
-          }
-          return null;
-        })()}
+        {/* Screen Capture / Recording Prohibited Overlay */}
+        {isScreenCaptured && (
+          <View style={styles.screenCaptureCover}>
+            <ShieldAlert size={48} color={colors.error} />
+            <Text style={[typography.headline, { color: colors.text, marginTop: 12 }]}>
+              Recording Prohibited
+            </Text>
+            <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, textAlign: 'center' }]}>
+              Screen capture or recording is blocked to protect intellectual property.
+            </Text>
+          </View>
+        )}
+
+        {/* Access Denied Overlay for Non-Enrolled Users */}
+        {!isEnrolled && !currentLesson?.isFreePreview && (
+          <View style={[styles.errorOverlay, { backgroundColor: colors.surface }]}>
+            <Lock size={36} color={colors.primary} />
+            <Text style={[typography.headline, { color: colors.text, marginTop: 12, textAlign: 'center' }]}>
+              Premium Lesson Locked
+            </Text>
+            <Text style={[typography.body, { color: colors.textMuted, marginTop: 6, textAlign: 'center', marginHorizontal: 24 }]}>
+              Enroll in this course to unlock secure high-definition playback and downloadable resources.
+            </Text>
+            <Button
+              title="Enroll Now to Unlock"
+              size="md"
+              variant="primary"
+              onPress={() => router.push({ pathname: '/checkout/[courseId]', params: { courseId: course?.id || '' } })}
+              style={{ marginTop: 16 }}
+            />
+          </View>
+        )}
 
         <TouchableOpacity
           activeOpacity={1}
@@ -434,18 +533,18 @@ export default function VideoPlayerScreen() {
           }}
           style={styles.canvasTouchArea}
         >
-          {/* Moving Anti-Piracy Floating Watermark */}
-          <View
-            pointerEvents="none"
-            style={[
-              styles.watermarkBox,
-              { top: `${watermarkPos.top}%`, left: `${watermarkPos.left}%` },
-            ]}
-          >
-            <Text style={styles.watermarkText}>
-              {profile?.phone || 'Verified Student'} • {user?.uid?.substring(0, 8) || 'Sikho'}
-            </Text>
-          </View>
+          {/* Dynamic Anti-Piracy Floating Watermark (Real Identity Only) */}
+          {watermarkText ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.watermarkBox,
+                { top: `${watermarkPos.top}%`, left: `${watermarkPos.left}%` },
+              ]}
+            >
+              <Text style={styles.watermarkText}>{watermarkText}</Text>
+            </View>
+          ) : null}
 
           {/* Buffering Indicator */}
           {isBuffering && (
@@ -956,6 +1055,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
+  },
+  screenCaptureCover: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    zIndex: 9999,
   },
   bufferingOverlay: {
     ...StyleSheet.absoluteFillObject,

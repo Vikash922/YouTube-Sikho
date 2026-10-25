@@ -14,7 +14,7 @@
  *  - Accent amber badge text: MUST use dark text (#1F2937) >= 4.5:1
  */
 
-const { createPalette, getContrastRatio } = require('../src/theme/colors.js');
+const { createPalette, getContrastRatio } = require('./load-colors');
 
 const TEST_BRANDS = [
   { name: 'Default Indigo', hex: '#4F46E5' },

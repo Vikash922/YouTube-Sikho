@@ -2,6 +2,7 @@
  * CLIENT CONFIGURATION: YouTube Sikho Academy
  * -------------------------------------------------------------
  * Complete single source of truth for white-label client instance.
+ * Follows ARCHITECTURE.md strictly.
  */
 
 export interface ClientConfig {
@@ -40,10 +41,6 @@ export interface ClientConfig {
   refundPolicyUrl: string;
   dataDeletionUrl: string;
 
-  youpiGatewayUrl: string;
-  youpiPortalUrl: string;
-  youpiMerchantId: string;
-  merchantUpiVpa: string;
   razorpayKeyId?: string;
   bunnyLibraryId?: string;
   bunnyCdnHostname?: string;
@@ -68,15 +65,39 @@ export interface ClientConfig {
   };
 }
 
+export function validateClientConfig(config: ClientConfig): { valid: boolean; warnings: string[] } {
+  const warnings: string[] = [];
+
+  if (!config.appName) warnings.push('appName is required.');
+  if (!config.packageName || config.packageName.includes('_')) {
+    warnings.push(`Invalid packageName '${config.packageName}'. Must use lowercase dot notation (e.g. com.company.app).`);
+  }
+  if (!config.firebaseConfig?.projectId) {
+    warnings.push('firebaseConfig.projectId is missing.');
+  }
+  if (!config.privacyPolicyUrl || !config.termsUrl) {
+    warnings.push('Legal URLs (privacyPolicyUrl, termsUrl) must be configured for Play Store compliance.');
+  }
+
+  if (warnings.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.warn('⚠️ [ClientConfig Validation Warnings]:', warnings);
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+  };
+}
+
 export const clientConfig: ClientConfig = {
   appName: "YouTube Sikho Academy",
   shortName: "YouTube Sikho",
   tagline: "India's Premier Creator Academy",
   slug: "youtube-sikho",
-  packageName: "YouTube_sikho.com",
+  packageName: "com.youtubesikho.academy",
   bundleIdentifier: "com.youtubesikho.academy",
   version: "1.0.0",
-  logoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
+  logoUrl: "./assets/icon.png",
   splashUrl: "./assets/splash.png",
   faviconUrl: "./assets/icon.png",
 
@@ -94,8 +115,8 @@ export const clientConfig: ClientConfig = {
     success: "#16A34A",
   },
 
-  supportPhone: "+919876543210",
-  supportWhatsApp: "+919876543210",
+  supportPhone: process.env.EXPO_PUBLIC_SUPPORT_PHONE || "",
+  supportWhatsApp: process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP || "",
   supportEmail: "support@youtubesikho.com",
 
   companyLegalName: "YouTube Sikho Education LLP",
@@ -104,13 +125,9 @@ export const clientConfig: ClientConfig = {
   refundPolicyUrl: "https://youtubesikho.com/refund",
   dataDeletionUrl: "https://youtubesikho.com/delete-account",
 
-  youpiGatewayUrl: process.env.EXPO_PUBLIC_YOUPI_URL || "http://127.0.0.1:6100",
-  youpiPortalUrl: process.env.EXPO_PUBLIC_YOUPI_PORTAL_URL || "http://127.0.0.1:7000",
-  youpiMerchantId: "00000000-0000-0000-0000-000000000001",
-  merchantUpiVpa: "7848894498@ibl",
-  razorpayKeyId: "rzp_test_yt_sikho_519827",
-  bunnyLibraryId: "12345",
-  bunnyCdnHostname: "vz-test-123.b-cdn.net",
+  razorpayKeyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "",
+  bunnyLibraryId: process.env.EXPO_PUBLIC_BUNNY_LIBRARY_ID || "",
+  bunnyCdnHostname: process.env.EXPO_PUBLIC_BUNNY_CDN_HOSTNAME || "",
 
   firebaseConfig: {
     apiKey:
@@ -133,5 +150,7 @@ export const clientConfig: ClientConfig = {
     reviewsEnabled: true,
   },
 };
+
+validateClientConfig(clientConfig);
 
 export default clientConfig;

@@ -8,7 +8,7 @@
 
 const { initializeApp } = require('firebase/app');
 const { getFirestore, doc, setDoc, serverTimestamp } = require('firebase/firestore');
-const { clientConfig } = require('../src/config/client.config.js');
+const { clientConfig } = require('./load-client-config');
 
 const app = initializeApp(clientConfig.firebaseConfig);
 const db = getFirestore(app);

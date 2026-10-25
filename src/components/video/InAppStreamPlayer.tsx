@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Text, ActivityIndicator, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { Radio, VideoOff, Clock, Sparkles } from 'lucide-react-native';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { firebaseFirestore } from '../../services/firebase';
 import { SafeWebView } from './SafeWebView';
 import { useTheme } from '../../theme';
@@ -24,6 +25,33 @@ export function extractYouTubeId(url?: string | null): string | null {
   const match = clean.match(regExp);
   return match && match[1] ? match[1] : null;
 }
+
+const DirectVideoPlayerView: React.FC<{ url: string }> = ({ url }) => {
+  const player = useVideoPlayer(url, (p: any) => {
+    p.loop = false;
+    p.play();
+  });
+
+  if (Platform.OS === 'web') {
+    return (
+      <video
+        src={url}
+        autoPlay
+        controls
+        playsInline
+        style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: colors.background }}
+      />
+    );
+  }
+
+  return (
+    <VideoView
+      player={player}
+      style={StyleSheet.absoluteFillObject}
+      nativeControls={true}
+    />
+  );
+};
 
 export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
   classId,
@@ -132,32 +160,11 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
     );
   }
 
-  // 4. Direct MP4 Video URL (Live or Recorded Replay)
+  // 4. Direct Video URL (Replay via native expo-video, never raw WebView)
   if (isDirectVideo) {
-    const videoHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; background: #000000; }
-            body { display: flex; align-items: center; justify-content: center; height: 100%; background: #000000; }
-            video { width: 100%; height: 100%; object-fit: contain; }
-          </style>
-        </head>
-        <body>
-          <video src="${streamUrl}" autoplay controls playsinline></video>
-        </body>
-      </html>
-    `;
-
     return (
       <View style={styles.container}>
-        <SafeWebView
-          source={{ html: videoHtml, uri: streamUrl! }}
-          title={title}
-          style={styles.webview}
-        />
+        <DirectVideoPlayerView url={streamUrl!} />
         {isEnded && (
           <View style={[styles.replayIndicatorPill, { borderColor: colors.accent }]}>
             <Sparkles size={11} color={colors.accent} strokeWidth={2} />

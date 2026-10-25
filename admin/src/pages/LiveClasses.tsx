@@ -127,6 +127,23 @@ export const LiveClasses: React.FC = () => {
       return;
     }
 
+    const cleanUrl = streamUrl.trim();
+    const isStudio = cleanUrl === 'studio';
+    const isHttpsYouTube =
+      cleanUrl.startsWith('https://www.youtube.com/') ||
+      cleanUrl.startsWith('https://youtu.be/') ||
+      cleanUrl.startsWith('https://youtube.com/') ||
+      cleanUrl.startsWith('https://www.youtube-nocookie.com/');
+    const isHttpsMedia = cleanUrl.startsWith('https://') && (cleanUrl.includes('.m3u8') || cleanUrl.includes('.mp4'));
+
+    if (!isStudio && !isHttpsYouTube && !isHttpsMedia) {
+      setFeedback({
+        type: 'error',
+        message: 'Invalid stream URL: Must be an official HTTPS YouTube live link or HTTPS CDN video stream. Arbitrary or insecure (http) URLs are rejected.',
+      });
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
 

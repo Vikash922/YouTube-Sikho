@@ -53,18 +53,15 @@ export async function verifyPaymentHandler(
   const secrets = getSecrets();
 
   // 1. Cryptographic Signature Verification
-  const expectedSignature = computeYoupiSignature(
-    orderId,
-    paymentId,
-    secrets.YOUPI_WEBHOOK_SECRET || secrets.RAZORPAY_KEY_SECRET
-  );
-  const legacySignature = computeYoupiSignature(
+  const expectedSignature = computeRazorpaySignature(
     orderId,
     paymentId,
     secrets.RAZORPAY_KEY_SECRET
   );
 
-  if (expectedSignature !== signature && legacySignature !== signature) {
+  const sigBuf = Buffer.from(signature, 'utf8');
+  const expBuf = Buffer.from(expectedSignature, 'utf8');
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     throw new Error('Payment verification failed: Invalid cryptographic signature.');
   }
 

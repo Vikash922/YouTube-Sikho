@@ -29,7 +29,7 @@ const LEGAL_DOCS: Record<string, LegalDoc> = {
       },
       {
         heading: '2. Payment Data & Security',
-        body: 'All payment processing is executed through our secure direct UPI payment gateway (YouPI-PG). We do not store your banking credentials or UPI MPIN on our servers. Transactions settle directly peer-to-peer via verified NPCI UPI protocols.',
+        body: 'All payment processing is securely executed through Razorpay and RBI-authorized payment partners (supporting UPI, Cards, and NetBanking). We do not store your credit card numbers, banking passwords, or UPI MPIN on our servers.',
       },
       {
         heading: '3. Data Retention & Account Deletion',
@@ -57,7 +57,7 @@ const LEGAL_DOCS: Record<string, LegalDoc> = {
       },
       {
         heading: '3. Screen Recording & Copyright Protection',
-        body: 'All course videos, PDFs, and tests are protected under Indian and international copyright laws. Dynamic watermarking is applied during playback. Screen capturing or ripping video streams is actively blocked.',
+        body: 'All course videos, PDFs, and tests are protected under applicable copyright laws. Dynamic watermarking with the learner’s verified identity is displayed during playback. In standalone mobile app builds, screen capturing is restricted via Android FLAG_SECURE and iOS recording detection.',
       },
       {
         heading: '4. Code of Conduct in Live Classes',

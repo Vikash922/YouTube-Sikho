@@ -97,52 +97,39 @@ export async function createOrderHandler(
   const finalPrice = Math.max(0, serverPrice - discountAmount);
   const amountPaise = Math.round(finalPrice * 100);
 
-  // 4. YouPI-PG Gateway Session Generation (with offline/mock test fallback)
+  // 4. Official Razorpay Order Generation
   const secrets = getSecrets();
-  const generatedOrderId = `ORD_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-  let paymentId = `yp_pay_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  let checkoutUrl = `${secrets.YOUPI_GATEWAY_URL}/checkout/${paymentId}`;
+  let generatedOrderId = `order_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
-  try {
-    const youpiResponse = await fetch(`${secrets.YOUPI_GATEWAY_URL}/api/v1/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(secrets.YOUPI_MERCHANT_ID ? { 'X-Merchant-Id': secrets.YOUPI_MERCHANT_ID } : {}),
-      },
-      body: JSON.stringify({
-        orderId: generatedOrderId,
-        amount: finalPrice.toFixed(2),
+  if (secrets.RAZORPAY_KEY_ID && secrets.RAZORPAY_KEY_SECRET) {
+    try {
+      const Razorpay = require('razorpay');
+      const rzp = new Razorpay({
+        key_id: secrets.RAZORPAY_KEY_ID,
+        key_secret: secrets.RAZORPAY_KEY_SECRET,
+      });
+      const rzpOrder = await rzp.orders.create({
+        amount: amountPaise,
         currency: 'INR',
-        description: `Enrollment: ${courseData.title || 'Course Enrollment'}`,
-        customer: {
-          name: 'Student',
-          phoneNumber: '9876543210',
-        },
-        metadata: {
+        receipt: `rcpt_${Date.now()}`,
+        notes: {
           uid,
           courseId,
           couponCode: normalizedCouponCode || '',
         },
-      }),
-      // Set short timeout so tests/offline setups don't stall
-      signal: AbortSignal.timeout(2000),
-    });
-
-    if (youpiResponse.ok) {
-      const youpiData = (await youpiResponse.json()) as any;
-      if (youpiData.paymentId) paymentId = youpiData.paymentId;
-      if (youpiData.checkoutUrl) checkoutUrl = youpiData.checkoutUrl;
+      });
+      if (rzpOrder && rzpOrder.id) {
+        generatedOrderId = rzpOrder.id;
+      }
+    } catch (rzpErr: any) {
+      console.warn('Razorpay order creation fallback/mock:', rzpErr.message);
     }
-  } catch (ypErr) {
-    // Gateway offline or test runner environment: use simulated session
   }
 
   // 5. Store Order Document in Firestore with status 'created'
   const orderDocData = {
     orderId: generatedOrderId,
-    paymentId,
-    checkoutUrl,
+    razorpayOrderId: generatedOrderId,
     uid,
     courseId,
     courseTitle: courseData.title || 'Course Enrollment',
@@ -152,8 +139,7 @@ export async function createOrderHandler(
     couponCode: normalizedCouponCode,
     discountAmount,
     status: 'created',
-    gateway: 'youpi',
-    razorpayOrderId: generatedOrderId, // backward-compatibility
+    gateway: 'razorpay',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
@@ -162,14 +148,12 @@ export async function createOrderHandler(
 
   return {
     orderId: generatedOrderId,
-    paymentId,
-    checkoutUrl,
+    razorpayOrderId: generatedOrderId,
     amount: amountPaise,
     currency: 'INR',
-    keyId: secrets.YOUPI_MERCHANT_ID,
+    keyId: secrets.RAZORPAY_KEY_ID,
     courseTitle: courseData.title || 'Course Enrollment',
     finalPrice,
     discountAmount,
-    razorpayOrderId: generatedOrderId,
   };
 }

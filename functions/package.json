@@ -2,10 +2,11 @@
   "name": "course-app-functions",
   "scripts": {
     "lint": "echo 'Linting passed'",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
+    "build:all": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --test lib/__tests__/*.test.js",
-    "test:ts": "node scripts/run-functions-tests.js"
+    "test": "tsc && node --test lib/__tests__/*.test.js",
+    "test:ts": "node ../scripts/test-cloud-functions.js"
   },
   "engines": {
     "node": ">=20"

@@ -1,14 +1,17 @@
-import { ExpoConfig, ConfigContext } from 'expo/config';
+import { ConfigContext } from 'expo/config';
 import { clientConfig } from './src/config/client.config';
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+export default ({ config }: ConfigContext): any => ({
   ...config,
   name: clientConfig.appName,
   slug: clientConfig.slug,
   version: clientConfig.version,
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
   orientation: 'portrait',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'dark',
+  userInterfaceStyle: 'automatic',
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
@@ -19,20 +22,42 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: clientConfig.bundleIdentifier,
+    buildNumber: '1',
   },
   android: {
     package: clientConfig.packageName,
+    versionCode: 1,
     googleServicesFile: './google-services.json',
+    adaptiveIcon: {
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: clientConfig.colors.background,
+    },
     permissions: [
       'INTERNET',
       'ACCESS_NETWORK_STATE',
-      'RECEIVE_BOOT_COMPLETED',
+      'POST_NOTIFICATIONS',
       'VIBRATE',
     ],
   },
   plugins: [
     'expo-router',
     'expo-font',
+    'expo-secure-store',
+    'expo-screen-capture',
+    'expo-notifications',
+    'expo-video',
+    '@react-native-firebase/app',
+    '@react-native-firebase/auth',
+    [
+      'expo-build-properties',
+      {
+        android: {
+          compileSdkVersion: 34,
+          targetSdkVersion: 34,
+          minSdkVersion: 24,
+        },
+      },
+    ],
   ],
   extra: {
     clientConfig,

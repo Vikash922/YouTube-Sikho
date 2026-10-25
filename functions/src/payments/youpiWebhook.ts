@@ -40,18 +40,13 @@ export async function youpiWebhookHandler(
   }
 
   const secrets = getSecrets();
-  const isValidYoupi = verifyGatewaySignature(
-    rawBody,
-    signatureHeader,
-    secrets.YOUPI_WEBHOOK_SECRET
-  );
-  const isValidLegacy = verifyGatewaySignature(
+  const isValidSignature = verifyGatewaySignature(
     rawBody,
     signatureHeader,
     secrets.RAZORPAY_WEBHOOK_SECRET
   );
 
-  if (!isValidYoupi && !isValidLegacy) {
+  if (!isValidSignature) {
     throw new Error('Unauthorized: Invalid Razorpay webhook signature.');
   }
 

@@ -43,7 +43,7 @@ The top 10 production issues that may arise, root causes, and step-by-step resol
 - **Fix**:
   1. Run the admin provisioning command in terminal:
      ```bash
-     node scripts/set-first-admin.js <admin-email>
+     node scripts/set-first-admin.js --service-account serviceAccountKey.json --email <admin-email>
      ```
   2. In the Admin Web Portal, click **Sign Out** and log back in to refresh the Firebase Auth JWT token with the new admin claims.
 
