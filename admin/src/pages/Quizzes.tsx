@@ -21,7 +21,7 @@ import {
   getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, functions, httpsCallable } from '../firebase';
 import { Course } from '../types';
 
 export interface AdminQuiz {
@@ -236,10 +236,14 @@ export const Quizzes: React.FC = () => {
   };
 
   const handleDeleteQuiz = async (id: string) => {
-    if (!window.confirm('Delete this quiz and all its questions?')) return;
+    if (!window.confirm('Delete this quiz and all its questions? This action is irreversible.')) return;
     try {
-      await deleteDoc(doc(db, 'quizzes', id));
-      setFeedback({ type: 'success', message: 'Quiz deleted successfully.' });
+      const deleteQuizCallable = httpsCallable<{ quizId: string }, { success: boolean }>(
+        functions,
+        'deleteQuiz'
+      );
+      await deleteQuizCallable({ quizId: id });
+      setFeedback({ type: 'success', message: 'Quiz and all questions deleted successfully.' });
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Could not delete quiz.' });
     }

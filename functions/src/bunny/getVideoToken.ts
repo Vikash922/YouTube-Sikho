@@ -52,10 +52,12 @@ export async function getVideoTokenHandler(
 
   // 1. Locate the lesson in Firestore
   let lessonDoc: admin.firestore.DocumentSnapshot | null = null;
+  let legacyLesson: any = null;
+
   if (sectionId) {
     lessonDoc = await db.doc(`courses/${courseId}/sections/${sectionId}/lessons/${lessonId}`).get();
   } else {
-    // If sectionId is omitted, scan sections under this course
+    // If sectionId is omitted, scan sections subcollections under this course
     const sectionsSnap = await db.collection(`courses/${courseId}/sections`).get();
     for (const sec of sectionsSnap.docs) {
       const candidate = await db.doc(`courses/${courseId}/sections/${sec.id}/lessons/${lessonId}`).get();
@@ -66,13 +68,36 @@ export async function getVideoTokenHandler(
     }
   }
 
+  // Backward compatibility fallback: check legacy courseDoc.sections array during migration
   if (!lessonDoc || !lessonDoc.exists) {
+    const courseDoc = await db.doc(`courses/${courseId}`).get();
+    const courseData = courseDoc.data();
+    if (courseData?.sections && Array.isArray(courseData.sections)) {
+      for (const sec of courseData.sections) {
+        const candidate = (sec.lessons || []).find((l: any) => l.id === lessonId);
+        if (candidate) {
+          legacyLesson = candidate;
+          break;
+        }
+      }
+    }
+  }
+
+  if ((!lessonDoc || !lessonDoc.exists) && !legacyLesson) {
     throw new Error(`Lesson ${lessonId} not found in course ${courseId}.`);
   }
 
-  const lessonData = lessonDoc.data() || {};
+  const lessonData = lessonDoc && lessonDoc.exists ? (lessonDoc.data() || {}) : legacyLesson;
   const isFreePreview = lessonData.isFreePreview === true;
-  const videoId = lessonData.videoId;
+
+  // Retrieve private media asset (isolated from public lesson doc)
+  let videoId = '';
+  if (lessonDoc && lessonDoc.exists) {
+    const mediaSnap = await lessonDoc.ref.collection('private').doc('media').get();
+    videoId = (mediaSnap.exists ? mediaSnap.data()?.videoId : null) || lessonData.videoId;
+  } else if (legacyLesson) {
+    videoId = legacyLesson.videoId;
+  }
 
   if (!videoId) {
     throw new Error('Lesson does not have an active videoId configured.');

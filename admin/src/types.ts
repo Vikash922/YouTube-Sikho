@@ -47,7 +47,9 @@ export interface Course {
   isFeatured: boolean;
   order: number;
   totalLessons: number;
+  lessonsCount?: number;
   totalDuration: string;
+  totalDurationSeconds?: number;
   sections?: Section[];
 }
 
@@ -58,7 +60,8 @@ export interface Banner {
   actionType: 'course' | 'category' | 'url';
   actionValue: string;
   order: number;
-  active: boolean;
+  active?: boolean;
+  isVisible?: boolean;
 }
 
 export interface HomeSection {

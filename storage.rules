@@ -2,39 +2,51 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
+      return isSignedIn() && (
         request.auth.token.admin == true ||
         request.auth.token.role == 'owner'
       );
     }
 
     function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
+      return isSignedIn() && request.auth.uid == uid;
     }
 
     function isSafeImage() {
-      return request.resource.size < 10 * 1024 * 1024
+      return request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png|webp|gif)');
     }
 
     function isSafeDocument() {
-      return request.resource.size < 25 * 1024 * 1024
+      return request.resource.size <= 25 * 1024 * 1024
         && request.resource.contentType.matches('(application/pdf|image/.*)');
     }
 
-    // 1. User Avatars
+    function isEnrolled(courseId) {
+      return isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/enrollments/$(request.auth.uid)_$(courseId)) &&
+        firestore.get(/databases/(default)/documents/enrollments/$(request.auth.uid)_$(courseId)).data.status == 'active'
+      );
+    }
+
+    // 1. User Profile Avatars
     match /users/{uid}/avatar/{fileName} {
       allow read: if true;
       allow write: if (isOwner(uid) || isAdmin()) && isSafeImage();
     }
 
-    // 2. Course Thumbnails & Marketing Banners (Admin only)
+    // 2. Course Thumbnails, Category Icons & Banners (Public Read, Admin Write)
     match /courses/{courseId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isSafeImage();
+    }
+
+    match /categories/{categoryId}/{fileName} {
       allow read: if true;
       allow write: if isAdmin() && isSafeImage();
     }
@@ -44,13 +56,14 @@ service firebase.storage {
       allow write: if isAdmin() && isSafeImage();
     }
 
-    // 3. Study Materials & PDF Notes
+    // 3. Course Study Materials & PDF Notes
+    // Protected by cross-service Firestore enrollment check or signed ephemeral URLs
     match /materials/{courseId}/{fileName} {
-      allow read: if isAuthenticated() || isAdmin();
+      allow read: if isAdmin() || isEnrolled(courseId);
       allow write: if isAdmin() && isSafeDocument();
     }
 
-    // 4. Default Deny
+    // 4. Default Deny Catch-All
     match /{allPaths=**} {
       allow read, write: if false;
     }

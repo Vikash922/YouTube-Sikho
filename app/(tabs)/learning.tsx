@@ -83,7 +83,10 @@ export default function MyLearningScreen() {
         if (course) {
           const progress = await getCourseProgress(user.uid, course.id);
           const totalLessons =
-            course.sections?.reduce((acc, s) => acc + s.lessons.length, 0) || 1;
+            course.totalLessons ||
+            course.lessonsCount ||
+            course.sections?.reduce((acc, s) => acc + s.lessons.length, 0) ||
+            1;
           const completedCount = progress?.completedLessons?.length || 0;
           const percent = Math.min(100, Math.round((completedCount / totalLessons) * 100));
 

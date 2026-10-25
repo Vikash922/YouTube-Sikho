@@ -1,4 +1,4 @@
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { firebaseFirestore } from './firebase';
 
 export interface Banner {
@@ -27,16 +27,18 @@ export const DEFAULT_HOME_SECTIONS: HomeSectionConfig[] = [
 ];
 
 /**
- * Real-time listener for active promotional banners
+ * Real-time listener for active promotional banners.
+ * Filters by isVisible == true to conform with Firestore security rules.
  */
 export function subscribeToBanners(
   onUpdate: (banners: Banner[]) => void,
   onError?: (err: Error) => void
 ): () => void {
   const colRef = collection(firebaseFirestore, 'banners');
+  const q = query(colRef, where('isVisible', '==', true));
 
   return onSnapshot(
-    colRef,
+    q,
     (snapshot) => {
       const list = snapshot.docs
         .map((d) => {
@@ -46,11 +48,11 @@ export function subscribeToBanners(
             ...data,
             title: data.title || '',
             imageUrl: data.imageUrl || data.image || '',
-            isVisible: data.isVisible !== false && data.active !== false,
+            isVisible: data.isVisible !== false,
             order: data.order || 0,
           } as Banner;
         })
-        .filter((b) => b.isVisible && !!b.imageUrl);
+        .filter((b) => !!b.imageUrl);
       list.sort((a, b) => (a.order || 0) - (b.order || 0));
       onUpdate(list);
     },
@@ -62,16 +64,18 @@ export function subscribeToBanners(
 }
 
 /**
- * Real-time listener for dynamic home sections
+ * Real-time listener for dynamic home sections.
+ * Filters by isVisible == true to conform with Firestore security rules.
  */
 export function subscribeToHomeSections(
   onUpdate: (sections: HomeSectionConfig[]) => void,
   onError?: (err: Error) => void
 ): () => void {
   const colRef = collection(firebaseFirestore, 'homeSections');
+  const q = query(colRef, where('isVisible', '==', true));
 
   return onSnapshot(
-    colRef,
+    q,
     (snapshot) => {
       if (snapshot.empty) {
         onUpdate(DEFAULT_HOME_SECTIONS);

@@ -84,7 +84,42 @@ export default function SupportScreen() {
 
   const [activeTab, setActiveTab] = useState<'tickets' | 'faqs'>('tickets');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [faqsList, setFaqsList] = useState<{ q: string; a: string }[]>(FAQS);
   const [loading, setLoading] = useState(true);
+
+  // Live subscription to published FAQs (conforming to firestore rules where isPublished == true)
+  useEffect(() => {
+    const q = query(
+      collection(firebaseFirestore, 'faqs'),
+      where('isPublished', '==', true)
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs
+            .map((d) => {
+              const data = d.data();
+              return {
+                q: data.question || data.q || '',
+                a: data.answer || data.a || '',
+                order: data.order || 0,
+              };
+            })
+            .sort((a, b) => a.order - b.order)
+            .map(({ q, a }) => ({ q, a }));
+          setFaqsList(list);
+        } else {
+          setFaqsList(FAQS);
+        }
+      },
+      (err) => {
+        console.warn('FAQs listener notice:', err.message);
+        setFaqsList(FAQS);
+      }
+    );
+    return () => unsub();
+  }, []);
 
   // New ticket modal/form state
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -477,7 +512,7 @@ export default function SupportScreen() {
         {/* 3. FAQs Tab View */}
         {activeTab === 'faqs' && (
           <View style={{ marginTop: spacing.base, gap: 12 }}>
-            {FAQS.map((faq, i) => (
+            {faqsList.map((faq, i) => (
               <Card key={i} padding={spacing.base}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <HelpCircle size={18} color={colors.primary} strokeWidth={2} />

@@ -8,15 +8,16 @@ import {
   where,
   getDocs,
   onSnapshot,
+  orderBy,
 } from './firebase';
 
 export interface Lesson {
   id: string;
   title: string;
   type: 'video' | 'pdf' | 'quiz';
-  videoId?: string;
+  videoId?: string; // legacy support only; canonical video is isolated in private/media
   pdfUrl?: string;
-  duration?: number; // in seconds
+  duration?: number | string; // in seconds or "12:30"
   isFreePreview?: boolean;
   order: number;
 }
@@ -37,13 +38,18 @@ export interface Course {
   discountPrice?: number;
   instructor: string;
   thumbnail?: string;
+  thumbnailUrl?: string;
   language?: string;
   duration?: string;
+  totalDurationSeconds?: number;
+  totalLessons?: number;
+  lessonsCount?: number;
   rating?: number;
   totalStudents?: number;
   isPublished: boolean;
   isFeatured?: boolean;
   isNew?: boolean;
+  order?: number;
   sections?: Section[];
 }
 
@@ -62,16 +68,18 @@ export interface Enrollment {
 export const FALLBACK_COURSES: Record<string, Course> = {};
 
 /**
- * Real-time listener for published courses from Firestore
+ * Real-time listener for published courses from Firestore.
+ * Conforms strictly to Firestore security rules (filters by isPublished == true).
  */
 export function subscribeToPublishedCourses(
   onUpdate: (courses: Course[]) => void,
   onError?: (err: Error) => void
 ): () => void {
   const colRef = collection(firebaseFirestore, 'courses');
+  const q = query(colRef, where('isPublished', '==', true));
 
   return onSnapshot(
-    colRef,
+    q,
     (snapshot) => {
       const list = snapshot.docs
         .map((d) => {
@@ -83,11 +91,115 @@ export function subscribeToPublishedCourses(
             thumbnailUrl: data.thumbnailUrl || data.thumbnail || data.image || '',
           } as unknown as Course);
         })
-        .filter((c) => c.isPublished !== false);
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
       onUpdate(list);
     },
     (err) => {
       console.warn('[courseService] subscribeToPublishedCourses error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Fetch course curriculum from secure subcollections:
+ * courses/{courseId}/sections/{sectionId} -> lessons/{lessonId}
+ * Falls back to legacy course.sections array if subcollections are not populated.
+ */
+export async function getCourseCurriculum(courseId: string): Promise<Section[]> {
+  try {
+    const secColRef = collection(firebaseFirestore, 'courses', courseId, 'sections');
+    const secSnap = await getDocs(query(secColRef, orderBy('order', 'asc')));
+
+    if (!secSnap.empty) {
+      const sections: Section[] = [];
+      for (const sDoc of secSnap.docs) {
+        const sData = sDoc.data();
+        const lesColRef = collection(firebaseFirestore, 'courses', courseId, 'sections', sDoc.id, 'lessons');
+        const lesSnap = await getDocs(query(lesColRef, orderBy('order', 'asc')));
+        const lessons: Lesson[] = lesSnap.docs.map((lDoc) => {
+          const lData = lDoc.data();
+          return {
+            id: lDoc.id,
+            title: lData.title || '',
+            type: lData.type || 'video',
+            duration: lData.duration,
+            isFreePreview: !!lData.isFreePreview,
+            order: lData.order || 1,
+          };
+        });
+
+        sections.push({
+          id: sDoc.id,
+          title: sData.title || '',
+          order: sData.order || 1,
+          lessons,
+        });
+      }
+      return sections;
+    }
+  } catch (err) {
+    console.warn('[courseService] getCourseCurriculum subcollections fetch error:', err);
+  }
+
+  // Backward compatibility fallback to legacy course.sections
+  const course = await getCourseById(courseId);
+  return course?.sections || [];
+}
+
+/**
+ * Real-time listener for course curriculum subcollections
+ */
+export function subscribeToCourseCurriculum(
+  courseId: string,
+  onUpdate: (sections: Section[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const secColRef = collection(firebaseFirestore, 'courses', courseId, 'sections');
+  const secQuery = query(secColRef, orderBy('order', 'asc'));
+
+  return onSnapshot(
+    secQuery,
+    async (snapshot) => {
+      if (snapshot.empty) {
+        // Fallback: check if parent course doc has legacy sections
+        const course = await getCourseById(courseId);
+        onUpdate(course?.sections || []);
+        return;
+      }
+
+      try {
+        const sections: Section[] = [];
+        for (const sDoc of snapshot.docs) {
+          const sData = sDoc.data();
+          const lesColRef = collection(firebaseFirestore, 'courses', courseId, 'sections', sDoc.id, 'lessons');
+          const lesSnap = await getDocs(query(lesColRef, orderBy('order', 'asc')));
+          const lessons: Lesson[] = lesSnap.docs.map((lDoc) => {
+            const lData = lDoc.data();
+            return {
+              id: lDoc.id,
+              title: lData.title || '',
+              type: lData.type || 'video',
+              duration: lData.duration,
+              isFreePreview: !!lData.isFreePreview,
+              order: lData.order || 1,
+            };
+          });
+
+          sections.push({
+            id: sDoc.id,
+            title: sData.title || '',
+            order: sData.order || 1,
+            lessons,
+          });
+        }
+        onUpdate(sections);
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
+    },
+    (err) => {
+      console.warn('[courseService] subscribeToCourseCurriculum error:', err);
       if (onError) onError(err);
     }
   );

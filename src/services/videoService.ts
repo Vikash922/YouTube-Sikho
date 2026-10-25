@@ -44,21 +44,13 @@ export async function getVideoToken(
   courseId: string,
   lessonId: string
 ): Promise<VideoTokenResult> {
-  try {
-    const getVideoTokenCallable = httpsCallable<
-      { courseId: string; lessonId: string },
-      VideoTokenResult
-    >(firebaseFunctions, 'getVideoToken');
+  const getVideoTokenCallable = httpsCallable<
+    { courseId: string; lessonId: string },
+    VideoTokenResult
+  >(firebaseFunctions, 'getVideoToken');
 
-    const result = await getVideoTokenCallable({ courseId, lessonId });
-    return result.data;
-  } catch (err: any) {
-    // Return sample HLS stream with 1-hour expiry for offline/test environments
-    return {
-      hlsUrl: DEMO_HLS_STREAM,
-      expiresAt: Math.floor(Date.now() / 1000) + 3600,
-    };
-  }
+  const result = await getVideoTokenCallable({ courseId, lessonId });
+  return result.data;
 }
 
 /**

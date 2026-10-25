@@ -5,8 +5,13 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc,
+  getDocs,
+  getDoc,
   query,
+  orderBy,
+  writeBatch,
+  deleteField,
+  serverTimestamp,
 } from 'firebase/firestore';
 import {
   BookOpen,
@@ -17,9 +22,10 @@ import {
   Layers,
   ArrowLeft,
   Download,
+  Loader2,
 } from 'lucide-react';
-import { db } from '../firebase';
-import { Course, Section } from '../types';
+import { db, functions, httpsCallable } from '../firebase';
+import { Course, Section, Lesson } from '../types';
 import { Button } from '../components/common/Button';
 import { CourseContentBuilder } from '../components/courses/CourseContentBuilder';
 import { useToast } from '../context/ToastContext';
@@ -52,6 +58,7 @@ export const Courses: React.FC = () => {
   const [activeCurriculumCourse, setActiveCurriculumCourse] = useState<Course | null>(null);
   const [curriculumSections, setCurriculumSections] = useState<Section[]>([]);
   const [savingCurriculum, setSavingCurriculum] = useState(false);
+  const [loadingCurriculum, setLoadingCurriculum] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'courses'));
@@ -147,39 +154,189 @@ export const Courses: React.FC = () => {
   };
 
   const handleDeleteCourse = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this course?')) return;
+    if (!window.confirm('Are you sure you want to delete this course and all its curriculum lessons? This action is irreversible.')) return;
     try {
-      await deleteDoc(doc(db, 'courses', id));
-      showToast('Course deleted', 'info');
+      const deleteCourseCallable = httpsCallable<{ courseId: string }, { success: boolean }>(
+        functions,
+        'deleteCourse'
+      );
+      await deleteCourseCallable({ courseId: id });
+      showToast('Course and syllabus subcollections deleted successfully', 'info');
     } catch (err: any) {
+      console.error('Delete course error:', err);
       showToast(err.message || 'Failed to delete course', 'error');
     }
   };
 
-  // Open Curriculum Editor
-  const handleOpenCurriculum = (course: Course) => {
+  const parseDurationInSeconds = (dur: string | number | undefined): number => {
+    if (!dur) return 0;
+    if (typeof dur === 'number') return Math.round(dur);
+    const parts = String(dur).trim().split(':').map((p) => parseInt(p, 10) || 0);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 1 && !isNaN(Number(parts[0]))) return Number(parts[0]);
+    return 0;
+  };
+
+  // Open Curriculum Editor (Loads subcollections if present, or legacy sections array)
+  const handleOpenCurriculum = async (course: Course) => {
     setActiveCurriculumCourse(course);
-    setCurriculumSections(course.sections || []);
+    setLoadingCurriculum(true);
+    try {
+      const sectionsQuery = query(
+        collection(db, 'courses', course.id, 'sections'),
+        orderBy('order', 'asc')
+      );
+      const secSnap = await getDocs(sectionsQuery);
+
+      if (!secSnap.empty) {
+        const loadedSections: Section[] = [];
+        for (const sDoc of secSnap.docs) {
+          const secData = sDoc.data();
+          const lessonsQuery = query(
+            collection(db, 'courses', course.id, 'sections', sDoc.id, 'lessons'),
+            orderBy('order', 'asc')
+          );
+          const lesSnap = await getDocs(lessonsQuery);
+          const loadedLessons: Lesson[] = [];
+
+          for (const lDoc of lesSnap.docs) {
+            const lData = lDoc.data();
+            let videoId = lData.videoId || '';
+            try {
+              const mediaSnap = await getDoc(
+                doc(db, 'courses', course.id, 'sections', sDoc.id, 'lessons', lDoc.id, 'private', 'media')
+              );
+              if (mediaSnap.exists()) {
+                const mData = mediaSnap.data();
+                videoId = mData?.videoId || mData?.pdfPath || videoId;
+              }
+            } catch (mErr) {
+              console.warn('Could not read private/media:', mErr);
+            }
+
+            loadedLessons.push({
+              id: lDoc.id,
+              title: lData.title || 'Untitled Lesson',
+              type: lData.type || 'video',
+              videoId: videoId,
+              duration: lData.duration || '',
+              order: lData.order || 1,
+              isFreePreview: !!lData.isFreePreview,
+            });
+          }
+
+          loadedSections.push({
+            id: sDoc.id,
+            title: secData.title || 'Untitled Section',
+            order: secData.order || 1,
+            lessons: loadedLessons,
+          });
+        }
+        setCurriculumSections(loadedSections);
+      } else {
+        setCurriculumSections(course.sections || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to load subcollection curriculum:', err);
+      setCurriculumSections(course.sections || []);
+      showToast('Loaded curriculum from course doc (subcollections empty)', 'info');
+    } finally {
+      setLoadingCurriculum(false);
+    }
   };
 
   const handleSaveCurriculum = async () => {
     if (!activeCurriculumCourse) return;
     setSavingCurriculum(true);
     try {
-      // Calculate total lessons and durations
-      const totalLessons = curriculumSections.reduce(
-        (acc, sec) => acc + (sec.lessons?.length || 0),
-        0
-      );
+      const courseId = activeCurriculumCourse.id;
 
-      await updateDoc(doc(db, 'courses', activeCurriculumCourse.id), {
-        sections: curriculumSections,
-        totalLessons,
-        lessonsCount: totalLessons,
-        updatedAt: new Date().toISOString(),
+      // 1. Calculate totals
+      let totalLessons = 0;
+      let totalDurationSeconds = 0;
+      for (const sec of curriculumSections) {
+        for (const les of sec.lessons || []) {
+          totalLessons++;
+          totalDurationSeconds += parseDurationInSeconds(les.duration);
+        }
+      }
+
+      // 2. Fetch existing subcollections to detect deletions
+      const existingSectionsSnap = await getDocs(collection(db, 'courses', courseId, 'sections'));
+      const currentSectionIds = new Set(curriculumSections.map((s) => s.id));
+
+      const batch = writeBatch(db);
+
+      // Clean up deleted sections and lessons
+      for (const sDoc of existingSectionsSnap.docs) {
+        if (!currentSectionIds.has(sDoc.id)) {
+          const oldLessonsSnap = await getDocs(
+            collection(db, 'courses', courseId, 'sections', sDoc.id, 'lessons')
+          );
+          for (const lDoc of oldLessonsSnap.docs) {
+            batch.delete(doc(db, 'courses', courseId, 'sections', sDoc.id, 'lessons', lDoc.id, 'private', 'media'));
+            batch.delete(doc(db, 'courses', courseId, 'sections', sDoc.id, 'lessons', lDoc.id));
+          }
+          batch.delete(doc(db, 'courses', courseId, 'sections', sDoc.id));
+        } else {
+          const currentSec = curriculumSections.find((s) => s.id === sDoc.id);
+          const currentLessonIds = new Set((currentSec?.lessons || []).map((l) => l.id));
+          const oldLessonsSnap = await getDocs(
+            collection(db, 'courses', courseId, 'sections', sDoc.id, 'lessons')
+          );
+          for (const lDoc of oldLessonsSnap.docs) {
+            if (!currentLessonIds.has(lDoc.id)) {
+              batch.delete(doc(db, 'courses', courseId, 'sections', sDoc.id, 'lessons', lDoc.id, 'private', 'media'));
+              batch.delete(doc(db, 'courses', courseId, 'sections', sDoc.id, 'lessons', lDoc.id));
+            }
+          }
+        }
+      }
+
+      // 3. Write active sections, lessons, and private/media
+      curriculumSections.forEach((sec, secIdx) => {
+        const secRef = doc(db, 'courses', courseId, 'sections', sec.id);
+        batch.set(secRef, {
+          id: sec.id,
+          title: sec.title,
+          order: secIdx + 1,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+
+        (sec.lessons || []).forEach((les, lesIdx) => {
+          const lesRef = doc(db, 'courses', courseId, 'sections', sec.id, 'lessons', les.id);
+          batch.set(lesRef, {
+            id: les.id,
+            title: les.title,
+            order: lesIdx + 1,
+            type: les.type,
+            duration: les.duration || '',
+            isFreePreview: !!les.isFreePreview,
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+
+          const mediaRef = doc(db, 'courses', courseId, 'sections', sec.id, 'lessons', les.id, 'private', 'media');
+          batch.set(mediaRef, {
+            videoId: les.videoId || '',
+            pdfPath: les.videoId || '',
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        });
       });
 
-      showToast('Curriculum updated successfully!', 'success');
+      // 4. Update course metadata: delete legacy sections array & store totals
+      const courseRef = doc(db, 'courses', courseId);
+      batch.update(courseRef, {
+        totalLessons,
+        lessonsCount: totalLessons,
+        totalDurationSeconds,
+        updatedAt: serverTimestamp(),
+        sections: deleteField(),
+      });
+
+      await batch.commit();
+      showToast('Curriculum saved to secure subcollections successfully!', 'success');
     } catch (err: any) {
       console.error('Save curriculum error:', err);
       showToast(err.message || 'Failed to save curriculum', 'error');
@@ -211,12 +368,21 @@ export const Courses: React.FC = () => {
           </div>
         </div>
 
-        <CourseContentBuilder
-          sections={curriculumSections}
-          onChange={setCurriculumSections}
-          onSave={handleSaveCurriculum}
-          saving={savingCurriculum}
-        />
+        {loadingCurriculum ? (
+          <div className="p-16 flex flex-col items-center justify-center space-y-3 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border rounded-xl">
+            <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+            <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+              Loading curriculum from secure subcollections...
+            </p>
+          </div>
+        ) : (
+          <CourseContentBuilder
+            sections={curriculumSections}
+            onChange={setCurriculumSections}
+            onSave={handleSaveCurriculum}
+            saving={savingCurriculum}
+          />
+        )}
       </div>
     );
   }
@@ -233,7 +399,7 @@ export const Courses: React.FC = () => {
       showToast('No courses to export', 'error');
       return;
     }
-    const headers = ['Course ID', 'Title', 'Category', 'Instructor', 'Price', 'Discount Price', 'Published', 'Sections Count'];
+    const headers = ['Course ID', 'Title', 'Category', 'Instructor', 'Price', 'Discount Price', 'Published', 'Lessons Count'];
     const rows = filteredCourses.map((c) => [
       c.id,
       c.title,
@@ -242,7 +408,7 @@ export const Courses: React.FC = () => {
       c.price,
       c.discountPrice || '',
       c.isPublished !== false ? 'Yes' : 'No',
-      c.sections?.length || 0,
+      c.totalLessons || c.lessonsCount || c.sections?.length || 0,
     ]);
     const csvContent = [
       headers.join(','),
@@ -372,10 +538,13 @@ export const Courses: React.FC = () => {
                     <span>By {course.instructor}</span>
                     <span className="flex items-center gap-1 font-semibold text-light-text dark:text-dark-text">
                       <Layers className="w-3.5 h-3.5 text-brand-500" />
-                      {course.sections?.reduce(
-                        (acc, s) => acc + (s.lessons?.length || 0),
-                        0
-                      ) || 0}{' '}
+                      {course.totalLessons ||
+                        course.lessonsCount ||
+                        course.sections?.reduce(
+                          (acc, s) => acc + (s.lessons?.length || 0),
+                          0
+                        ) ||
+                        0}{' '}
                       Lessons
                     </span>
                   </div>

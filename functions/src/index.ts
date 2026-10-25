@@ -14,6 +14,13 @@ import { sendNotificationHandler } from './notifications/sendNotification';
 import { deleteAccountHandler } from './user/deleteAccount';
 import { submitQuizHandler } from './quizzes/submitQuiz';
 import { getQuizQuestionsHandler } from './quizzes/getQuizQuestions';
+import { getMaterialUrlHandler } from './materials/getMaterialUrl';
+import {
+  deleteCourseHandler,
+  deleteQuizHandler,
+  deleteLiveClassHandler,
+} from './admin/cascadeDeletes';
+import { getLiveStreamHandler } from './live/getLiveStream';
 
 // Initialize Firebase Admin App
 if (admin.apps.length === 0) {
@@ -225,6 +232,88 @@ export const deleteAccount = onCall(
     } catch (err: any) {
       if (err instanceof HttpsError) throw err;
       throw new HttpsError('permission-denied', err.message || 'Account deletion failed.');
+    }
+  }
+);
+
+/**
+ * 11. getMaterialUrl: Short-Lived Ephemeral Download URL for Course Study Materials
+ */
+export const getMaterialUrl = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const uid = request.auth?.uid || null;
+    const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
+    try {
+      return await getMaterialUrlHandler(request.data, uid, { admin: adminClaim });
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('internal', err.message || 'Failed to generate download URL.');
+    }
+  }
+);
+
+/**
+ * 12. getLiveStream: Gated Live Broadcast Access
+ */
+export const getLiveStream = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const uid = request.auth?.uid || null;
+    const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
+    try {
+      return await getLiveStreamHandler(request.data, uid, { admin: adminClaim });
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('permission-denied', err.message || 'Failed to retrieve live stream.');
+    }
+  }
+);
+
+/**
+ * 13. deleteCourse: Administrative Cascade Delete with Active Enrollment Safeguard
+ */
+export const deleteCourse = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const caller = requireAdmin(request);
+    try {
+      return await deleteCourseHandler(request.data, caller);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('internal', err.message || 'Failed to delete course.');
+    }
+  }
+);
+
+/**
+ * 14. deleteQuiz: Administrative Cascade Delete for Quizzes
+ */
+export const deleteQuiz = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const caller = requireAdmin(request);
+    try {
+      return await deleteQuizHandler(request.data, caller);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('internal', err.message || 'Failed to delete quiz.');
+    }
+  }
+);
+
+/**
+ * 15. deleteLiveClass: Administrative Cascade Delete for Live Classes
+ */
+export const deleteLiveClass = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const caller = requireAdmin(request);
+    try {
+      return await deleteLiveClassHandler(request.data, caller);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('internal', err.message || 'Failed to delete live class.');
     }
   }
 );

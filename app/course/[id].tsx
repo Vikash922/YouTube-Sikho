@@ -42,7 +42,9 @@ import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
 import {
   getCourseById,
   subscribeToEnrollment,
+  subscribeToCourseCurriculum,
   Course,
+  Section,
   Lesson,
   FALLBACK_COURSES,
 } from '../../src/services/courseService';
@@ -57,6 +59,7 @@ export default function CourseDetailScreen() {
   const t = useLanguageStore((state) => state.t);
 
   const [course, setCourse] = useState<Course | null>(null);
+  const [curriculum, setCurriculum] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [quizzes, setQuizzes] = useState<QuizMetadata[]>([]);
@@ -95,10 +98,16 @@ export default function CourseDetailScreen() {
       setQuizzes(quizList);
     });
 
+    // 4. Real-time curriculum subcollections listener
+    const unsubCurriculum = subscribeToCourseCurriculum(id, (sections) => {
+      setCurriculum(sections);
+    });
+
     return () => {
       unsubCourse();
       unsubEnroll();
       unsubQuizzes();
+      unsubCurriculum();
     };
   }, [id, user?.uid]);
 
@@ -122,10 +131,27 @@ export default function CourseDetailScreen() {
     }
   };
 
+  const formatLessonDuration = (dur: number | string | undefined) => {
+    if (!dur) return null;
+    if (typeof dur === 'string' && dur.includes(':')) return dur;
+    const num = Number(dur);
+    if (Number.isFinite(num) && num > 0) {
+      return `${Math.round(num / 60)} mins`;
+    }
+    return String(dur);
+  };
+
+  const displayedSections = curriculum.length > 0 ? curriculum : (course?.sections || []);
+  const totalLessonsCount =
+    course?.totalLessons ||
+    course?.lessonsCount ||
+    displayedSections.reduce((acc, s) => acc + (s.lessons?.length || 0), 0) ||
+    0;
+
   const handleEnrollOrResume = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (isEnrolled) {
-      const firstLesson = course?.sections?.[0]?.lessons?.[0];
+      const firstLesson = displayedSections?.[0]?.lessons?.[0];
       router.push({
         pathname: '/player/[lessonId]',
         params: {
@@ -449,12 +475,12 @@ export default function CourseDetailScreen() {
               {t('courseSyllabus')}
             </Text>
             <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
-              {course.sections?.reduce((acc, s) => acc + s.lessons.length, 0) || 0} Lessons
+              {totalLessonsCount} Lessons
             </Text>
           </View>
 
-          {course.sections && course.sections.length > 0 ? (
-            course.sections.map((section, sIdx) => (
+          {displayedSections && displayedSections.length > 0 ? (
+            displayedSections.map((section, sIdx) => (
               <View key={section.id || sIdx} style={{ marginTop: spacing.md }}>
                 <Text style={[typography.small, { color: colors.text, fontWeight: '700', marginBottom: 8 }]}>
                   {section.title}
@@ -513,7 +539,7 @@ export default function CourseDetailScreen() {
                         </Text>
                         {lesson.duration && (
                           <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
-                            {Math.round(lesson.duration / 60)} mins • {lesson.type.toUpperCase()}
+                            {formatLessonDuration(lesson.duration)} • {lesson.type.toUpperCase()}
                           </Text>
                         )}
                       </View>

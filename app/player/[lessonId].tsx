@@ -51,6 +51,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import * as ScreenCapture from 'expo-screen-capture';
 import {
   getCourseById,
+  getCourseCurriculum,
   checkCourseEnrollment,
   Course,
   Lesson,
@@ -200,14 +201,25 @@ export default function VideoPlayerScreen() {
       if (!courseId) return;
       setLoadingInitial(true);
 
-      const [courseData, enrolled, progress] = await Promise.all([
+      const [courseData, curriculumSections, enrolled, progress] = await Promise.all([
         getCourseById(courseId),
+        getCourseCurriculum(courseId),
         checkCourseEnrollment(user?.uid, courseId),
         getCourseProgress(user?.uid, courseId),
       ]);
 
+      const effectiveCourse: Course | null = courseData
+        ? {
+            ...courseData,
+            sections:
+              curriculumSections.length > 0
+                ? curriculumSections
+                : courseData.sections || [],
+          }
+        : null;
+
       if (isMounted) {
-        setCourse(courseData);
+        setCourse(effectiveCourse);
         setIsEnrolled(enrolled);
         if (progress?.completedLessons) {
           setCompletedLessons(progress.completedLessons);
@@ -215,8 +227,8 @@ export default function VideoPlayerScreen() {
 
         // Find active lesson
         let foundLesson: Lesson | null = null;
-        if (courseData?.sections) {
-          for (const sec of courseData.sections) {
+        if (effectiveCourse?.sections) {
+          for (const sec of effectiveCourse.sections) {
             const l = sec.lessons.find((item) => item.id === lessonId);
             if (l) {
               foundLesson = l;
@@ -226,8 +238,8 @@ export default function VideoPlayerScreen() {
         }
 
         // Fallback default lesson if not found
-        if (!foundLesson && courseData?.sections?.[0]?.lessons?.[0]) {
-          foundLesson = courseData.sections[0].lessons[0];
+        if (!foundLesson && effectiveCourse?.sections?.[0]?.lessons?.[0]) {
+          foundLesson = effectiveCourse.sections[0].lessons[0];
         }
 
         setCurrentLesson(foundLesson);

@@ -71,3 +71,58 @@ Students never read `/quizzes/{id}/questions` directly. The mobile app invokes t
   - `minPrice` (optional minimum course price in rupees)
   - `courseIds` (optional array of restricted course IDs)
 - Client-side reads from mobile are blocked in `firestore.rules`; coupon validation is performed server-side via the `validateCoupon` callable Cloud Function.
+
+---
+
+## 4. Part 4: Curriculum Subcollection, Schema Canonicalization & Rules Migration
+
+### A. Comprehensive Field Canonicalization Matrix
+
+| Collection | Legacy Code / Admin / Rules | ARCHITECTURE.md | Proposed Canonical Field | Migration Strategy |
+| :--- | :--- | :--- | :--- | :--- |
+| **`banners`** | `active` (rules & indexes) / `isVisible` (code) | `isVisible` | **`isVisible`** | Update rules & indexes to `isVisible`. Script backfills `isVisible = true` if `active == true`. |
+| **`courses`** | `thumbnail` (app) / `thumbnailUrl` (admin) | `thumbnailUrl` | **`thumbnailUrl`** | Keep backward-compatible getter in app; script migrates `thumbnail` -> `thumbnailUrl`. |
+| **`courses`** | `category` (app) / `categoryId` (admin) | `categoryId` | **`categoryId`** (with optional `category` string for UI display) | Store foreign key `categoryId` and maintain category display label. |
+| **`courses`** | `duration` ("12h 30m") | `totalDurationSeconds` | **`totalDurationSeconds`** & **`totalLessons`** | Compute dynamically from lessons during curriculum migration. |
+| **`courses`** | `sections` (embedded array with `videoId` / `pdfUrl`) | Subcollections | **Subcollections** (`sections/{sId}/lessons/{lId}`) | Move to subcollections; private media to `lessons/{lId}/private/media`. Remove array from course doc. |
+| **`liveClasses`** | `streamUrl` on public doc | `streamUrl` | **`liveClasses/{id}/private/stream`** | Move stream URL to private subdoc. Free streams or enrolled students access via `getLiveStream` callable. |
+| **`liveClasses/messages`** | `uid`, `userName`, `text` (code) | `senderId`, `senderName`, `message` | **`uid`**, **`userName`**, **`text`** | Standardize on `uid`, `userName`, `text` (aligns with `users/{uid}` and existing UI). Update ARCHITECTURE.md. |
+| **`quizzes`** | `passMarks`, `durationMinutes`, `questionsCount` | `passingPercentage`, `timeLimitMinutes`, `questionCount` | **`passingPercentage`**, **`timeLimitMinutes`**, **`questionCount`** | Update Admin and functions to canonical names; migrate existing documents. |
+| **`quizzes/questions`** | `questionText`, `correctOptionIndex` | `question`, `correctAnswerIndex` | **`question`**, **`correctAnswerIndex`** | Update Admin question builder to canonical names; script backfills legacy keys. |
+| **`tickets`** | `status: 'closed'` / `userName` | `status: 'resolved'` / `studentName` | **`status: 'open' \| 'in_progress' \| 'resolved'`** / **`studentName`** | Support `'closed'` as alias in UI; canonical status in DB is `'resolved'`. |
+| **`notifications`** | Direct student read of `/notifications` | Inbox isolation | **`/userNotifications/{uid}/items`** | Students read only personal items. `/notifications` locked to Admin broadcast history. |
+| **`materials`** | `allow read: if isAuthenticated()` | Enrolled check | **`isEnrolled(courseId)`** | Lock Firestore & Storage rules to verified course enrollment. Short-lived URLs via `getMaterialUrl`. |
+
+---
+
+### B. Deployment & Rollout Sequence
+
+To ensure zero downtime and prevent permission failures, all updates must be rolled out in this strict order:
+
+```mermaid
+flowchart TD
+    Step1["1. Database Backup (Firestore Managed Export)"]
+    Step2["2. Deploy Backward-Compatible Cloud Functions (getLiveStream, getMaterialUrl, etc.)"]
+    Step3["3. Run Curriculum & Field Migration Script (Dry-run, then --commit)"]
+    Step4["4. Deploy Updated Admin Panel & Mobile App Builds"]
+    Step5["5. Deploy Strict Security Rules & Composite Indexes (Default Deny)"]
+    Step6["6. Multi-Persona Verification (Student, Non-Enrolled, Admin)"]
+
+    Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6
+```
+
+1. **Step 1: Database Backup**:
+   Run full Firestore managed export to Google Cloud Storage bucket before touching documents.
+2. **Step 2: Deploy Cloud Functions**:
+   Deploy new and updated functions (`getLiveStream`, `getMaterialUrl`, `deleteCourse`, `deleteQuiz`, `deleteLiveClass`, `validateCoupon`).
+3. **Step 3: Run Data Migration Script**:
+   Execute `node scripts/migrate-curriculum.js` (dry-run first to inspect transformations, then with `--commit`).
+4. **Step 4: Deploy Admin & Mobile Client**:
+   Publish the updated Admin Panel and submit new Mobile EAS build with subcollection listeners and query filters matching rules.
+5. **Step 5: Deploy Security Rules & Indexes**:
+   Deploy locked `firestore.rules`, `firestore.indexes.json`, and `storage.rules`. Because the client apps now filter on `where('isPublished', '==', true)` and `where('isVisible', '==', true)`, queries will match rules perfectly.
+6. **Step 6: Verification Smoke Tests**:
+   Verify access as:
+   - Non-enrolled user (cannot access private stream, private media, or paid materials).
+   - Enrolled user (can access tokenized video, study materials, and submit reviews).
+   - Admin user (can manage content, issue refunds, view audit logs).

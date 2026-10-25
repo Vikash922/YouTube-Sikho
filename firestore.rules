@@ -3,56 +3,36 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Assumed Data Model & Architecture (Phase 4 Production Hardened)
-    // ===============================================================
-    // - /categories/{categoryId}
-    // - /courses/{courseId}
-    //   - /sections/{sectionId}
-    //     - /lessons/{lessonId}
-    // - /banners/{bannerId}
-    // - /homeSections/{sectionId}
-    // - /appConfig/{configDoc}
-    // - /admins/{uid}
-    // - /users/{uid}
-    // - /progress/{progressId}
-    // - /enrollments/{enrollmentId} (Cloud Functions / Admin locked)
-    // - /orders/{orderId} (Cloud Functions / Admin locked)
-    // - /coupons/{couponCode} (Admin managed, Student read)
-    // - /liveClasses/{classId} (Admin managed, Public/Student read)
-    //   - /messages/{messageId} (Rate-limited, Student chat, Admin moderate)
-    // - /notifications/{notificationId} (Admin broadcast history)
-    // - /userNotifications/{uid}/items/{itemId} (Owner-isolated notification center)
-    // - /quizzes/{quizId} (Metadata read by student)
-    //   - /questions/{questionId} (CRITICAL: Admin/Functions ONLY, student direct read DENIED)
-    // - /quizResults/{resultId} (Cloud Functions / Admin locked, Student read own)
-    // - /reviews/{reviewId} (Student review, Admin hide toggle)
-    // - /tickets/{ticketId} (Owner or Admin support tickets)
-    // - /faqs/{faqId} (Admin managed, Public read)
-    // - /materials/{materialId} (Course study material notes/PDFs)
-    // ===============================================================
-
     // Helper Functions
-    function isAuthenticated() {
+    // ===============================================================
+    function isSignedIn() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isAuthenticated() && (
+      return isSignedIn() && (
         ('admin' in request.auth.token && request.auth.token.admin == true) ||
-        ('role' in request.auth.token && request.auth.token.role == 'owner')
+        ('role' in request.auth.token && request.auth.token.role == 'owner') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 
     function isOwner(uid) {
-      return isAuthenticated() && request.auth.uid == uid;
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isEnrolled(courseId) {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/enrollments/$(request.auth.uid)_$(courseId)) &&
+        get(/databases/$(database)/documents/enrollments/$(request.auth.uid)_$(courseId)).data.status == 'active'
+      );
     }
 
     // ===============================================================
     // 1. ADMINS COLLECTION
     // ===============================================================
     match /admins/{uid} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
 
     // ===============================================================
@@ -64,19 +44,24 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // 3. COURSES, SECTIONS & LESSONS
+    // 3. COURSES, SECTIONS, LESSONS & PRIVATE MEDIA
     // ===============================================================
     match /courses/{courseId} {
       allow read: if (resource == null || resource.data.isPublished == true) || isAdmin();
       allow create, update, delete: if isAdmin();
 
       match /sections/{sectionId} {
-        allow read: if true;
+        allow read: if (get(/databases/$(database)/documents/courses/$(courseId)).data.isPublished == true) || isAdmin();
         allow write: if isAdmin();
 
         match /lessons/{lessonId} {
-          allow read: if true;
+          allow read: if (get(/databases/$(database)/documents/courses/$(courseId)).data.isPublished == true) || isAdmin();
           allow write: if isAdmin();
+
+          match /private/{docId} {
+            // Admin only! Never readable by clients.
+            allow read, write: if isAdmin();
+          }
         }
       }
     }
@@ -85,7 +70,11 @@ service cloud.firestore {
     // 4. BANNERS (Home Manager)
     // ===============================================================
     match /banners/{bannerId} {
-      allow read: if (resource == null || resource.data.active == true) || isAdmin();
+      allow read: if (
+        resource == null ||
+        resource.data.isVisible == true ||
+        resource.data.active == true
+      ) || isAdmin();
       allow create, update, delete: if isAdmin();
     }
 
@@ -111,7 +100,6 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
 
-      // Owner can create own profile document with strictly allowed non-privilege fields
       allow create: if (
         isOwner(uid) &&
         request.resource.data.keys().hasOnly([
@@ -125,7 +113,6 @@ service cloud.firestore {
         (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 120))
       ) || isAdmin();
 
-      // Owner can update only profile fields; isBlocked, role, claims & admin flags are NEVER owner-writable
       allow update: if (
         isOwner(uid) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -137,7 +124,6 @@ service cloud.firestore {
         (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 120))
       ) || isAdmin();
 
-      // Delete permitted exclusively via deleteAccount Cloud Function (Admin SDK)
       allow delete: if false;
 
       match /{allUserPaths=**} {
@@ -149,9 +135,9 @@ service cloud.firestore {
     // 8. WATCH PROGRESS
     // ===============================================================
     match /progress/{progressId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isAdmin());
-      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }
 
@@ -159,93 +145,81 @@ service cloud.firestore {
     // 9. STUDENT ENROLLMENTS (Cloud Functions Protected - Admin SDK Only)
     // ===============================================================
     match /enrollments/{enrollmentId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow write: if false; // Server-authoritative: written only via Cloud Functions / manageEnrollment
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
     }
 
     // ===============================================================
     // 10. ORDERS & BILLING (Cloud Functions Protected - Admin SDK Only)
     // ===============================================================
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow write: if false; // Server-authoritative: written only via Cloud Functions
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if isAdmin();
     }
 
     // ===============================================================
     // 11. DISCOUNT COUPONS (Admin Managed, Server Validated)
     // ===============================================================
     match /coupons/{couponCode} {
-      allow read: if isAdmin(); // Students validate server-side via validateCoupon callable
-      allow write: if isAdmin();
+      allow read: if isAdmin(); // Validated server-side via validateCoupon callable
+      allow create, update, delete: if isAdmin();
     }
 
     // ===============================================================
-    // 12. LIVE CLASSES & REAL-TIME CHAT (Phase 4 Hardened)
+    // 12. LIVE CLASSES & REAL-TIME CHAT
     // ===============================================================
     match /liveClasses/{classId} {
-      allow read: if true;
+      allow read: if isSignedIn() || isAdmin();
       allow create, update, delete: if isAdmin();
 
-      // Real-time Chat Room Subcollection
       match /messages/{messageId} {
-        allow read: if isAuthenticated() || isAdmin();
-        allow create: if isAuthenticated() &&
+        allow read: if isSignedIn() || isAdmin();
+        allow create: if isSignedIn() &&
           request.resource.data.uid == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() <= 300;
-        allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+        allow update: if isAdmin(); // Prevent message tampering / impersonation
+        allow delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
       }
 
-      // Real-time Hand Raises Subcollection
-      match /handRaises/{raiseId} {
-        allow read, write: if isAuthenticated() || isAdmin();
+      match /handRaises/{uid} {
+        allow read: if isSignedIn() || isAdmin();
+        allow write: if isOwner(uid) || isAdmin();
       }
 
-      // WebRTC Live Video Signaling Subcollection
       match /viewers/{viewerId} {
-        allow read, write: if true;
-        match /{allViewerSubpaths=**} {
-          allow read, write: if true;
-        }
+        allow read, write: if false; // Disallow raw WebRTC signaling leakage
       }
     }
 
     // ===============================================================
-    // 13. PUSH NOTIFICATIONS & USER IN-APP NOTIFICATION CENTER (Phase 4)
+    // 13. PUSH NOTIFICATIONS & USER NOTIFICATION CENTER
     // ===============================================================
     match /notifications/{notificationId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if isAdmin(); // Internal broadcast log
     }
 
     match /userNotifications/{uid}/items/{itemId} {
-      // User can read and swipe-to-delete only their own notifications
       allow read: if isOwner(uid) || isAdmin();
       allow create: if isAdmin();
-      // Allow user to mark as read or update their own notification item
-      allow update: if (isOwner(uid) || isAdmin());
+      allow update: if (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])) || isAdmin();
       allow delete: if isOwner(uid) || isAdmin();
     }
 
     // ===============================================================
-    // 14. QUIZZES, EVALUATION & RESULTS (Phase 4)
+    // 14. QUIZZES, QUESTIONS & RESULTS
     // ===============================================================
     match /quizzes/{quizId} {
-      // Students can read quiz metadata (title, duration, passMarks)
-      allow read: if isAuthenticated() || isAdmin();
+      allow read: if isSignedIn() || isAdmin();
       allow create, update, delete: if isAdmin();
 
-      // CRITICAL SECURITY: Questions subcollection contains correct answers and explanations.
-      // Must NEVER be readable directly by students. Only Admin & Cloud Functions.
       match /questions/{questionId} {
-        allow read, write: if isAdmin();
+        allow read, write: if isAdmin(); // Anti-cheat: students evaluate via submitQuiz Cloud Function
       }
     }
 
     match /quizResults/{resultId} {
-      // Students can read only their own evaluated quiz result
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      // Results MUST be evaluated server-side and written by Cloud Functions/Admin
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow create, update, delete: if isAdmin();
     }
 
@@ -253,36 +227,64 @@ service cloud.firestore {
     // 15. STUDENT REVIEWS & COURSE RATINGS
     // ===============================================================
     match /reviews/{reviewId} {
-      // Public can read reviews unless hidden by admin
       allow read: if (resource == null || resource.data.isHidden != true) || isAdmin();
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() &&
+        isOwner(request.resource.data.uid) &&
+        isEnrolled(request.resource.data.courseId);
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
     }
 
     // ===============================================================
-    // 16. SUPPORT TICKETS & FAQS (Phase 4)
+    // 16. SUPPORT TICKETS & FAQS
     // ===============================================================
     match /tickets/{ticketId} {
-      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(request.resource.data.uid) && request.resource.data.status == 'open';
+      allow update: if isAdmin(); // Students cannot change status or assign tickets
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.uid == request.auth.uid || isAdmin());
+        allow create: if isSignedIn() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.uid == request.auth.uid || isAdmin());
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /faqs/{faqId} {
-      allow read: if resource.data.isPublished == true || isAdmin();
+      allow read: if (resource == null || resource.data.isPublished == true) || isAdmin();
       allow write: if isAdmin();
     }
 
     // ===============================================================
-    // 17. STUDY MATERIALS & PDF NOTES (Phase 4)
+    // 17. STUDY MATERIALS & PDF NOTES
     // ===============================================================
     match /materials/{materialId} {
-      allow read: if isAuthenticated() || isAdmin();
-      allow write: if isAdmin();
+      allow read: if isSignedIn() && (isAdmin() || (resource.data.courseId != null && isEnrolled(resource.data.courseId)));
+      allow create, update, delete: if isAdmin();
     }
 
     // ===============================================================
-    // DEFAULT DENY FOR ANY UNMATCHED PATH
+    // 18. CERTIFICATES (Public Verification, Server-Authoritative)
+    // ===============================================================
+    match /certificates/{certificateId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 19. INTERNAL AUDIT LOGS & PROCESSED EVENTS
+    // ===============================================================
+    match /processedEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ===============================================================
+    // DEFAULT DENY CATCH-ALL
     // ===============================================================
     match /{document=**} {
       allow read, write: if false;

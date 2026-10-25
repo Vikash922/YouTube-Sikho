@@ -20,12 +20,11 @@ import {
   onSnapshot,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, functions, httpsCallable } from '../firebase';
 import { Course } from '../types';
 import { LiveStudioModal } from '../components/live/LiveStudioModal';
 
@@ -195,10 +194,14 @@ export const LiveClasses: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this live class?')) return;
+    if (!window.confirm('Are you sure you want to delete this live class and its chat history? This action is irreversible.')) return;
     try {
-      await deleteDoc(doc(db, 'liveClasses', id));
-      setFeedback({ type: 'success', message: 'Live class deleted successfully.' });
+      const deleteLiveClassCallable = httpsCallable<{ classId: string }, { success: boolean }>(
+        functions,
+        'deleteLiveClass'
+      );
+      await deleteLiveClassCallable({ classId: id });
+      setFeedback({ type: 'success', message: 'Live class and chat history deleted successfully.' });
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Failed to delete class.' });
     }
