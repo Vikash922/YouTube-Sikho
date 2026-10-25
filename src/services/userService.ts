@@ -28,7 +28,19 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     const userRef = doc(firebaseFirestore, 'users', uid);
     const userSnap = await getDoc(userRef);
     if (userSnap.exists()) {
-      return userSnap.data() as UserProfile;
+      const data = userSnap.data();
+      return {
+        uid,
+        name: data.name || '',
+        phone: data.phone || '',
+        email: data.email || '',
+        role: data.role || 'student',
+        photoUrl: data.photoUrl || '',
+        fcmToken: data.fcmToken || '',
+        isBlocked: data.isBlocked === true,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      } as UserProfile;
     }
     return null;
   } catch (error) {
@@ -39,10 +51,11 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 
 /**
  * Creates or updates student profile document in Firestore users/{uid}
+ * Strictly complies with non-writable security fields (never writes isBlocked/role)
  */
 export async function saveUserProfile(
   uid: string,
-  data: { name: string; phone: string; photoUrl?: string }
+  data: { name: string; phone?: string; email?: string; photoUrl?: string }
 ): Promise<void> {
   if (!uid) return;
   // Guard against unauthenticated writes which trigger Firestore permission-denied
@@ -58,15 +71,17 @@ export async function saveUserProfile(
       await setDoc(userRef, {
         uid,
         name: data.name.trim(),
-        phone: data.phone,
+        phone: data.phone || '',
+        ...(data.email ? { email: data.email } : {}),
         photoUrl: data.photoUrl || '',
-        isBlocked: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
     } else {
       await updateDoc(userRef, {
         name: data.name.trim(),
+        ...(data.phone ? { phone: data.phone } : {}),
+        ...(data.email ? { email: data.email } : {}),
         ...(data.photoUrl ? { photoUrl: data.photoUrl } : {}),
         updatedAt: new Date().toISOString(),
       });

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { RefreshCw, AlertCircle } from 'lucide-react-native';
 import { useAppInit } from '../src/hooks/useAppInit';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useTheme } from '../src/theme';
@@ -18,8 +19,8 @@ import { clientConfig } from '../src/config/client.config';
 
 export default function SplashScreen() {
   const router = useRouter();
-  const { colors, typography, shadows, spacing } = useTheme();
-  const { isReady, isMaintenanceMode } = useAppInit();
+  const { colors, typography, shadows, spacing, radius } = useTheme();
+  const { isReady, isMaintenanceMode, configError, isOffline, retry } = useAppInit();
   const { user, profile } = useAuthStore();
   const shouldReduceMotion = useReducedMotion();
 
@@ -46,15 +47,27 @@ export default function SplashScreen() {
       router.replace('/maintenance');
     } else if (!user) {
       router.replace('/(auth)/login');
+    } else if (profile?.isBlocked) {
+      useAuthStore.getState().logout();
+      router.replace('/(auth)/login');
+    } else if (isOffline) {
+      // Offline mode: proceed to home so existing students aren't forced into profile-setup
+      router.replace('/(tabs)');
     } else if (!profile || !profile.name) {
       router.replace('/(auth)/profile-setup');
     } else {
-      router.replace('/(tabs)');
+      const pending = useAuthStore.getState().pendingRedirectRoute;
+      if (pending) {
+        useAuthStore.getState().setPendingRedirectRoute(null);
+        router.replace(pending as any);
+      } else {
+        router.replace('/(tabs)');
+      }
     }
   };
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || configError) return;
 
     const timer = setTimeout(() => {
       containerOpacity.value = withTiming(0, { duration: 250 }, () => {
@@ -63,7 +76,7 @@ export default function SplashScreen() {
     }, 1100);
 
     return () => clearTimeout(timer);
-  }, [isReady, isMaintenanceMode, user, profile]);
+  }, [isReady, configError, isMaintenanceMode, user, profile, isOffline]);
 
   const logoAnimatedStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,
@@ -127,6 +140,32 @@ export default function SplashScreen() {
             Learn from the Best Creators
           </Text>
         </Animated.View>
+
+        {configError && (
+          <View
+            style={[
+              styles.errorCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.error,
+                borderRadius: radius.card,
+              },
+            ]}
+          >
+            <AlertCircle size={20} color={colors.error} />
+            <Text style={[typography.body, { color: colors.text, textAlign: 'center', marginVertical: 8 }]}>
+              {configError}
+            </Text>
+            <TouchableOpacity
+              onPress={retry}
+              activeOpacity={0.8}
+              style={[styles.retryBtn, { backgroundColor: colors.primary, borderRadius: radius.button }]}
+            >
+              <RefreshCw size={16} color={colors.textInverse} style={{ marginRight: 8 }} />
+              <Text style={[typography.body, { color: colors.textInverse, fontWeight: '600' }]}>Retry Connection</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </Animated.View>
   );
@@ -146,6 +185,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+    width: '100%',
   },
   logoWrapper: {
     width: 88,
@@ -163,5 +203,21 @@ const styles = StyleSheet.create({
   textBox: {
     marginTop: 20,
     alignItems: 'center',
+  },
+  errorCard: {
+    marginTop: 28,
+    padding: 16,
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    marginTop: 8,
   },
 });

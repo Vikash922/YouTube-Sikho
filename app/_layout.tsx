@@ -79,6 +79,22 @@ export default function RootLayout() {
     return () => unsubUser();
   }, [user?.uid, logout, router]);
 
+  // 4. Route guard protection for private screens (deep-link preservation)
+  useEffect(() => {
+    if (!pathname || pathname === '/' || pathname === '/index' || pathname === '/maintenance') {
+      return;
+    }
+
+    const isPublic =
+      pathname.startsWith('/(auth)') ||
+      pathname.startsWith('/legal');
+
+    if (!user && !isPublic) {
+      useAuthStore.getState().setPendingRedirectRoute(pathname);
+      router.replace('/(auth)/login');
+    }
+  }, [user, pathname, router]);
+
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,

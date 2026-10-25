@@ -38,6 +38,8 @@ export default function OtpScreen() {
   const [loading, setLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [timer, setTimer] = useState(30);
+  const [resendAttempts, setResendAttempts] = useState(0);
+  const isSubmittingRef = useRef(false);
   const inputRefs = useRef<Array<any>>([]);
 
   const shakeX = useSharedValue(0);
@@ -68,15 +70,16 @@ export default function OtpScreen() {
 
   const handleDigitChange = (text: string, index: number) => {
     if (text.length > 1) {
+      // Paste handler: always populate from box 0 to 5 regardless of which box is focused
       const cleanDigits = text.replace(/\D/g, '').slice(0, 6).split('');
-      const newDigits = [...digits];
+      const newDigits = ['', '', '', '', '', ''];
       cleanDigits.forEach((d, idx) => {
         newDigits[idx] = d;
       });
       setDigits(newDigits);
       const nextFocus = Math.min(cleanDigits.length, 5);
       inputRefs.current[nextFocus]?.focus();
-      if (cleanDigits.length === 6) {
+      if (cleanDigits.length === 6 && !isSubmittingRef.current) {
         autoSubmit(cleanDigits.join(''));
       }
       return;
@@ -94,7 +97,7 @@ export default function OtpScreen() {
     // Auto-submit when all 6 digits entered
     if (val && index === 5) {
       const full = newDigits.join('');
-      if (full.length === 6) {
+      if (full.length === 6 && !isSubmittingRef.current) {
         autoSubmit(full);
       }
     }
@@ -111,6 +114,8 @@ export default function OtpScreen() {
   };
 
   const handleVerifyOTP = async (codeToVerify?: string) => {
+    if (isSubmittingRef.current || loading || isSuccess) return;
+
     const code = codeToVerify || digits.join('');
     if (!confirmation) {
       showToast('Session expired. Please request a new OTP.', 'error');
@@ -122,6 +127,7 @@ export default function OtpScreen() {
       return;
     }
 
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
@@ -139,8 +145,12 @@ export default function OtpScreen() {
       setProfile(profile);
 
       setTimeout(() => {
+        const pending = useAuthStore.getState().pendingRedirectRoute;
         if (!profile || !profile.name) {
           router.replace('/(auth)/profile-setup');
+        } else if (pending) {
+          useAuthStore.getState().setPendingRedirectRoute(null);
+          router.replace(pending as any);
         } else {
           router.replace('/(tabs)');
         }
@@ -148,19 +158,40 @@ export default function OtpScreen() {
     } catch (err: any) {
       console.error('[OtpScreen] Verification error:', err);
       triggerShake();
-      showToast('Invalid OTP. Please check the code and retry.', 'error');
+      const errCode = err?.code || '';
+      let message = 'Invalid OTP. Please check the code and retry.';
+      if (errCode === 'auth/invalid-verification-code') {
+        message = 'Incorrect code. Please double-check and enter the 6-digit code received via SMS.';
+      } else if (errCode === 'auth/code-expired') {
+        message = 'Verification code has expired. Please request a new code.';
+      } else if (errCode === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please wait a few minutes before trying again.';
+      } else if (errCode === 'auth/quota-exceeded') {
+        message = 'SMS quota exceeded. Please contact support or try again later.';
+      } else if (errCode === 'auth/network-request-failed') {
+        message = 'Network connection issue. Please check your internet and try again.';
+      } else if (err?.message) {
+        message = err.message;
+      }
+      showToast(message, 'error');
     } finally {
+      isSubmittingRef.current = false;
       setLoading(false);
     }
   };
 
   const handleResend = () => {
     if (timer > 0) return;
+    if (resendAttempts >= 3) {
+      showToast('Maximum resend attempts reached. Please try again after 15 minutes.', 'error');
+      return;
+    }
+    setResendAttempts((prev) => prev + 1);
     setTimer(30);
     setDigits(['', '', '', '', '', '']);
     inputRefs.current[0]?.focus();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showToast('A new OTP code has been sent to your phone.', 'info');
+    showToast('A new 6-digit code has been sent via SMS.', 'info');
   };
 
   return (

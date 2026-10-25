@@ -7,7 +7,6 @@ import {
   getAuth,
   onAuthStateChanged,
   signOut,
-  signInAnonymously,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
@@ -72,17 +71,9 @@ export const firebaseFirestore = firestoreInstance;
 export const firebaseFunctions = getFunctions(firebaseApp, 'asia-south1');
 export const functions = firebaseFunctions;
 
-// Messaging placeholder for Expo Go
-export const firebaseMessaging = {
-  requestPermission: async () => 1,
-  getToken: async () => 'expo-go-dummy-token',
-  AuthorizationStatus: { AUTHORIZED: 1, PROVISIONAL: 2 },
-};
-
 export {
   onAuthStateChanged,
   signOut,
-  signInAnonymously,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,

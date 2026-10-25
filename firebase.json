@@ -1,8 +1,8 @@
 {
   "auth": {
     "providers": {
+      "phone": true,
       "emailPassword": true,
-      "anonymous": true,
       "googleSignIn": {
         "oAuthBrandDisplayName": "YouTube Sikho Academy",
         "supportEmail": "support@youtubesikho.com",

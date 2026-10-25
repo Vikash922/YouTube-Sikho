@@ -7,7 +7,9 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Phone, Mail, Lock, User as UserIcon, ArrowRight, ChevronDown, ShieldCheck } from 'lucide-react-native';
@@ -130,7 +132,13 @@ export default function LoginScreen() {
       const profile = await getUserProfile(result.uid);
       setProfile(profile);
 
-      router.replace('/(tabs)');
+      const pending = useAuthStore.getState().pendingRedirectRoute;
+      if (pending) {
+        useAuthStore.getState().setPendingRedirectRoute(null);
+        router.replace(pending as any);
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (err: any) {
       console.error('[LoginScreen] Email auth error:', err);
       let msg = err.message || 'Authentication failed';
@@ -182,6 +190,16 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
 
+    if (Constants.appOwnership === 'expo') {
+      Alert.alert(
+        'EAS Development Build Required',
+        'Hardware SMS auto-retrieval and Phone OTP authentication require native Google Play Services, which are only supported in an EAS Development Build.\n\nTo test in Expo Go, please use the Email & Password option above.',
+        [{ text: 'OK', onPress: () => setAuthMethod('email') }]
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       setPhoneNumber(fullPhoneNumber);
       showToast('Enter the 6-digit verification code sent to your phone', 'info');
@@ -200,6 +218,17 @@ export default function LoginScreen() {
    */
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
+
+    if (Constants.appOwnership === 'expo') {
+      Alert.alert(
+        'EAS Development Build Required',
+        'Native Google Sign-In requires an EAS Development Build with SHA-1 fingerprints registered.\n\nTo test in Expo Go, please use the Email & Password option above.',
+        [{ text: 'OK', onPress: () => setAuthMethod('email') }]
+      );
+      setGoogleLoading(false);
+      return;
+    }
+
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       const googleUser = await loginWithGoogle();
@@ -210,10 +239,26 @@ export default function LoginScreen() {
       setProfile(profile);
 
       showToast('Signed in with Google successfully!', 'success');
-      router.replace('/(tabs)');
+      const pending = useAuthStore.getState().pendingRedirectRoute;
+      if (pending) {
+        useAuthStore.getState().setPendingRedirectRoute(null);
+        router.replace(pending as any);
+      } else {
+        const pending = useAuthStore.getState().pendingRedirectRoute;
+      if (pending) {
+        useAuthStore.getState().setPendingRedirectRoute(null);
+        router.replace(pending as any);
+      } else {
+        router.replace('/(tabs)');
+      }
+      }
     } catch (err: any) {
       console.error('[LoginScreen] Google Sign-In error:', err);
-      showToast('Google Sign-In failed. Please retry.', 'error');
+      if (err?.code === 'SIGN_IN_CANCELLED' || err?.message?.includes('cancel')) {
+        showToast('Google sign-in cancelled', 'info');
+      } else {
+        showToast(err.message || 'Google Sign-In failed. Please retry.', 'error');
+      }
     } finally {
       setGoogleLoading(false);
     }

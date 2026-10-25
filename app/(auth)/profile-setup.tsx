@@ -23,7 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useToastStore } from '../../src/store/useToastStore';
 import { saveUserProfile, getUserProfile } from '../../src/services/userService';
-import { firebaseAuth, signInAnonymously } from '../../src/services/firebase';
+import { firebaseAuth } from '../../src/services/firebase';
 import { useTheme } from '../../src/theme';
 import { Button } from '../../src/components/common/Button';
 import { Input } from '../../src/components/common/Input';
@@ -104,16 +104,13 @@ export default function ProfileSetupScreen() {
     setLoading(true);
     setError(null);
 
-    let activeUid = user?.uid || `user_${Date.now()}`;
-    if (firebaseAuth.currentUser) {
-      activeUid = firebaseAuth.currentUser.uid;
-    } else {
-      try {
-        const anonCred = await signInAnonymously(firebaseAuth);
-        activeUid = anonCred.user.uid;
-      } catch (e: any) {
-        console.warn('[ProfileSetupScreen] anonymous auth note:', e?.message);
-      }
+    const currentUser = firebaseAuth.currentUser;
+    const activeUid = currentUser?.uid || user?.uid;
+    if (!activeUid) {
+      setError('You must be signed in to set up your profile.');
+      setLoading(false);
+      router.replace('/(auth)/login');
+      return;
     }
 
     try {
@@ -149,7 +146,13 @@ export default function ProfileSetupScreen() {
     }
 
     showToast('Profile created successfully!', 'success');
-    router.replace('/(tabs)');
+    const pending = useAuthStore.getState().pendingRedirectRoute;
+    if (pending) {
+      useAuthStore.getState().setPendingRedirectRoute(null);
+      router.replace(pending as any);
+    } else {
+      router.replace('/(tabs)');
+    }
     setLoading(false);
   };
 

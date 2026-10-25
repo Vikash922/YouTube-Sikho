@@ -106,12 +106,39 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // 7. USER PROFILE & USER SUBCOLLECTIONS (Strict PII Isolation)
+    // 7. USER PROFILE & USER SUBCOLLECTIONS (Strict PII Isolation & Field Lock)
     // ===============================================================
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create, update: if isOwner(uid) || isAdmin();
-      allow delete: if isAdmin();
+
+      // Owner can create own profile document with strictly allowed non-privilege fields
+      allow create: if (
+        isOwner(uid) &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'name', 'phone', 'email', 'photoUrl', 'language',
+          'notificationPreferences', 'fcmToken', 'fcmTokenUpdatedAt',
+          'createdAt', 'updatedAt'
+        ]) &&
+        request.resource.data.uid == uid &&
+        (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 100)) &&
+        (!('phone' in request.resource.data) || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20)) &&
+        (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 120))
+      ) || isAdmin();
+
+      // Owner can update only profile fields; isBlocked, role, claims & admin flags are NEVER owner-writable
+      allow update: if (
+        isOwner(uid) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'email', 'photoUrl', 'language',
+          'notificationPreferences', 'fcmToken', 'fcmTokenUpdatedAt', 'updatedAt'
+        ]) &&
+        (!('name' in request.resource.data) || (request.resource.data.name is string && request.resource.data.name.size() <= 100)) &&
+        (!('phone' in request.resource.data) || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20)) &&
+        (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 120))
+      ) || isAdmin();
+
+      // Delete permitted exclusively via deleteAccount Cloud Function (Admin SDK)
+      allow delete: if false;
 
       match /{allUserPaths=**} {
         allow read, write: if isOwner(uid) || isAdmin();

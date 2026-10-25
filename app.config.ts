@@ -2,7 +2,11 @@ import { ConfigContext } from 'expo/config';
 
 // Safe loader that works with pure TypeScript client.config.ts without needing a .js duplicate
 // eslint-disable-next-line @typescript-eslint/no-var-requires
+const fs = require('fs');
 const { clientConfig } = require('./scripts/load-client-config');
+
+const clientGoogleServices = `./clients/${clientConfig.slug}/google-services.json`;
+const googleServicesFile = fs.existsSync(clientGoogleServices) ? clientGoogleServices : './google-services.json';
 
 export default ({ config }: ConfigContext): any => ({
   ...config,
@@ -30,7 +34,7 @@ export default ({ config }: ConfigContext): any => ({
   android: {
     package: clientConfig.packageName,
     versionCode: 1,
-    googleServicesFile: './google-services.json',
+    googleServicesFile,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: clientConfig.colors.background,
