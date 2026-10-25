@@ -44,14 +44,16 @@ const getSecretValue = (secretParam: any, envName: string, fallback: string = ''
   return process.env[envName] || fallback;
 };
 
+const isEmulatedOrTest = !process.env.K_SERVICE;
+
 export const getSecrets = (): AppSecrets => {
   return {
-    BUNNY_API_KEY: getSecretValue(bunnyApiKey, 'BUNNY_API_KEY', 'test_bunny_api_key'),
-    BUNNY_TOKEN_AUTH_KEY: getSecretValue(bunnyTokenAuthKey, 'BUNNY_TOKEN_AUTH_KEY', 'test_bunny_token_auth_key'),
-    BUNNY_LIBRARY_ID: getSecretValue(bunnyLibraryId, 'BUNNY_LIBRARY_ID', '123456'),
-    BUNNY_CDN_HOSTNAME: getSecretValue(bunnyCdnHostname, 'BUNNY_CDN_HOSTNAME', 'video.youtubesikho.com'),
-    RAZORPAY_KEY_ID: getSecretValue(razorpayKeyId, 'RAZORPAY_KEY_ID', 'rzp_test_placeholder'),
-    RAZORPAY_KEY_SECRET: getSecretValue(razorpayKeySecret, 'RAZORPAY_KEY_SECRET', 'rzp_test_secret_placeholder'),
-    RAZORPAY_WEBHOOK_SECRET: getSecretValue(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET', 'rzp_webhook_secret_placeholder'),
+    BUNNY_API_KEY: getSecretValue(bunnyApiKey, 'BUNNY_API_KEY', isEmulatedOrTest ? 'test_bunny_api_key' : ''),
+    BUNNY_TOKEN_AUTH_KEY: getSecretValue(bunnyTokenAuthKey, 'BUNNY_TOKEN_AUTH_KEY', isEmulatedOrTest ? 'test_bunny_token_auth_key' : ''),
+    BUNNY_LIBRARY_ID: getSecretValue(bunnyLibraryId, 'BUNNY_LIBRARY_ID', isEmulatedOrTest ? '123456' : ''),
+    BUNNY_CDN_HOSTNAME: getSecretValue(bunnyCdnHostname, 'BUNNY_CDN_HOSTNAME', isEmulatedOrTest ? 'video.youtubesikho.com' : ''),
+    RAZORPAY_KEY_ID: getSecretValue(razorpayKeyId, 'RAZORPAY_KEY_ID', isEmulatedOrTest ? 'rzp_test_placeholder' : ''),
+    RAZORPAY_KEY_SECRET: getSecretValue(razorpayKeySecret, 'RAZORPAY_KEY_SECRET', isEmulatedOrTest ? 'rzp_test_secret_placeholder' : ''),
+    RAZORPAY_WEBHOOK_SECRET: getSecretValue(razorpayWebhookSecret, 'RAZORPAY_WEBHOOK_SECRET', isEmulatedOrTest ? 'rzp_webhook_secret_placeholder' : ''),
   };
 };

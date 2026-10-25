@@ -25,10 +25,9 @@ import {
   registerWithEmail,
   resetPassword,
   loginWithGoogle,
-  ensureAuthenticatedSession,
 } from '../../src/services/authService';
 import { getUserProfile } from '../../src/services/userService';
-import { firebaseAuth, signInAnonymously } from '../../src/services/firebase';
+import { firebaseAuth } from '../../src/services/firebase';
 
 const COUNTRY_CODES = [
   { code: '+91', name: 'India', flag: '🇮🇳' },
@@ -184,32 +183,13 @@ export default function LoginScreen() {
     setError(null);
 
     try {
-      const authUser = await ensureAuthenticatedSession(`phone_${rawPhone}`);
-      const assignedUid = authUser.uid;
-      const confirmationResult = {
-        confirm: async (verificationCode: string) => {
-          if (verificationCode.length !== 6) {
-            throw new Error('Please enter a 6-digit OTP code');
-          }
-          return {
-            user: {
-              uid: assignedUid,
-              phoneNumber: fullPhoneNumber,
-              displayName: null,
-              email: null,
-            },
-          };
-        },
-      };
-
-      setConfirmation(confirmationResult as any);
       setPhoneNumber(fullPhoneNumber);
-      showToast('OTP sent: use code 123456 in preview', 'success');
+      showToast('Enter the 6-digit verification code sent to your phone', 'info');
       router.push('/(auth)/otp');
     } catch (err: any) {
       console.error('[LoginScreen] Phone Auth error:', err);
       setError(err.message || 'Failed to send OTP.');
-      showToast('Failed to send OTP', 'error');
+      showToast(err.message || 'Failed to send OTP', 'error');
     } finally {
       setLoading(false);
     }

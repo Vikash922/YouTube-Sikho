@@ -23,8 +23,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useToastStore } from '../../src/store/useToastStore';
 import { getUserProfile } from '../../src/services/userService';
-import { ensureAuthenticatedSession } from '../../src/services/authService';
-import { firebaseAuth, signInAnonymously } from '../../src/services/firebase';
+import { firebaseAuth } from '../../src/services/firebase';
 import { useTheme } from '../../src/theme';
 import { Button } from '../../src/components/common/Button';
 
@@ -127,23 +126,9 @@ export default function OtpScreen() {
 
     try {
       const userCredential = await confirmation.confirm(code);
-      let authenticatedUser = userCredential.user;
-
-      if (!firebaseAuth.currentUser) {
-        try {
-          const sessionUser = await ensureAuthenticatedSession(`phone_${phoneNumber}`);
-          authenticatedUser = {
-            ...authenticatedUser,
-            uid: sessionUser.uid,
-          };
-        } catch (authErr) {
-          console.warn('[OtpScreen] Auth session note:', authErr);
-        }
-      } else {
-        authenticatedUser = {
-          ...authenticatedUser,
-          uid: firebaseAuth.currentUser.uid,
-        };
+      const authenticatedUser = userCredential.user || firebaseAuth.currentUser;
+      if (!authenticatedUser) {
+        throw new Error('Authentication failed. Please verify your OTP code and try again.');
       }
 
       setUser(authenticatedUser);
@@ -175,7 +160,7 @@ export default function OtpScreen() {
     setDigits(['', '', '', '', '', '']);
     inputRefs.current[0]?.focus();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showToast('A new OTP has been sent (demo: 123456)', 'info');
+    showToast('A new OTP code has been sent to your phone.', 'info');
   };
 
   return (
