@@ -3,11 +3,13 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Add CJS support and disable unstable_enablePackageExports for Firebase modular SDK compatibility
+// Add CJS support
 if (!config.resolver.sourceExts.includes('cjs')) {
   config.resolver.sourceExts.push('cjs');
 }
-config.resolver.unstable_enablePackageExports = false;
+
+// Enable package exports (required for Expo SDK 58 and React Native 0.88 subpath exports)
+config.resolver.unstable_enablePackageExports = true;
 
 // Strictly block non-app subdirectories from Metro watcher to prevent ENOSPC watcher exhaustion
 config.resolver.blockList = [
