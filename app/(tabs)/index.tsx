@@ -102,7 +102,13 @@ export default function HomeScreen() {
 
   const currentHour = new Date().getHours();
   const timeOfDayGreeting =
-    currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
+    currentHour >= 5 && currentHour < 12
+      ? 'Good morning'
+      : currentHour >= 12 && currentHour < 17
+      ? 'Good afternoon'
+      : currentHour >= 17 && currentHour < 22
+      ? 'Good evening'
+      : 'Good night';
 
   const isLiveSectionVisible =
     homeSections.find((s) => s.type === 'live_stream')?.isVisible !== false;
