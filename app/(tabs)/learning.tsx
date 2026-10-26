@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,6 @@ import {
   collection,
   query,
   where,
-  getDocs,
   onSnapshot,
 } from 'firebase/firestore';
 import { firebaseFirestore } from '../../src/services/firebase';
@@ -43,8 +42,9 @@ import {
   getCourseById,
   subscribeToUserEnrollments,
   Course,
+  Enrollment,
 } from '../../src/services/courseService';
-import { getCourseProgress, CourseProgressData } from '../../src/services/videoService';
+import { CourseProgressData } from '../../src/services/videoService';
 
 interface EnrolledCourseItem {
   course: Course;
@@ -60,68 +60,149 @@ export default function MyLearningScreen() {
   const user = useAuthStore((state) => state.user);
   const t = useLanguageStore((state) => state.t);
 
-  const [enrolledList, setEnrolledList] = useState<EnrolledCourseItem[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [coursesMap, setCoursesMap] = useState<Record<string, Course>>({});
+  const [progressMap, setProgressMap] = useState<Record<string, CourseProgressData>>({});
   const [loading, setLoading] = useState(true);
 
-  // Real-time listener for enrolled courses
+  // 1. Single Listener: User Enrollments
   useEffect(() => {
     if (!user?.uid) {
-      setEnrolledList([]);
+      setEnrollments([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const unsub = subscribeToUserEnrollments(user.uid, async (enrollments) => {
-      if (enrollments.length === 0) {
-        setEnrolledList([]);
-        setLoading(false);
-        return;
-      }
-
-      const items: EnrolledCourseItem[] = [];
-      for (const enr of enrollments) {
-        const course = await getCourseById(enr.courseId);
-        if (course) {
-          const progress = await getCourseProgress(user.uid, course.id);
-          const totalLessons =
-            course.totalLessons ||
-            course.lessonsCount ||
-            course.sections?.reduce((acc, s) => acc + s.lessons.length, 0) ||
-            1;
-          const completedCount = progress?.completedLessons?.length || 0;
-          const percent = Math.min(100, Math.round((completedCount / totalLessons) * 100));
-
-          let lastLessonTitle = course.sections?.[0]?.lessons?.[0]?.title;
-          let lastLessonId = course.sections?.[0]?.lessons?.[0]?.id;
-
-          if (progress?.lastLessonId) {
-            for (const sec of course.sections || []) {
-              const found = sec.lessons.find((l) => l.id === progress.lastLessonId);
-              if (found) {
-                lastLessonTitle = found.title;
-                lastLessonId = found.id;
-                break;
-              }
-            }
-          }
-
-          items.push({
-            course,
-            progress,
-            percentComplete: percent,
-            lastLessonTitle,
-            lastLessonId,
-          });
-        }
-      }
-
-      setEnrolledList(items);
-      setLoading(false);
+    const unsub = subscribeToUserEnrollments(user.uid, (enrs) => {
+      setEnrollments(enrs);
+      if (enrs.length === 0) setLoading(false);
     });
 
     return () => unsub();
   }, [user?.uid]);
+
+  // 2. Single Listener: User Course Progress documents (Zero N+1!)
+  useEffect(() => {
+    if (!user?.uid) {
+      setProgressMap({});
+      return;
+    }
+
+    const progressQuery = query(
+      collection(firebaseFirestore, 'progress'),
+      where('uid', '==', user.uid)
+    );
+
+    const unsub = onSnapshot(
+      progressQuery,
+      (snap) => {
+        const pMap: Record<string, CourseProgressData> = {};
+        snap.docs.forEach((doc) => {
+          const d = doc.data();
+          pMap[d.courseId] = {
+            uid: d.uid,
+            courseId: d.courseId,
+            lastLessonId: d.lastLessonId || '',
+            lastPosition: d.lastPosition || 0,
+            completedLessons: d.completedLessons || [],
+            lessons: d.lessons || {},
+            percentComplete: d.percentComplete ?? d.percentage ?? 0,
+            updatedAt: d.updatedAt,
+          };
+        });
+        setProgressMap(pMap);
+      },
+      (err) => {
+        console.warn('[learning] Progress listener error:', err.message);
+      }
+    );
+
+    return () => unsub();
+  }, [user?.uid]);
+
+  // 3. Batch Fetch Course details in parallel for new enrolled courses
+  useEffect(() => {
+    if (enrollments.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchMissingCourses = async () => {
+      const missingCourseIds = enrollments
+        .map((e) => e.courseId)
+        .filter((cid) => !coursesMap[cid]);
+
+      if (missingCourseIds.length > 0) {
+        const fetchedCourses = await Promise.all(
+          missingCourseIds.map((cid) => getCourseById(cid))
+        );
+
+        if (isMounted) {
+          setCoursesMap((prev) => {
+            const next = { ...prev };
+            fetchedCourses.forEach((c) => {
+              if (c) next[c.id] = c;
+            });
+            return next;
+          });
+        }
+      }
+
+      if (isMounted) setLoading(false);
+    };
+
+    fetchMissingCourses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [enrollments]);
+
+  // 4. Memoized Enrolled Course Items
+  const enrolledList: EnrolledCourseItem[] = useMemo(() => {
+    return enrollments
+      .map((enr) => {
+        const course = coursesMap[enr.courseId];
+        if (!course) return null;
+
+        const progress = progressMap[enr.courseId] || null;
+        const totalLessons =
+          course.totalLessons ||
+          course.lessonsCount ||
+          course.sections?.reduce((acc, s) => acc + (s.lessons?.length || 0), 0) ||
+          1;
+
+        const completedCount = progress?.completedLessons?.length || 0;
+        const percent = progress?.percentComplete !== undefined
+          ? progress.percentComplete
+          : Math.min(100, Math.round((completedCount / totalLessons) * 100));
+
+        let lastLessonTitle = course.sections?.[0]?.lessons?.[0]?.title;
+        let lastLessonId = course.sections?.[0]?.lessons?.[0]?.id;
+
+        if (progress?.lastLessonId && course.sections) {
+          for (const sec of course.sections) {
+            const found = (sec.lessons || []).find((l) => l.id === progress.lastLessonId);
+            if (found) {
+              lastLessonTitle = found.title;
+              lastLessonId = found.id;
+              break;
+            }
+          }
+        }
+
+        return {
+          course,
+          progress,
+          percentComplete: percent,
+          lastLessonTitle,
+          lastLessonId,
+        };
+      })
+      .filter(Boolean) as EnrolledCourseItem[];
+  }, [enrollments, coursesMap, progressMap]);
 
   const handleResume = (item: EnrolledCourseItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

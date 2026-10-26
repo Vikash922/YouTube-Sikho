@@ -20,6 +20,8 @@ import {
   deleteLiveClassHandler,
 } from './admin/cascadeDeletes';
 import { getLiveStreamHandler } from './live/getLiveStream';
+import { markLessonCompleteHandler } from './progress/markLessonComplete';
+import { issueCertificateHandler } from './certificates/issueCertificate';
 
 // Initialize Firebase Admin App
 if (admin.apps.length === 0) {
@@ -296,6 +298,38 @@ export const deleteLiveClass = onCall(
     } catch (err: any) {
       if (err instanceof HttpsError) throw err;
       throw new HttpsError('internal', err.message || 'Failed to delete live class.');
+    }
+  }
+);
+
+/**
+ * 16. markLessonComplete: Authoritative Progress Evaluation & Completion Check
+ */
+export const markLessonComplete = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const uid = request.auth?.uid || null;
+    try {
+      return await markLessonCompleteHandler(request.data, uid);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('internal', err.message || 'Failed to update lesson completion.');
+    }
+  }
+);
+
+/**
+ * 17. issueCertificate: Authoritative 100% Progress Verification & Certificate Issuance
+ */
+export const issueCertificate = onCall(
+  { region: REGION, cors: true },
+  async (request) => {
+    const uid = request.auth?.uid || null;
+    try {
+      return await issueCertificateHandler(request.data, uid);
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      throw new HttpsError('internal', err.message || 'Failed to issue course certificate.');
     }
   }
 );

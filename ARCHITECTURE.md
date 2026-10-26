@@ -90,10 +90,14 @@ flowchart TD
 | `/coupons` | `{code}` | `code` (string), `discountType` (percentage/fixed), `value` (number), `isActive` (boolean), `maxUses` (number) | Checkout discount validation | Authenticated Read, Admin Write |
 | `/liveClasses` | `class_{id}` | `title` (string), `courseId` (string), `scheduledAt` (string), `streamUrl` (string), `status` (scheduled/live/ended), `chatEnabled` (boolean) | Live broadcast schedules and status tracking | Authenticated Read, Admin Write |
 | `/liveClasses/{id}/messages` | `msg_{id}` | `senderId` (string), `senderName` (string), `message` (string), `createdAt` (timestamp) | Real-time live room student chat stream | Enrolled Read/Write, Admin Moderate |
-| `/quizzes` | `quiz_{id}` | `title` (string), `courseId` (string), `passingPercentage` (number), `timeLimitMinutes` (number), `questionCount` (number) | Quiz metadata for students | Authenticated Read, Admin Write |
-| `/quizzes/{id}/questions` | `q_{id}` | `question` (string), `options` (array), `correctAnswerIndex` (number), `explanation` (string) | True answers and scoring key | Cloud Functions & Admin ONLY (Student Read DENIED) |
-| `/quizResults` | `res_{id}` | `uid` (string), `quizId` (string), `score` (number), `percentage` (number), `passed` (boolean), `submittedAt` (timestamp) | Verified test evaluation results | Owner Read, Cloud Functions Write |
-| `/certificates` | `cert_{id}` | `uid` (string), `studentName` (string), `courseId` (string), `courseTitle` (string), `issueDate` (string), `verificationHash` (string) | Course completion certificates with QR code verification | Public Read, Cloud Functions Write |
+| `/materials` | `mat_{id}` | `courseId` (string), `title` (string), `type` (pdf/zip/link), `storagePath` (string), `sizeBytes` (number), `order` (number), `isPublished` (boolean) | Course study resources and notes | Enrolled Read (Signed URLs), Admin Write |
+| `/quizzes` | `quiz_{id}` | `title` (string), `courseId` (string), `passingPercentage` (number), `timeLimitMinutes` (number), `questionCount` (number), `allowRetries` (boolean), `maxAttempts` (number), `negativeMarkingEnabled` (boolean), `showAnswersAfterSubmit` (boolean) | Quiz metadata for students | Authenticated Read, Admin Write |
+| `/quizzes/{id}/questions` | `q_{id}` | `question` (string), `options` (array), `correctAnswerIndex` (number), `explanation` (string), `marks` (number), `order` (number) | True answers and scoring key | Cloud Functions & Admin ONLY (Student Read DENIED) |
+| `/quizAttempts` | `{uid}_{quizId}` | `attemptId` (string), `uid` (string), `startedAt` (timestamp), `expiresAtMs` (number), `status` (in_progress/completed) | Server-authoritative timer and attempt tracking | Owner Read, Cloud Functions Write |
+| `/quizResults` | `{uid}_{quizId}_{attempt}` | `uid` (string), `quizId` (string), `score` (number), `percentage` (number), `passed` (boolean), `isLate` (boolean), `breakdown` (array) | Verified test evaluation results | Owner Read, Cloud Functions Write |
+| `/quizBest` | `{uid}_{quizId}` | `uid` (string), `quizId` (string), `score` (number), `bestResultId` (string) | Student high-score pointer | Owner Read, Cloud Functions Write |
+| `/progress` | `{uid}_{courseId}` | `uid` (string), `courseId` (string), `lastLessonId` (string), `lastPosition` (number), `completedLessons` (array), `percentComplete` (number), `isCompleted` (boolean) | Real-time course syllabus tracking | Owner Read, Position Client Write, Completion Functions Write |
+| `/certificates` | `{certId}` | `id` (string), `uid` (string), `studentName` (string), `courseId` (string), `courseTitle` (string), `issuedAt` (string), `clientName` (string), `verifyUrl` (string) | Course completion certificates with online verification | Public Read, Cloud Functions Write |
 | `/tickets` | `ticket_{id}` | `uid` (string), `studentName` (string), `subject` (string), `status` (open/in_progress/resolved), `messages` (array) | In-app customer support desk | Owner Read/Write, Admin Read/Write |
 
 ---
@@ -109,7 +113,14 @@ flowchart TD
 | `validateYoutubeVideo` | `onCall` (HTTPS) | `{ url }` | `{ videoId, title, durationSeconds, privacyStatus, embeddable }` | Admin Role Required |
 | `getLessonPlayback` | `onCall` (HTTPS) | `{ courseId, sectionId, lessonId }` | `{ provider: "youtube", videoId, startSeconds, sessionId, expiresAt }` | Enrolled Student or Free Preview |
 | `playbackHeartbeat` | `onCall` (HTTPS) | `{ sessionId }` | `{ status: "ok", active: boolean }` | Authenticated Active Student |
-| `submitQuiz` | `onCall` (HTTPS) | `{ quizId, answers, timeTakenSeconds }` | `{ resultId, score, percentage, passed }` | Authenticated Student |
+| `getQuizQuestions` | `onCall` (HTTPS) | `{ quizId }` | `{ attemptId, startedAt, expiresAt, serverNow, questions: [...] }` | Enrolled Student or Free Quiz |
+| `submitQuiz` | `onCall` (HTTPS) | `{ attemptId, quizId, answers, timeTakenSeconds }` | `{ resultId, score, maxScore, percentage, passed, breakdown }` | Authenticated Student Owner |
+| `markLessonComplete` | `onCall` (HTTPS) | `{ courseId, lessonId, watchedSeconds? }` | `{ success: true, completedLessons, percentage, isFullyCompleted }` | Enrolled Student |
+| `issueCertificate` | `onCall` (HTTPS) | `{ courseId }` | `{ success: true, certificateId, certificate: {...} }` | Enrolled Student (100% Progress Required) |
+| `getMaterialUrl` | `onCall` (HTTPS) | `{ courseId, materialId }` | `{ downloadUrl, expiresAt, title, fileName }` | Enrolled Student |
 | `sendNotification` | `onCall` (HTTPS) | `{ title, body, target, targetCourseId? }` | `{ success: true, count }` | Admin Role Required |
 | `manageEnrollment` | `onCall` (HTTPS) | `{ uid, courseId, action: "grant" \| "revoke" }` | `{ success: true }` | Admin Role Required |
 | `deleteAccount` | `onCall` (HTTPS) | `{}` | `{ success: true }` | Authenticated User |
+| `deleteCourse` | `onCall` (HTTPS) | `{ courseId }` | `{ success: true }` | Admin Role Required |
+| `deleteQuiz` | `onCall` (HTTPS) | `{ quizId }` | `{ success: true }` | Admin Role Required |
+| `deleteLiveClass` | `onCall` (HTTPS) | `{ classId }` | `{ success: true }` | Admin Role Required |

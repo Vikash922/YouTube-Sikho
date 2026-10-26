@@ -210,3 +210,47 @@ flowchart TD
    - Non-enrolled user (cannot access private stream, private media, or paid materials).
    - Enrolled user (can access tokenized video, study materials, and submit reviews).
    - Admin user (can manage content, issue refunds, view audit logs).
+
+---
+
+## 5. Part 6: Quizzes, Authoritative Progress, Real Certificates & Study Materials
+
+### A. Quizzes & Anti-Cheat Engine (Steps 6.1 - 6.3)
+1. **Schema Alignment**:
+   - Quizzes canonical schema: `title`, `courseId`, `lessonId`, `timeLimitMinutes`, `passingPercentage`, `questionCount`, `allowRetries`, `maxAttempts`, `negativeMarkingEnabled`, `negativeMarkingRate`, `showAnswersAfterSubmit`, `isPublished`.
+   - Questions subcollection: `question`, `options` (2-6), `correctAnswerIndex`, `marks`, `explanation`, `order`.
+   - **Zero Student Read Access**: Students are forbidden from querying `/quizzes/{id}/questions` directly in `firestore.rules`.
+2. **Server-Authoritative Evaluation**:
+   - `getQuizQuestions`: Sanitizes question bank (omitting answers/explanations), initializes server attempt with `expiresAt`.
+   - `submitQuiz`: Enforces server deadline (+15s latency grace), validates answers, computes score with negative marking, updates `quizResults` and high-score pointer `quizBest`.
+   - **Answer Key Concealment**: Answer keys and explanations are omitted unless `showAnswersAfterSubmit` is true AND no further retakes remain.
+3. **Mobile Screen Hardening**:
+   - Local autosave in `AsyncStorage` scoped per `uid + quizId`.
+   - Timer computed from server `expiresAt` with `AppState` foreground sync.
+   - Exit protection alert on back navigation.
+
+### B. Authoritative Lesson Progress (Step 6.4)
+1. **Client Restriction**:
+   - Direct client writes of `completedLessons` are denied in `firestore.rules`.
+   - Client writes only `{ lastLessonId, lastPosition, updatedAt }`.
+2. **Server Callable**:
+   - `markLessonComplete({ courseId, lessonId, watchedSeconds })` verifies active enrollment, verifies 90% watched for videos or opened for PDFs or passing score for quizzes, and atomically writes `completedLessons` and completion percentage using the Admin SDK.
+3. **N+1 Optimization**:
+   - `learning.tsx` subscribes to user progress via a single query (`where('uid', '==', user.uid)`), eliminating sequential per-course roundtrips.
+
+### C. Real Verifiable Certificates (Step 6.5)
+1. **Server Issuance**:
+   - `issueCertificate({ courseId })` validates that user progress is 100% complete and creates a stable unique `certificates/{certId}` record with `verifyUrl`.
+2. **Public Verification Page**:
+   - Hosted at `/verify?id={certId}`, allowing employers or students to publicly verify credential authenticity.
+3. **Real PDF Generation & Sharing**:
+   - App renders certificate HTML via `expo-print` into a high-res PDF and shares it using `expo-sharing`.
+   - Uses dynamic branding from `appConfig/main`.
+
+### D. End-to-End Study Materials (Step 6.6)
+1. **Admin Management**:
+   - Dedicated Materials page in Admin Panel (`/materials`) with drag & drop Storage upload (PDF/ZIP max 50MB, content-type verification, filename sanitization), progress bar, reorder controls, and publish toggles.
+2. **Secure Access**:
+   - No permanent download URLs stored in database.
+   - Mobile app verifies active enrollment and requests short-lived signed URLs via `getMaterialUrl`.
+   - Screen capture protection (`FLAG_SECURE`) applied to materials viewer.

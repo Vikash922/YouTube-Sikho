@@ -654,7 +654,7 @@
   dependencies:
     node-forge "^1.4.0"
 
-"@expo/config-plugins@~58.0.10":
+"@expo/config-plugins@^58.0.10", "@expo/config-plugins@~58.0.10":
   version "58.0.10"
   resolved "https://registry.npmjs.org/@expo/config-plugins/-/config-plugins-58.0.10.tgz"
   integrity sha512-oW0geRREubSsqV2d0EwkK0rRcAoB7a68CnJx7s8Al33HoTtEg7KLTQNcKlSTmmwoUESQQvAmzNqAZy4ajuCBKA==
@@ -1463,6 +1463,11 @@
   version "0.1.9"
   resolved "https://registry.npmjs.org/@noxcturnal/noxcturnal-linux-arm64-gnu/-/noxcturnal-linux-arm64-gnu-0.1.9.tgz"
   integrity sha512-ingSEdcjdZBiGfjpnTNSlEE6db247fUsdRF3NJI/0anYuJa4WlNnm+z8as2m9dFATr+qmZLjBXgUFfnc6ZRQAg==
+
+"@noxcturnal/noxcturnal-linux-arm64-musl@0.1.9":
+  version "0.1.9"
+  resolved "https://registry.npmjs.org/@noxcturnal/noxcturnal-linux-arm64-musl/-/noxcturnal-linux-arm64-musl-0.1.9.tgz"
+  integrity sha512-i45wjmtleHdQYCshqCiAIxdD57gaApdUTgu5M99FBsddpYHXIEHvdwA78aZiqMwjLNz723tFdGB52DwbhzgzEA==
 
 "@oxc-project/types@0.154.0":
   version "0.154.0"
@@ -2599,6 +2604,11 @@ expo-modules-macros@0.22.0:
     "@expo/modules-macros-win32-arm64" "0.22.0"
     "@expo/modules-macros-win32-x64" "0.22.0"
 
+expo-print@~58.0.7:
+  version "58.0.7"
+  resolved "https://registry.npmjs.org/expo-print/-/expo-print-58.0.7.tgz"
+  integrity sha512-9T4RpQmTXOHzVsBq3l72o4vnOv+lXnRmrX1L9o7z/qJdQmii5/iuuerBQiYAN/OsJ2NQe1/FUGvA/t8vSMpmLg==
+
 expo-router@~58.0.26:
   version "58.0.26"
   resolved "https://registry.npmjs.org/expo-router/-/expo-router-58.0.26.tgz"
@@ -2631,6 +2641,15 @@ expo-server@^58.0.6:
   version "58.0.6"
   resolved "https://registry.npmjs.org/expo-server/-/expo-server-58.0.6.tgz"
   integrity sha512-6DBlSZwxk3J0y1j2s4XebAWNiwGaMp32NcWX7b2kJC2+EFf1g+pCcVmx8ylawt2tyLmbDHswm4MHOfrd4bqfvA==
+
+expo-sharing@~58.0.20:
+  version "58.0.20"
+  resolved "https://registry.npmjs.org/expo-sharing/-/expo-sharing-58.0.20.tgz"
+  integrity sha512-FxfBGaiWYNmV12bDbT81TAi08MGN1OdQtz9WLscN3He0We3w9RfIQNAhCSOJLKpcFvbNAXZ4nkOjpO8q3I8LRw==
+  dependencies:
+    "@expo/config-plugins" "^58.0.10"
+    "@expo/config-types" "^58.0.3"
+    "@expo/plist" "^0.10.1"
 
 expo-status-bar@^58.0.4, expo-status-bar@~58.0.4:
   version "58.0.4"

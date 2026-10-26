@@ -20,106 +20,216 @@ import {
   ExternalLink,
   BookOpen,
   CheckCircle2,
-  Search,
+  Lock,
+  FileArchive,
+  Link as LinkIcon,
   ShieldAlert,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
+import { httpsCallable } from 'firebase/functions';
+import {
+  firebaseFirestore,
+  functions,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from '../../src/services/firebase';
 import { useTheme } from '../../src/theme';
+import { useAuthStore } from '../../src/store/useAuthStore';
 import { useScreenProtection } from '../../src/hooks/useScreenProtection';
+import { checkCourseEnrollment, getCourseById, Course } from '../../src/services/courseService';
 import { Card } from '../../src/components/common/Card';
 import { Badge } from '../../src/components/common/Badge';
+import { Button } from '../../src/components/common/Button';
 import { Screen } from '../../src/components/common/Screen';
-import { firebaseFirestore, collection, query, where, getDocs } from '../../src/services/firebase';
 
-export interface StudyMaterial {
+export interface StudyMaterialItem {
   id: string;
   courseId: string;
+  courseTitle?: string;
   title: string;
   description?: string;
-  fileUrl: string;
-  fileType: 'pdf' | 'notes' | 'cheatsheet' | 'zip';
-  fileSize?: string;
-  downloadCount?: number;
+  type: 'pdf' | 'zip' | 'link';
+  storagePath?: string;
+  externalUrl?: string;
+  sizeBytes?: number;
+  order: number;
+  isPublished?: boolean;
 }
 
 export default function CourseMaterialsScreen() {
   const { courseId } = useLocalSearchParams<{ courseId: string }>();
   const router = useRouter();
   const { colors, typography, radius, spacing } = useTheme();
+  const user = useAuthStore((state) => state.user);
   const { isScreenCaptured } = useScreenProtection(`materials_${courseId}`);
 
+  const [course, setCourse] = useState<Course | null>(null);
+  const [isEnrolled, setIsEnrolled] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
-  const [materials, setMaterials] = useState<StudyMaterial[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'pdf' | 'notes' | 'cheatsheet'>('all');
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [materials, setMaterials] = useState<StudyMaterialItem[]>([]);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
+  // 1. Check Course Details & Enrollment Status
   useEffect(() => {
-    fetchMaterials();
-  }, [courseId]);
+    if (!courseId) return;
 
-  const fetchMaterials = async () => {
-    setLoading(true);
-    try {
-      if (!courseId) {
-        setMaterials([]);
-        return;
+    let isMounted = true;
+    const checkAccess = async () => {
+      try {
+        const [cData, enrolled] = await Promise.all([
+          getCourseById(courseId),
+          user?.uid ? checkCourseEnrollment(courseId, user.uid) : Promise.resolve(false),
+        ]);
+
+        if (isMounted) {
+          setCourse(cData);
+          setIsEnrolled(enrolled || cData?.price === 0);
+        }
+      } catch (err: any) {
+        console.warn('[Materials] Access check error:', err.message);
+      } finally {
+        if (isMounted) setLoading(false);
       }
+    };
 
-      const q = query(
-        collection(firebaseFirestore, 'materials'),
-        where('courseId', '==', courseId)
-      );
-      const snap = await getDocs(q);
-      const list: StudyMaterial[] = [];
-      snap.forEach((doc) => {
-        list.push({ id: doc.id, ...(doc.data() as any) });
+    checkAccess();
+    return () => {
+      isMounted = false;
+    };
+  }, [courseId, user?.uid]);
+
+  // 2. Real-time Listener for Published Course Study Materials
+  useEffect(() => {
+    if (!courseId || !isEnrolled) return;
+
+    const q = query(
+      collection(firebaseFirestore, 'materials'),
+      where('courseId', '==', courseId)
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        const list: StudyMaterialItem[] = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((m) => m.isPublished !== false)
+          .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        setMaterials(list);
+      },
+      (err) => {
+        console.warn('[Materials] Listener error:', err.message);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [courseId, isEnrolled]);
+
+  // 3. Obtain Signed Short-Lived URL & Open Material
+  const handleOpenMaterial = async (item: StudyMaterialItem) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    if (item.type === 'link') {
+      if (item.externalUrl) {
+        Linking.openURL(item.externalUrl);
+      }
+      return;
+    }
+
+    setOpeningId(item.id);
+    try {
+      const getMaterialUrlCallable = httpsCallable<
+        { courseId: string; materialId: string },
+        { downloadUrl: string; expiresAt: number; title: string; fileName?: string }
+      >(functions, 'getMaterialUrl');
+
+      const res = await getMaterialUrlCallable({
+        courseId: courseId!,
+        materialId: item.id,
       });
 
-      setMaterials(list);
-    } catch (err: any) {
-      console.warn('[Materials] Fetch error:', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const { downloadUrl } = res.data;
 
-  const handleOpenMaterial = async (item: StudyMaterial) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setDownloadingId(item.id);
-    try {
-      const canOpen = await Linking.canOpenURL(item.fileUrl);
+      // Open signed URL directly or via browser/system viewer
+      const canOpen = await Linking.canOpenURL(downloadUrl);
       if (canOpen) {
-        await Linking.openURL(item.fileUrl);
+        await Linking.openURL(downloadUrl);
       } else {
-        Alert.alert('Unable to open', 'Please install a PDF or document reader application.');
+        Alert.alert('Download Ready', 'Document link is generated. Tap below to view.', [
+          { text: 'Open in Browser', onPress: () => Linking.openURL(downloadUrl) },
+          { text: 'Cancel', style: 'cancel' },
+        ]);
       }
     } catch (err: any) {
-      Alert.alert('Error', 'Could not open material: ' + err.message);
+      Alert.alert('Access Denied', err.message || 'Could not retrieve authorized download URL.');
     } finally {
-      setDownloadingId(null);
+      setOpeningId(null);
     }
   };
 
-  const handleShare = async (item: StudyMaterial) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await Share.share({
-        title: item.title,
-        message: `Download study material: "${item.title}" - ${item.fileUrl}`,
-      });
-    } catch (err) {
-      // Ignored
-    }
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes || bytes === 0) return '';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
 
-  const filteredMaterials = materials.filter((m) => {
-    if (selectedFilter === 'all') return true;
-    return m.fileType === selectedFilter;
-  });
+  if (loading) {
+    return (
+      <Screen withTopInset>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 12 }]}>
+            Verifying course enrollment...
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
+
+  // Locked State for Non-Enrolled Users
+  if (!isEnrolled) {
+    return (
+      <Screen withTopInset>
+        <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={20} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[typography.title, { color: colors.text, marginLeft: 12 }]}>
+            Study Materials
+          </Text>
+        </View>
+
+        <View style={styles.centerContainer}>
+          <View style={[styles.lockIconCircle, { backgroundColor: colors.surfaceHover }]}>
+            <Lock size={36} color={colors.textMuted} />
+          </View>
+          <Text style={[typography.headline, { color: colors.text, marginTop: 16 }]}>
+            Enrolled Students Only
+          </Text>
+          <Text style={[typography.body, { color: colors.textMuted, textAlign: 'center', marginTop: 8, marginHorizontal: 24, lineHeight: 20 }]}>
+            Course notes, cheat-sheets, and resource archives are reserved exclusively for students enrolled in "{course?.title || 'this course'}".
+          </Text>
+
+          <Button
+            title="Enroll in Course"
+            variant="primary"
+            onPress={() => router.push(`/course/${courseId}` as any)}
+            icon={<BookOpen size={16} color={colors.surface} />}
+            style={{ marginTop: 24 }}
+          />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen withTopInset>
-      {/* Top Header */}
+      {/* Header */}
       <View
         style={[
           styles.headerRow,
@@ -135,284 +245,137 @@ export default function CourseMaterialsScreen() {
           onPress={() => router.back()}
           style={[styles.backButton, { backgroundColor: colors.surface }]}
           accessibilityLabel="Go back"
-          accessibilityRole="button"
-          activeOpacity={0.7}
         >
           <ArrowLeft size={20} color={colors.text} strokeWidth={2} />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
           <Text style={[typography.title, { color: colors.text }]}>Study Materials</Text>
           <Text style={[typography.caption, { color: colors.textMuted }]}>
-            PDF Notes, Formula Sheets & Resources
+            {course?.title || 'Course Resources'}
           </Text>
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={[styles.filtersRow, { paddingHorizontal: spacing.screen }]}>
-        {[
-          { key: 'all', label: 'All Files' },
-          { key: 'pdf', label: 'PDFs' },
-          { key: 'cheatsheet', label: 'Cheatsheets' },
-          { key: 'notes', label: 'Notes' },
-        ].map((tab) => {
-          const isSelected = selectedFilter === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setSelectedFilter(tab.key as any);
-              }}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: isSelected ? colors.primary : colors.surface,
-                  borderColor: isSelected ? colors.primary : colors.border,
-                  borderRadius: radius.button,
-                },
-              ]}
-              activeOpacity={0.8}
-            >
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: isSelected ? '#FFFFFF' : colors.textMuted,
-                    fontWeight: isSelected ? '600' : '500',
-                  },
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Main Content */}
-      {loading ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[typography.body, { color: colors.textMuted, marginTop: 12 }]}>
-            Loading course study notes...
-          </Text>
-        </View>
-      ) : filteredMaterials.length === 0 ? (
-        <View style={[styles.emptyContainer, { paddingHorizontal: spacing.screen }]}>
-          <View style={[styles.emptyIconCircle, { backgroundColor: colors.surface }]}>
-            <BookOpen size={40} color={colors.textMuted} strokeWidth={1.5} />
+      {/* Materials List */}
+      <FlatList
+        data={materials}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[styles.listContainer, { paddingHorizontal: spacing.screen }]}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <FileText size={44} color={colors.textMuted} strokeWidth={1.5} />
+            <Text style={[typography.title, { color: colors.text, marginTop: 14 }]}>
+              No Materials Uploaded Yet
+            </Text>
+            <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center', marginTop: 6 }]}>
+              The instructor will upload reference notes and templates here soon.
+            </Text>
           </View>
-          <Text style={[typography.heading, { color: colors.text, marginTop: 16 }]}>
-            No materials found
-          </Text>
-          <Text
-            style={[
-              typography.body,
-              { color: colors.textMuted, textAlign: 'center', marginTop: 8 },
-            ]}
-          >
-            Study notes and resources will appear here once published by your instructor.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredMaterials}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingHorizontal: spacing.screen, paddingBottom: 60 },
-          ]}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => {
-            const isDownloading = downloadingId === item.id;
-            return (
-              <Animated.View entering={FadeInDown.duration(300).delay(index * 60)}>
-                <Card padding={spacing.base} style={{ marginBottom: spacing.sm }}>
-                  <View style={styles.cardHeader}>
-                    <View
-                      style={[
-                        styles.fileTypeBadge,
-                        { backgroundColor: colors.surface, borderColor: colors.border },
-                      ]}
-                    >
-                      <FileText size={22} color={colors.primary} strokeWidth={1.75} />
-                    </View>
+        }
+        renderItem={({ item, index }) => {
+          const isOpening = openingId === item.id;
+          const isPdf = item.type === 'pdf';
+          const isZip = item.type === 'zip';
 
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[typography.heading, { color: colors.text }]} numberOfLines={2}>
-                        {item.title}
+          return (
+            <Animated.View entering={FadeInDown.duration(350).delay(index * 60)}>
+              <Card
+                padding={spacing.base}
+                style={[styles.materialCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={styles.cardTopRow}>
+                  <View
+                    style={[
+                      styles.iconBox,
+                      {
+                        backgroundColor: isPdf ? colors.errorBg : isZip ? colors.warningBg : colors.accentLight,
+                      },
+                    ]}
+                  >
+                    {isPdf ? (
+                      <FileText size={22} color={colors.error} />
+                    ) : isZip ? (
+                      <FileArchive size={22} color={colors.warning} />
+                    ) : (
+                      <LinkIcon size={22} color={colors.primary} />
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[typography.title, { color: colors.text, fontSize: 15 }]} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    {item.description ? (
+                      <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={2}>
+                        {item.description}
                       </Text>
-                      {item.description ? (
-                        <Text
-                          style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}
-                          numberOfLines={2}
-                        >
-                          {item.description}
+                    ) : null}
+
+                    <View style={styles.metaRow}>
+                      <Badge
+                        label={item.type.toUpperCase()}
+                        variant={isPdf ? 'error' : isZip ? 'warning' : 'primary'}
+                        size="sm"
+                      />
+                      {item.sizeBytes ? (
+                        <Text style={[typography.caption, { color: colors.textMuted, fontSize: 11 }]}>
+                          {formatFileSize(item.sizeBytes)}
                         </Text>
                       ) : null}
-
-                      <View style={styles.metaRow}>
-                        <Badge
-                          label={item.fileType.toUpperCase()}
-                          variant="neutral"
-                          size="sm"
-                        />
-                        {item.fileSize ? (
-                          <Text
-                            style={[
-                              typography.caption,
-                              typography.tabular,
-                              { color: colors.textMuted, marginLeft: 8 },
-                            ]}
-                          >
-                            {item.fileSize}
-                          </Text>
-                        ) : null}
-                      </View>
                     </View>
                   </View>
+                </View>
 
-                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-                  {/* Actions Row */}
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                      onPress={() => handleShare(item)}
-                      style={[
-                        styles.iconActionBtn,
-                        { backgroundColor: colors.surface, borderColor: colors.border },
-                      ]}
-                      activeOpacity={0.7}
-                      accessibilityLabel="Share material"
-                    >
-                      <Share2 size={18} color={colors.textMuted} strokeWidth={1.75} />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => handleOpenMaterial(item)}
-                      disabled={isDownloading}
-                      style={[
-                        styles.downloadBtn,
-                        {
-                          backgroundColor: colors.primary,
-                          borderRadius: radius.button,
-                        },
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      {isDownloading ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                      ) : (
-                        <>
-                          <Download size={16} color="#FFFFFF" strokeWidth={2} style={{ marginRight: 6 }} />
-                          <Text style={[typography.caption, { color: '#FFFFFF', fontWeight: '600' }]}>
-                            Open & Download
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </Card>
-              </Animated.View>
-            );
-          }}
-        />
-      )}
-
-      {isScreenCaptured && (
-        <View style={styles.screenCaptureCover}>
-          <ShieldAlert size={44} color={colors.error} strokeWidth={2} />
-          <Text style={[typography.headline, { color: colors.text, marginTop: 12 }]}>
-            Protected Study Materials
-          </Text>
-          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, textAlign: 'center' }]}>
-            Screenshots and recordings of proprietary course materials are prohibited.
-          </Text>
-        </View>
-      )}
+                {/* Open / Download Button */}
+                <TouchableOpacity
+                  onPress={() => handleOpenMaterial(item)}
+                  disabled={isOpening}
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: colors.surfaceHover,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  {isOpening ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : item.type === 'link' ? (
+                    <>
+                      <ExternalLink size={15} color={colors.primary} />
+                      <Text style={[typography.small, { color: colors.primary, fontWeight: '700' }]}>
+                        Open External Resource
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={15} color={colors.primary} />
+                      <Text style={[typography.small, { color: colors.primary, fontWeight: '700' }]}>
+                        Access Document (Signed URL)
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </Card>
+            </Animated.View>
+          );
+        }}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screenCaptureCover: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    zIndex: 9999,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 56,
+    paddingHorizontal: 16,
   },
   backButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filtersRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 14,
-    height: 48,
-    minHeight: 48,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listContent: {
-    paddingTop: 8,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  fileTypeBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  divider: {
-    height: 1,
-    width: '100%',
-    marginVertical: 12,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  iconActionBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  downloadBtn: {
-    flex: 1,
-    marginLeft: 12,
-    height: 48,
-    minHeight: 48,
-    flexDirection: 'row',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -422,17 +385,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 60,
-  },
-  emptyIconCircle: {
+  lockIconCircle: {
     width: 72,
     height: 72,
     borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  listContainer: {
+    paddingVertical: 16,
+    gap: 12,
+  },
+  emptyContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  materialCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  iconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  actionBtn: {
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
 });

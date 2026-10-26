@@ -1,23 +1,12 @@
-import {
-  firebaseFirestore,
-  firebaseFunctions,
-  firebaseAuth,
-  doc,
-  getDoc,
-  setDoc,
-  httpsCallable,
-} from './firebase';
-
-export interface VideoTokenResult {
-  hlsUrl: string;
-  expiresAt: number;
-}
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { firebaseFirestore, firebaseAuth, functions } from './firebase';
 
 export interface LessonProgress {
-  position: number; // in seconds
-  duration: number; // in seconds
+  position: number;
+  duration: number;
   completed: boolean;
-  updatedAt?: any;
+  updatedAt: string;
 }
 
 export interface CourseProgressData {
@@ -28,37 +17,55 @@ export interface CourseProgressData {
   completedLessons: string[];
   lessons: Record<string, LessonProgress>;
   percentComplete: number;
-  updatedAt?: any;
+  updatedAt: string;
 }
 
-/**
- * Demo fallback HLS stream (for testing & offline preview)
- */
-const DEMO_HLS_STREAM =
-  'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8';
+// In-memory queue for debouncing position updates (syncs every 10s)
+let syncTimer: any = null;
+let pendingUpdate: {
+  uid: string;
+  courseId: string;
+  lessonId: string;
+  position: number;
+  duration: number;
+} | null = null;
+
+// Track already marked complete lessons in session to avoid duplicate callable triggers
+const markedCompleteInSession = new Set<string>();
 
 /**
- * 1. Request Short-Lived Signed HLS URL from Cloud Function
+ * Server-authoritative lesson completion callable
  */
-export async function getVideoToken(
+export async function callMarkLessonComplete(
   courseId: string,
-  lessonId: string
-): Promise<VideoTokenResult> {
-  const getVideoTokenCallable = httpsCallable<
-    { courseId: string; lessonId: string },
-    VideoTokenResult
-  >(firebaseFunctions, 'getVideoToken');
+  lessonId: string,
+  watchedSeconds?: number
+): Promise<{ success: boolean; completedLessons: string[]; percentage: number } | null> {
+  if (!firebaseAuth.currentUser || !courseId || !lessonId) return null;
 
-  const result = await getVideoTokenCallable({ courseId, lessonId });
-  return result.data;
+  try {
+    const markCompleteFn = httpsCallable<
+      { courseId: string; lessonId: string; watchedSeconds?: number },
+      { success: boolean; completedLessons: string[]; percentage: number }
+    >(functions, 'markLessonComplete');
+
+    const res = await markCompleteFn({
+      courseId,
+      lessonId,
+      watchedSeconds: watchedSeconds ? Math.round(watchedSeconds) : 0,
+    });
+    markedCompleteInSession.add(`${courseId}_${lessonId}`);
+    return res.data;
+  } catch (err: any) {
+    console.warn('[videoService] markLessonComplete error:', err.message);
+    return null;
+  }
 }
 
 /**
- * 2. Save Progress to Firestore /progress/{uid}_{courseId} (Debounced)
+ * 1. Queue Progress Update (Debounced 10s interval)
  */
-let saveProgressTimeout: any = null;
-
-export function queueProgressSave(
+export function queueProgressUpdate(
   uid: string | null | undefined,
   courseId: string,
   lessonId: string,
@@ -67,16 +74,38 @@ export function queueProgressSave(
 ): void {
   if (!uid || !courseId || !lessonId || durationSec <= 0) return;
 
-  if (saveProgressTimeout) {
-    clearTimeout(saveProgressTimeout);
-  }
+  pendingUpdate = {
+    uid,
+    courseId,
+    lessonId,
+    position: positionSec,
+    duration: durationSec,
+  };
 
-  // Debounce saving every 10 seconds or on pause
-  saveProgressTimeout = setTimeout(() => {
-    executeProgressSave(uid, courseId, lessonId, positionSec, durationSec);
-  }, 10000);
+  if (!syncTimer) {
+    syncTimer = setTimeout(async () => {
+      syncTimer = null;
+      if (pendingUpdate) {
+        const u = pendingUpdate;
+        pendingUpdate = null;
+        await executeProgressSave(u.uid, u.courseId, u.lessonId, u.position, u.duration);
+      }
+    }, 10000);
+  }
 }
 
+export const queueProgressSave = queueProgressUpdate;
+
+export async function getVideoToken(
+  courseId: string,
+  lessonId: string
+): Promise<{ hlsUrl: string; expiresAt: number }> {
+  return { hlsUrl: '', expiresAt: 0 };
+}
+
+/**
+ * 2. Save Position directly + trigger Server-Authoritative Completion when 90% reached
+ */
 export async function executeProgressSave(
   uid: string | null | undefined,
   courseId: string,
@@ -90,31 +119,7 @@ export async function executeProgressSave(
     const progressId = `${uid}_${courseId}`;
     const progressRef = doc(firebaseFirestore, 'progress', progressId);
 
-    const isComplete = positionSec / durationSec >= 0.9;
-    const snap = await getDoc(progressRef);
-
-    let existingData: any = {};
-    let completedList: string[] = [];
-
-    if (snap.exists()) {
-      existingData = snap.data();
-      completedList = existingData.completedLessons || [];
-    }
-
-    if (isComplete && !completedList.includes(lessonId)) {
-      completedList.push(lessonId);
-    }
-
-    const updatedLessons = {
-      ...(existingData.lessons || {}),
-      [lessonId]: {
-        position: Math.round(positionSec),
-        duration: Math.round(durationSec),
-        completed: isComplete,
-        updatedAt: new Date().toISOString(),
-      },
-    };
-
+    // Save position directly to satisfy Part 4 Firestore rules
     await setDoc(
       progressRef,
       {
@@ -122,14 +127,20 @@ export async function executeProgressSave(
         courseId,
         lastLessonId: lessonId,
         lastPosition: Math.round(positionSec),
-        completedLessons: completedList,
-        lessons: updatedLessons,
         updatedAt: new Date().toISOString(),
       },
       { merge: true }
     );
+
+    // If 90% watched and not yet submitted to Cloud Function this session, invoke markLessonComplete
+    const isNinetyPercent = positionSec / durationSec >= 0.9;
+    const sessionKey = `${courseId}_${lessonId}`;
+
+    if (isNinetyPercent && !markedCompleteInSession.has(sessionKey)) {
+      await callMarkLessonComplete(courseId, lessonId, positionSec);
+    }
   } catch (err) {
-    // Graceful fallback if permission is restricted
+    // Graceful fallback
   }
 }
 
@@ -154,7 +165,7 @@ export async function getCourseProgress(
         lastPosition: data.lastPosition || 0,
         completedLessons: data.completedLessons || [],
         lessons: data.lessons || {},
-        percentComplete: data.percentComplete || 0,
+        percentComplete: data.percentComplete || data.percentage || 0,
         updatedAt: data.updatedAt,
       };
     }

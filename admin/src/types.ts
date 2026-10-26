@@ -185,3 +185,19 @@ export interface QuizQuestion {
   explanation: string;
   order: number;
 }
+
+export interface Material {
+  id: string;
+  courseId: string;
+  courseTitle?: string;
+  title: string;
+  description: string;
+  type: 'pdf' | 'zip' | 'link';
+  storagePath?: string;
+  externalUrl?: string;
+  sizeBytes: number;
+  order: number;
+  isPublished: boolean;
+  createdAt?: any;
+  updatedAt?: any;
+}

@@ -12,14 +12,24 @@ import { Quizzes } from './pages/Quizzes';
 import { Support } from './pages/Support';
 import { Settings } from './pages/Settings';
 import { Categories } from './pages/Categories';
+import { Materials } from './pages/Materials';
 import { HomeManager } from './pages/HomeManager';
 import { Students } from './pages/Students';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { NavTab } from './components/layout/Sidebar';
+import { PublicCertificateVerify } from './pages/PublicCertificateVerify';
 
 export const App: React.FC = () => {
   const { user, isAdmin, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+
+  // Check URL query parameters for public certificate verification route
+  const searchParams = new URLSearchParams(window.location.search);
+  const verifyId = searchParams.get('id') || searchParams.get('verify') || (window.location.pathname.startsWith('/verify/') ? window.location.pathname.split('/')[2] : null);
+
+  if (verifyId) {
+    return <PublicCertificateVerify certId={verifyId} />;
+  }
 
   if (loading) {
     return (
@@ -46,6 +56,7 @@ export const App: React.FC = () => {
       {activeTab === 'dashboard' && <Dashboard onNavigate={setActiveTab} />}
       {activeTab === 'categories' && <Categories />}
       {activeTab === 'courses' && <Courses />}
+      {activeTab === 'materials' && <Materials />}
       {activeTab === 'live-classes' && <LiveClasses />}
       {activeTab === 'quizzes' && <Quizzes />}
       {activeTab === 'orders' && <Orders />}

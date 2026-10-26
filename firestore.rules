@@ -223,6 +223,16 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /quizAttempts/{attemptId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /quizBest/{bestId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
     // ===============================================================
     // 15. STUDENT REVIEWS & COURSE RATINGS
     // ===============================================================

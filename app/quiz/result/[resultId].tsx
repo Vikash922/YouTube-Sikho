@@ -16,11 +16,12 @@ import {
   RotateCcw,
   BookOpen,
   ArrowLeft,
-  Sparkles,
   Award,
+  ShieldAlert,
+  AlertCircle,
 } from 'lucide-react-native';
 import { useThemeColors } from '../../../src/theme';
-import { fetchQuizResult, QuizEvaluationResult } from '../../../src/services/quizService';
+import { fetchQuizResult, QuizEvaluationResult, QuestionBreakdownItem } from '../../../src/services/quizService';
 
 export default function QuizResultScreen() {
   const { resultId } = useLocalSearchParams<{ resultId: string }>();
@@ -74,6 +75,8 @@ export default function QuizResultScreen() {
   }
 
   const isPassed = result.passed;
+  const breakdownList: QuestionBreakdownItem[] = result.breakdown || result.reviewBreakup || [];
+  const answersRevealed = result.answersRevealed === true;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -138,8 +141,8 @@ export default function QuizResultScreen() {
 
           <Text style={[styles.statusSubtitle, { color: colors.textSecondary }]}>
             {isPassed
-              ? 'You have successfully cleared the passing threshold for this topic.'
-              : 'Review the question explanations below and retake the test to master this checkpoint.'}
+              ? `You achieved ${result.percentage}% and cleared the ${result.passingPercentage}% requirement.`
+              : `You scored ${result.percentage}% (required: ${result.passingPercentage}%). Retake the quiz to master this checkpoint.`}
           </Text>
 
           {/* Score Numbers with Tabular Figures */}
@@ -148,15 +151,15 @@ export default function QuizResultScreen() {
               {result.score}
             </Text>
             <Text style={[styles.totalScore, { color: colors.textTertiary }]}>
-              / {result.totalMarks} Marks
+              / {result.maxScore || result.totalMarks} Marks
             </Text>
           </View>
 
-          {/* Metrics Pill Grid */}
+          {/* Metrics Row */}
           <View style={styles.metricsRow}>
             <View style={[styles.metricBox, { backgroundColor: colors.surfaceHover }]}>
               <Text style={[styles.metricVal, { color: colors.textPrimary }]}>
-                {result.accuracy}%
+                {result.percentage}%
               </Text>
               <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
                 Accuracy
@@ -180,18 +183,42 @@ export default function QuizResultScreen() {
                 Wrong
               </Text>
             </View>
+
+            <View style={[styles.metricBox, { backgroundColor: colors.surfaceHover }]}>
+              <Text style={[styles.metricVal, { color: colors.textSecondary }]}>
+                {result.unansweredCount}
+              </Text>
+              <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
+                Skipped
+              </Text>
+            </View>
           </View>
         </View>
 
-        {/* 2. Detailed Question Review Breakup */}
+        {/* Anti-Cheat Key Notice if answers are protected */}
+        {!answersRevealed && (
+          <View
+            style={[
+              styles.noticeCard,
+              { backgroundColor: colors.surfaceHover, borderColor: colors.border },
+            ]}
+          >
+            <ShieldAlert size={18} color={colors.primary} />
+            <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
+              Official answer keys and explanations are concealed while retakes remain active. They will unlock after your final attempt.
+            </Text>
+          </View>
+        )}
+
+        {/* 2. Detailed Question Review */}
         <View style={styles.reviewSection}>
           <Text style={[styles.reviewSectionTitle, { color: colors.textPrimary }]}>
-            Detailed Answer Review
+            Question Analysis ({breakdownList.length})
           </Text>
 
-          {result.reviewBreakup.map((q, idx) => {
-            const isCorrect = q.isCorrect;
-            const isUnattempted = q.selectedOptionIndex === null || q.selectedOptionIndex === -1;
+          {breakdownList.map((q, idx) => {
+            const isCorrect = q.status === 'correct';
+            const isUnattempted = q.status === 'unanswered' || q.selectedOptionIndex === null || q.selectedOptionIndex === -1;
 
             return (
               <View
@@ -207,7 +234,7 @@ export default function QuizResultScreen() {
                 {/* Question Header */}
                 <View style={styles.qHeaderRow}>
                   <Text style={[styles.qNumText, { color: colors.primary }]}>
-                    Q{idx + 1}
+                    Question {idx + 1}
                   </Text>
                   <View
                     style={[
@@ -223,6 +250,8 @@ export default function QuizResultScreen() {
                   >
                     {isCorrect ? (
                       <CheckCircle size={14} color={colors.semanticSuccess} />
+                    ) : isUnattempted ? (
+                      <AlertCircle size={14} color={colors.textSecondary} />
                     ) : (
                       <XCircle size={14} color={colors.semanticError} />
                     )}
@@ -245,14 +274,14 @@ export default function QuizResultScreen() {
 
                 {/* Question Text */}
                 <Text style={[styles.reviewQuestionText, { color: colors.textPrimary }]}>
-                  {q.questionText}
+                  {q.question}
                 </Text>
 
                 {/* Options Review */}
                 <View style={styles.optionsReviewList}>
                   {q.options.map((opt, oIdx) => {
                     const isUserChoice = q.selectedOptionIndex === oIdx;
-                    const isRightAnswer = q.correctOptionIndex === oIdx;
+                    const isRightAnswer = answersRevealed && q.correctAnswerIndex === oIdx;
 
                     let optBg = colors.surfaceHover;
                     let optBorder = colors.border;
@@ -266,6 +295,10 @@ export default function QuizResultScreen() {
                       optBg = colors.errorBg;
                       optBorder = colors.semanticError;
                       optTextColor = colors.semanticError;
+                    } else if (isUserChoice && isCorrect) {
+                      optBg = colors.successBg;
+                      optBorder = colors.semanticSuccess;
+                      optTextColor = colors.semanticSuccess;
                     }
 
                     return (
@@ -282,19 +315,22 @@ export default function QuizResultScreen() {
                         <Text
                           style={[
                             styles.optionReviewText,
-                            { color: optTextColor, fontWeight: isRightAnswer || isUserChoice ? '700' : '400' },
+                            {
+                              color: optTextColor,
+                              fontWeight: isRightAnswer || isUserChoice ? '700' : '400',
+                            },
                           ]}
                         >
                           {opt}
                         </Text>
                         {isRightAnswer && (
                           <Text style={[styles.tagRight, { color: colors.semanticSuccess }]}>
-                            (Correct Answer)
+                            (Correct)
                           </Text>
                         )}
                         {isUserChoice && !isRightAnswer && (
                           <Text style={[styles.tagWrong, { color: colors.semanticError }]}>
-                            (Your Pick)
+                            (Your Choice)
                           </Text>
                         )}
                       </View>
@@ -302,12 +338,12 @@ export default function QuizResultScreen() {
                   })}
                 </View>
 
-                {/* Explanation Box */}
-                {q.explanation ? (
+                {/* Explanation Box (when revealed) */}
+                {answersRevealed && q.explanation ? (
                   <View
                     style={[
                       styles.explanationBox,
-                      { backgroundColor: colors.surfaceHighlight, borderColor: colors.border },
+                      { backgroundColor: colors.surfaceHover, borderColor: colors.border },
                     ]}
                   >
                     <Text style={[styles.explanationHeader, { color: colors.primary }]}>
@@ -347,7 +383,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerBar: {
-    height: 64,
+    height: 56,
     borderBottomWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,25 +391,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   headerBtn: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 6,
+    marginLeft: -6,
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
   },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
   scrollContent: {
-    padding: 16,
+    padding: 18,
     paddingBottom: 40,
   },
   scoreHeroCard: {
-    padding: 24,
-    borderRadius: 24,
+    borderRadius: 16,
     borderWidth: 1.5,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   trophyCircle: {
     width: 72,
@@ -381,26 +430,26 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   statusHeading: {
     fontSize: 20,
     fontWeight: '800',
-    textAlign: 'center',
     marginBottom: 6,
+    textAlign: 'center',
   },
   statusSubtitle: {
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 16,
-    paddingHorizontal: 12,
+    marginBottom: 18,
+    maxWidth: 280,
   },
   scoreRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 6,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   bigScore: {
     fontSize: 42,
@@ -408,53 +457,70 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   totalScore: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
   },
   metricsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     width: '100%',
   },
   metricBox: {
     flex: 1,
-    padding: 12,
-    borderRadius: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
     alignItems: 'center',
   },
   metricVal: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   metricLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  noticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
   },
   reviewSection: {
+    gap: 12,
     marginBottom: 24,
   },
   reviewSectionTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   reviewCard: {
-    padding: 18,
-    borderRadius: 18,
+    padding: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 14,
   },
   qHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   qNumText: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   resultPill: {
     flexDirection: 'row',
@@ -462,27 +528,27 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   resultPillText: {
     fontSize: 11,
     fontWeight: '700',
   },
   reviewQuestionText: {
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 22,
-    marginBottom: 14,
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+    marginBottom: 12,
   },
   optionsReviewList: {
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
   },
   optionReviewRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
     gap: 8,
   },
@@ -491,8 +557,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   optionReviewText: {
-    fontSize: 13,
     flex: 1,
+    fontSize: 13,
   },
   tagRight: {
     fontSize: 11,
@@ -503,10 +569,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   explanationBox: {
-    padding: 12,
-    borderRadius: 12,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    marginTop: 6,
   },
   explanationHeader: {
     fontSize: 12,
@@ -515,36 +581,21 @@ const styles = StyleSheet.create({
   },
   explanationText: {
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 16,
   },
   footerActions: {
-    gap: 12,
+    marginTop: 8,
   },
   primaryBtn: {
-    minHeight: 48,
-    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
   },
   primaryBtnText: {
     fontSize: 15,
-    fontWeight: '700',
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-  },
-  title: {
-    fontSize: 18,
     fontWeight: '700',
   },
 });

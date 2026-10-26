@@ -15,6 +15,7 @@ import {
   Bell,
   Radio,
   FileQuestion,
+  FileText,
   LifeBuoy,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 export type NavTab =
   | 'dashboard'
   | 'courses'
+  | 'materials'
   | 'live-classes'
   | 'quizzes'
   | 'notifications'
@@ -55,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const NAV_ITEMS: { id: NavTab; label: string; icon: React.ReactNode; badge?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: 'courses', label: 'Courses & Videos', icon: <BookOpen className="w-5 h-5" /> },
+    { id: 'materials', label: 'Study Materials', icon: <FileText className="w-5 h-5" /> },
     { id: 'live-classes', label: 'Live Classes', icon: <Radio className="w-5 h-5" /> },
     { id: 'quizzes', label: 'Quizzes & Tests', icon: <FileQuestion className="w-5 h-5" /> },
     { id: 'notifications', label: 'Push Notifications', icon: <Bell className="w-5 h-5" /> },

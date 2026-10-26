@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,10 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  AppState,
+  AppStateStatus,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -21,17 +25,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Flame,
+  X,
+  FileQuestion,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useThemeColors } from '../../src/theme';
 import {
-  QuizMetadata,
-  QuizQuestionClient,
-  fetchQuizMetadata,
-  fetchQuizQuestions,
+  startQuizSession,
+  submitQuizToServer,
   saveLocalQuizProgress,
   restoreLocalQuizProgress,
-  submitQuizToServer,
+  clearLocalQuizProgress,
+  QuizQuestionClient,
+  StartQuizSessionResponse,
 } from '../../src/services/quizService';
 
 export default function QuizTakingScreen() {
@@ -39,93 +45,162 @@ export default function QuizTakingScreen() {
   const router = useRouter();
   const colors = useThemeColors();
 
-  const [quiz, setQuiz] = useState<QuizMetadata | null>(null);
+  const [session, setSession] = useState<StartQuizSessionResponse | null>(null);
   const [questions, setQuestions] = useState<QuizQuestionClient[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [markedForReview, setMarkedForReview] = useState<string[]>([]);
-  const [remainingSeconds, setRemainingSeconds] = useState(15 * 60);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isSubmitModalVisible, setIsSubmitModalVisible] = useState(false);
 
-  const totalTimeSeconds = useRef(15 * 60);
+  // Server Time Offset Tracking (serverNow - clientNow)
+  const serverOffsetRef = useRef<number>(0);
+  const expiresAtMsRef = useRef<number>(0);
+  const timerIntervalRef = useRef<any>(null);
+  const autoSubmittedRef = useRef<boolean>(false);
 
-  // 1. Load Quiz and Questions + Restore Autosave
+  // 1. Initialize Server-Authoritative Quiz Session & Restore Autosave
   useEffect(() => {
     if (!quizId) return;
 
-    const loadData = async () => {
+    let isMounted = true;
+
+    const initQuiz = async () => {
       try {
-        const [meta, qList] = await Promise.all([
-          fetchQuizMetadata(quizId),
-          fetchQuizQuestions(quizId),
-        ]);
+        const sess = await startQuizSession(quizId);
+        if (!isMounted) return;
 
-        if (!meta) {
-          Alert.alert('Quiz Not Found', 'This quiz could not be loaded.');
-          router.back();
-          return;
-        }
+        setSession(sess);
+        setQuestions(sess.questions || []);
 
-        setQuiz(meta);
-        setQuestions(qList);
+        // Compute clock sync offset
+        const clientNow = Date.now();
+        const serverNowMs = sess.serverNow ? Date.parse(sess.serverNow) : clientNow;
+        serverOffsetRef.current = serverNowMs - clientNow;
+        expiresAtMsRef.current = sess.expiresAt;
 
-        const durationSec = meta.durationMinutes * 60;
-        totalTimeSeconds.current = durationSec;
+        // Calculate initial remaining seconds
+        const currentServerNow = clientNow + serverOffsetRef.current;
+        const initialRemaining = Math.max(0, Math.floor((sess.expiresAt - currentServerNow) / 1000));
+        setRemainingSeconds(initialRemaining);
 
-        // Restore any autosaved state
+        // Check and restore local autosave if valid for current attempt
         const saved = await restoreLocalQuizProgress(quizId);
-        if (saved) {
+        if (saved && saved.attemptId === sess.attemptId) {
           setAnswers(saved.answers || {});
           setMarkedForReview(saved.markedForReview || []);
-          setRemainingSeconds(saved.remainingSeconds > 0 ? saved.remainingSeconds : durationSec);
-        } else {
-          setRemainingSeconds(durationSec);
+          if (typeof saved.currentIndex === 'number' && saved.currentIndex < sess.questions.length) {
+            setCurrentIndex(saved.currentIndex);
+          }
+        } else if (saved && saved.attemptId !== sess.attemptId) {
+          // Discard stale autosave from a past attempt
+          await clearLocalQuizProgress(quizId);
         }
       } catch (err: any) {
-        Alert.alert('Error', err.message || 'Could not load quiz.');
+        if (!isMounted) return;
+        Alert.alert('Quiz Notice', err.message || 'Could not load quiz session.', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    loadData();
+    initQuiz();
+
+    return () => {
+      isMounted = false;
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
   }, [quizId]);
 
-  // 2. Countdown Timer Loop
-  useEffect(() => {
-    if (loading || submitting || remainingSeconds <= 0) return;
+  // 2. Authoritative Timer Loop using Server expiresAt & AppState Resumption
+  const recomputeRemainingTime = useCallback(() => {
+    if (!expiresAtMsRef.current) return 0;
+    const currentServerNow = Date.now() + serverOffsetRef.current;
+    const diffSeconds = Math.max(0, Math.floor((expiresAtMsRef.current - currentServerNow) / 1000));
+    setRemainingSeconds(diffSeconds);
+    return diffSeconds;
+  }, []);
 
-    const timer = setInterval(() => {
-      setRemainingSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+  useEffect(() => {
+    if (loading || submitting || !expiresAtMsRef.current) return;
+
+    // Start single ticking interval
+    timerIntervalRef.current = setInterval(() => {
+      const remaining = recomputeRemainingTime();
+      if (remaining <= 0 && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        clearInterval(timerIntervalRef.current);
+        handleAutoSubmit();
+      }
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [loading, submitting, remainingSeconds]);
+    // AppState Foreground Re-sync
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        const remaining = recomputeRemainingTime();
+        if (remaining <= 0 && !autoSubmittedRef.current) {
+          autoSubmittedRef.current = true;
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          handleAutoSubmit();
+        }
+      }
+    });
 
-  // 3. Periodic Autosave
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      subscription.remove();
+    };
+  }, [loading, submitting, recomputeRemainingTime]);
+
+  // 3. Autosave on every answer / review change
   useEffect(() => {
-    if (loading || !quizId) return;
+    if (loading || !quizId || !session?.attemptId) return;
     saveLocalQuizProgress(quizId, {
+      attemptId: session.attemptId,
       answers,
       markedForReview,
-      remainingSeconds,
+      currentIndex,
     });
-  }, [answers, markedForReview, remainingSeconds, quizId, loading]);
+  }, [answers, markedForReview, currentIndex, quizId, session?.attemptId, loading]);
+
+  // 4. Exit Protection (Android BackHandler & In-app Confirmation)
+  useEffect(() => {
+    const onBackPress = () => {
+      confirmExit();
+      return true;
+    };
+
+    const backSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backSub.remove();
+  }, []);
+
+  const confirmExit = () => {
+    Alert.alert(
+      'Exit Quiz Session?',
+      'Your selected answers are saved locally. However, the official timer continues to tick on the server until expiration.',
+      [
+        { text: 'Keep Playing', style: 'cancel' },
+        {
+          text: 'Leave Quiz',
+          style: 'destructive',
+          onPress: () => router.back(),
+        },
+      ]
+    );
+  };
 
   const handleAutoSubmit = () => {
-    Alert.alert('Time Up!', 'The timer has expired. Your quiz will now be automatically evaluated.', [
-      { text: 'Submit Now', onPress: executeSubmit },
-    ]);
+    Alert.alert(
+      'Time Expired!',
+      'The time limit for this quiz has ended. Your answers are now being submitted automatically.',
+      [{ text: 'Submit Now', onPress: executeSubmit }]
+    );
+    executeSubmit();
   };
 
   const handleSelectOption = (optionIndex: number) => {
@@ -152,19 +227,20 @@ export default function QuizTakingScreen() {
   };
 
   const executeSubmit = async () => {
-    if (!quizId || submitting) return;
+    if (!quizId || !session?.attemptId || submitting) return;
     setSubmitting(true);
     setIsSubmitModalVisible(false);
 
-    const timeTaken = totalTimeSeconds.current - remainingSeconds;
+    const startedAt = session.startedAt || Date.now();
+    const timeTaken = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
 
     try {
-      const result = await submitQuizToServer(quizId, answers, timeTaken);
+      const result = await submitQuizToServer(session.attemptId, quizId, answers, timeTaken);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace(`/quiz/result/${result.resultId}` as any);
     } catch (err: any) {
       setSubmitting(false);
-      Alert.alert('Submission Error', err.message || 'Could not submit quiz.');
+      Alert.alert('Submission Error', err.message || 'Could not complete quiz submission.');
     }
   };
 
@@ -173,7 +249,7 @@ export default function QuizTakingScreen() {
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Loading test questions...
+          Loading secure quiz session...
         </Text>
       </View>
     );
@@ -184,26 +260,24 @@ export default function QuizTakingScreen() {
       <View style={[styles.centerContainer, { backgroundColor: colors.background }]}>
         <AlertCircle size={48} color={colors.semanticWarning} />
         <Text style={[styles.errorTitle, { color: colors.textPrimary }]}>
-          Questions Pending
+          No Questions Available
         </Text>
         <Text style={[styles.errorSubtitle, { color: colors.textSecondary }]}>
-          The instructor has not added questions to this checkpoint yet.
+          This checkpoint has no configured questions at this time.
         </Text>
         <TouchableOpacity
           onPress={() => router.back()}
           style={[styles.backBtn, { backgroundColor: colors.primary }]}
         >
-          <Text style={[styles.backBtnText, { color: colors.surface }]}>
-            Back to Course
-          </Text>
+          <Text style={[styles.backBtnText, { color: colors.surface }]}>Back to Course</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   const currentQuestion = questions[currentIndex];
-  const selectedOptionIndex = answers[currentQuestion.id];
-  const isMarked = markedForReview.includes(currentQuestion.id);
+  const selectedOptionIndex = currentQuestion ? answers[currentQuestion.id] : undefined;
+  const isMarked = currentQuestion ? markedForReview.includes(currentQuestion.id) : false;
 
   const formatTimer = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -212,11 +286,12 @@ export default function QuizTakingScreen() {
   };
 
   const answeredCount = Object.keys(answers).length;
-  const unattemptedCount = questions.length - answeredCount;
+  const unattemptedCount = Math.max(0, questions.length - answeredCount);
+  const markedCount = markedForReview.length;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* 1. Header with Back Button & Tabular Timer */}
+      {/* 1. Header Bar */}
       <View
         style={[
           styles.headerBar,
@@ -224,16 +299,7 @@ export default function QuizTakingScreen() {
         ]}
       >
         <TouchableOpacity
-          onPress={() => {
-            Alert.alert(
-              'Exit Quiz?',
-              'Your progress is saved locally. You can resume anytime before submission.',
-              [
-                { text: 'Resume Test', style: 'cancel' },
-                { text: 'Exit', style: 'destructive', onPress: () => router.back() },
-              ]
-            );
-          }}
+          onPress={confirmExit}
           style={styles.headerIconButton}
           accessibilityRole="button"
           accessibilityLabel="Back"
@@ -242,10 +308,10 @@ export default function QuizTakingScreen() {
         </TouchableOpacity>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-          {quiz?.title || 'Checkpoint Quiz'}
+          {session?.title || 'Checkpoint Quiz'}
         </Text>
 
-        {/* Timer Badge with Tabular Numbers */}
+        {/* Tabular Server Timer */}
         <View
           style={[
             styles.timerPill,
@@ -255,16 +321,11 @@ export default function QuizTakingScreen() {
             },
           ]}
         >
-          <Clock
-            size={14}
-            color={remainingSeconds < 120 ? colors.error : colors.primary}
-          />
+          <Clock size={14} color={remainingSeconds < 120 ? colors.error : colors.primary} />
           <Text
             style={[
               styles.timerText,
-              {
-                color: remainingSeconds < 120 ? colors.error : colors.primary,
-              },
+              { color: remainingSeconds < 120 ? colors.error : colors.primary },
             ]}
           >
             {formatTimer(remainingSeconds)}
@@ -272,7 +333,7 @@ export default function QuizTakingScreen() {
         </View>
       </View>
 
-      {/* 2. Horizontal Question Palette */}
+      {/* 2. Question Navigation Strip */}
       <View
         style={[
           styles.paletteContainer,
@@ -298,22 +359,20 @@ export default function QuizTakingScreen() {
                   {
                     backgroundColor: isCurrent
                       ? colors.primary
+                      : hasAnswered
+                      ? colors.successBg
                       : isQMarked
                       ? colors.warningBg
-                      : hasAnswered
-                      ? colors.accentMuted
                       : colors.surfaceHover,
                     borderColor: isCurrent
                       ? colors.primary
-                      : isQMarked
-                      ? colors.warning
                       : hasAnswered
-                      ? colors.primary
+                      ? colors.semanticSuccess
+                      : isQMarked
+                      ? colors.semanticWarning
                       : colors.border,
                   },
                 ]}
-                accessibilityRole="button"
-                accessibilityLabel={`Question ${idx + 1}`}
               >
                 <Text
                   style={[
@@ -321,11 +380,12 @@ export default function QuizTakingScreen() {
                     {
                       color: isCurrent
                         ? colors.surface
-                        : isQMarked
-                        ? colors.warning
                         : hasAnswered
-                        ? colors.primary
+                        ? colors.semanticSuccess
+                        : isQMarked
+                        ? colors.semanticWarning
                         : colors.textSecondary,
+                      fontWeight: isCurrent ? '700' : '600',
                     },
                   ]}
                 >
@@ -337,38 +397,56 @@ export default function QuizTakingScreen() {
         </ScrollView>
       </View>
 
-      {/* 3. Question Body Card */}
+      {/* 3. Question Body */}
       <ScrollView
-        contentContainerStyle={styles.bodyContent}
+        contentContainerStyle={styles.questionScroll}
         showsVerticalScrollIndicator={false}
       >
-        {/* Meta badges */}
-        <View style={styles.questionMetaRow}>
-          <Text style={[styles.qIndexText, { color: colors.primary }]}>
+        {/* Question Counter Card */}
+        <View style={styles.qMetaRow}>
+          <Text style={[styles.qIndexLabel, { color: colors.primary }]}>
             Question {currentIndex + 1} of {questions.length}
           </Text>
-          <View style={[styles.marksBadge, { backgroundColor: colors.surfaceHover }]}>
-            <Text style={[styles.marksText, { color: colors.textSecondary }]}>
-              +{currentQuestion.marks} Marks
+          <TouchableOpacity
+            onPress={handleToggleMarkReview}
+            style={[
+              styles.reviewBtn,
+              {
+                backgroundColor: isMarked ? colors.warningBg : colors.surfaceHover,
+                borderColor: isMarked ? colors.semanticWarning : colors.border,
+              },
+            ]}
+          >
+            <Bookmark
+              size={14}
+              color={isMarked ? colors.semanticWarning : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.reviewBtnText,
+                { color: isMarked ? colors.semanticWarning : colors.textSecondary },
+              ]}
+            >
+              {isMarked ? 'Marked' : 'Review'}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* Question Text */}
-        <Text style={[styles.questionText, { color: colors.textPrimary }]}>
-          {currentQuestion.questionText}
+        {/* Question Prompt */}
+        <Text style={[styles.questionPrompt, { color: colors.textPrimary }]}>
+          {currentQuestion?.question || currentQuestion?.questionText}
         </Text>
 
         {/* Options List */}
-        <View style={styles.optionsList}>
-          {currentQuestion.options.map((option, idx) => {
-            const isSelected = selectedOptionIndex === idx;
+        <View style={styles.optionsContainer}>
+          {currentQuestion?.options.map((optionText, optIdx) => {
+            const isSelected = selectedOptionIndex === optIdx;
 
             return (
               <TouchableOpacity
-                key={idx}
-                onPress={() => handleSelectOption(idx)}
-                activeOpacity={0.8}
+                key={optIdx}
+                onPress={() => handleSelectOption(optIdx)}
+                activeOpacity={0.7}
                 style={[
                   styles.optionCard,
                   {
@@ -376,38 +454,35 @@ export default function QuizTakingScreen() {
                     borderColor: isSelected ? colors.primary : colors.border,
                   },
                 ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={`Option ${String.fromCharCode(65 + idx)}: ${option}`}
               >
                 <View
                   style={[
-                    styles.optionLetterCircle,
+                    styles.optionBadge,
                     {
                       backgroundColor: isSelected ? colors.primary : colors.surfaceHover,
+                      borderColor: isSelected ? colors.primary : colors.border,
                     },
                   ]}
                 >
                   <Text
                     style={[
-                      styles.optionLetterText,
-                      { color: isSelected ? colors.surface : colors.textPrimary },
+                      styles.optionBadgeText,
+                      { color: isSelected ? colors.surface : colors.textSecondary },
                     ]}
                   >
-                    {String.fromCharCode(65 + idx)}
+                    {String.fromCharCode(65 + optIdx)}
                   </Text>
                 </View>
-
                 <Text
                   style={[
                     styles.optionText,
                     {
-                      color: isSelected ? colors.textPrimary : colors.textSecondary,
-                      fontWeight: isSelected ? '600' : '400',
+                      color: isSelected ? colors.primary : colors.textPrimary,
+                      fontWeight: isSelected ? '700' : '500',
                     },
                   ]}
                 >
-                  {option}
+                  {optionText}
                 </Text>
               </TouchableOpacity>
             );
@@ -415,102 +490,81 @@ export default function QuizTakingScreen() {
         </View>
       </ScrollView>
 
-      {/* 4. Bottom Action Bar (48px Touch Targets) */}
+      {/* 4. Bottom Controls Toolbar */}
       <View
         style={[
-          styles.bottomBar,
+          styles.bottomToolbar,
           { backgroundColor: colors.surface, borderTopColor: colors.border },
         ]}
       >
         <TouchableOpacity
-          onPress={handleToggleMarkReview}
+          onPress={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+          disabled={currentIndex === 0}
           style={[
-            styles.reviewButton,
+            styles.navBtn,
             {
-              backgroundColor: isMarked ? colors.warningBg : colors.surfaceHover,
-              borderColor: isMarked ? colors.warning : colors.border,
+              backgroundColor: colors.surfaceHover,
+              borderColor: colors.border,
+              opacity: currentIndex === 0 ? 0.3 : 1,
             },
           ]}
-          accessibilityRole="button"
-          accessibilityLabel={isMarked ? 'Marked for review' : 'Mark for review'}
         >
-          <Bookmark size={18} color={isMarked ? colors.warning : colors.textSecondary} />
+          <ChevronLeft size={18} color={colors.textPrimary} />
+          <Text style={[styles.navBtnText, { color: colors.textPrimary }]}>Prev</Text>
         </TouchableOpacity>
 
-        <View style={styles.navButtonsGroup}>
-          <TouchableOpacity
-            onPress={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-            disabled={currentIndex === 0}
-            style={[
-              styles.navBtn,
-              {
-                backgroundColor: colors.surfaceHover,
-                borderColor: colors.border,
-                opacity: currentIndex === 0 ? 0.4 : 1,
-              },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel="Previous Question"
-          >
-            <ChevronLeft size={20} color={colors.textPrimary} />
-          </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setIsSubmitModalVisible(true)}
+          style={[styles.submitTriggerBtn, { backgroundColor: colors.semanticSuccess }]}
+        >
+          <Send size={16} color={colors.surface} />
+          <Text style={[styles.submitTriggerText, { color: colors.surface }]}>
+            Submit ({answeredCount}/{questions.length})
+          </Text>
+        </TouchableOpacity>
 
-          {currentIndex < questions.length - 1 ? (
-            <TouchableOpacity
-              onPress={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
-              style={[
-                styles.navBtn,
-                { backgroundColor: colors.primary, borderColor: colors.primary },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Next Question"
-            >
-              <ChevronRight size={20} color={colors.surface} />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={() => setIsSubmitModalVisible(true)}
-              style={[
-                styles.finishBtn,
-                { backgroundColor: colors.semanticSuccess },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Submit Quiz"
-            >
-              <Send size={16} color={colors.surface} />
-              <Text style={[styles.finishBtnText, { color: colors.surface }]}>
-                Submit
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <TouchableOpacity
+          onPress={() => setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+          disabled={currentIndex === questions.length - 1}
+          style={[
+            styles.navBtn,
+            {
+              backgroundColor: colors.surfaceHover,
+              borderColor: colors.border,
+              opacity: currentIndex === questions.length - 1 ? 0.3 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.navBtnText, { color: colors.textPrimary }]}>Next</Text>
+          <ChevronRight size={18} color={colors.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       {/* 5. Submit Confirmation Bottom Sheet Modal */}
       <Modal
         visible={isSubmitModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setIsSubmitModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalSheet,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
-              Ready to Submit?
-            </Text>
+          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
+                Ready to Submit?
+              </Text>
+              <TouchableOpacity onPress={() => setIsSubmitModalVisible(false)}>
+                <X size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
             <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
-              Check your test summary before finalizing submission.
+              Please review your summary before finalizing your test submission.
             </Text>
 
-            {/* Test Summary Grid */}
             <View style={styles.summaryGrid}>
-              <View style={[styles.summaryTile, { backgroundColor: colors.surfaceHover }]}>
-                <Text style={[styles.summaryNumber, { color: colors.semanticSuccess }]}>
+              <View style={[styles.summaryBox, { backgroundColor: colors.surfaceHover }]}>
+                <Text style={[styles.summaryVal, { color: colors.semanticSuccess }]}>
                   {answeredCount}
                 </Text>
                 <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
@@ -518,56 +572,47 @@ export default function QuizTakingScreen() {
                 </Text>
               </View>
 
-              <View style={[styles.summaryTile, { backgroundColor: colors.surfaceHover }]}>
-                <Text style={[styles.summaryNumber, { color: colors.semanticWarning }]}>
-                  {markedForReview.length}
-                </Text>
-                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
-                  Marked
-                </Text>
-              </View>
-
-              <View style={[styles.summaryTile, { backgroundColor: colors.surfaceHover }]}>
-                <Text style={[styles.summaryNumber, { color: colors.textTertiary }]}>
+              <View style={[styles.summaryBox, { backgroundColor: colors.surfaceHover }]}>
+                <Text style={[styles.summaryVal, { color: colors.semanticWarning }]}>
                   {unattemptedCount}
                 </Text>
                 <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
                   Unanswered
                 </Text>
               </View>
+
+              <View style={[styles.summaryBox, { backgroundColor: colors.surfaceHover }]}>
+                <Text style={[styles.summaryVal, { color: colors.primary }]}>
+                  {markedCount}
+                </Text>
+                <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+                  Marked
+                </Text>
+              </View>
             </View>
 
-            {/* Modal Actions */}
             <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setIsSubmitModalVisible(false)}
+                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+              >
+                <Text style={[styles.modalCancelText, { color: colors.textPrimary }]}>
+                  Return to Test
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={executeSubmit}
                 disabled={submitting}
-                style={[
-                  styles.modalSubmitBtn,
-                  { backgroundColor: colors.primary },
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Confirm Submit Quiz"
+                style={[styles.modalConfirmBtn, { backgroundColor: colors.primary }]}
               >
                 {submitting ? (
                   <ActivityIndicator size="small" color={colors.surface} />
                 ) : (
-                  <Text style={[styles.modalSubmitText, { color: colors.surface }]}>
-                    Confirm & View Score
+                  <Text style={[styles.modalConfirmText, { color: colors.surface }]}>
+                    Confirm & Submit
                   </Text>
                 )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setIsSubmitModalVisible(false)}
-                disabled={submitting}
-                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
-                accessibilityRole="button"
-                accessibilityLabel="Resume Test"
-              >
-                <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>
-                  Keep Reviewing
-                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -581,33 +626,63 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerBar: {
-    height: 64,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerIconButton: {
-    width: 48,
-    height: 48,
+  centerContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 16,
+  },
+  errorSubtitle: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  backBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  backBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  headerBar: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+  },
+  headerIconButton: {
+    padding: 6,
+    marginLeft: -6,
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
     flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    marginHorizontal: 10,
   },
   timerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
     borderWidth: 1,
   },
   timerText: {
@@ -616,222 +691,189 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   paletteContainer: {
+    height: 50,
     borderBottomWidth: 1,
-    paddingVertical: 8,
   },
   paletteScroll: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
     gap: 8,
-    flexDirection: 'row',
   },
   paletteChip: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
   paletteChipText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
   },
-  bodyContent: {
-    padding: 20,
+  questionScroll: {
+    padding: 18,
     paddingBottom: 40,
   },
-  questionMetaRow: {
+  qMetaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  qIndexText: {
-    fontSize: 13,
+  qIndexLabel: {
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  marksBadge: {
+  reviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6,
+    borderWidth: 1,
   },
-  marksText: {
+  reviewBtnText: {
     fontSize: 11,
     fontWeight: '600',
   },
-  questionText: {
-    fontSize: 17,
-    fontWeight: '700',
-    lineHeight: 26,
-    marginBottom: 24,
+  questionPrompt: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 24,
+    marginBottom: 20,
   },
-  optionsList: {
+  optionsContainer: {
     gap: 12,
   },
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 1.5,
     gap: 12,
   },
-  optionLetterCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  optionBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
   },
-  optionLetterText: {
+  optionBadgeText: {
     fontSize: 13,
     fontWeight: '700',
   },
   optionText: {
+    flex: 1,
     fontSize: 14,
     lineHeight: 20,
-    flex: 1,
   },
-  bottomBar: {
-    height: 72,
-    borderTopWidth: 1,
+  bottomToolbar: {
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     justifyContent: 'space-between',
-  },
-  reviewButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navButtonsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
   },
   navBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  finishBtn: {
-    height: 48,
-    paddingHorizontal: 20,
-    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  finishBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  errorSubtitle: {
+  navBtnText: {
     fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  backBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  backBtnText: {
-    fontSize: 14,
     fontWeight: '600',
+  },
+  submitTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  submitTriggerText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalSheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderTopWidth: 1,
-    padding: 24,
-    paddingBottom: 36,
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
-    textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: 13,
-    textAlign: 'center',
     marginTop: 4,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   summaryGrid: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  summaryTile: {
+  summaryBox: {
     flex: 1,
-    padding: 14,
-    borderRadius: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  summaryNumber: {
-    fontSize: 22,
+  summaryVal: {
+    fontSize: 20,
     fontWeight: '800',
-    fontVariant: ['tabular-nums'],
   },
   summaryLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
     marginTop: 2,
   },
   modalActions: {
+    flexDirection: 'row',
     gap: 10,
   },
-  modalSubmitBtn: {
-    minHeight: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSubmitText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
   modalCancelBtn: {
-    minHeight: 48,
-    borderRadius: 14,
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   modalCancelText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

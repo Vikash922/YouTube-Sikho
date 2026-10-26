@@ -61,6 +61,7 @@ import {
   queueProgressSave,
   executeProgressSave,
   getCourseProgress,
+  callMarkLessonComplete,
 } from '../../src/services/videoService';
 import { analytics } from '../../src/services/analyticsService';
 
@@ -246,6 +247,16 @@ export default function VideoPlayerScreen() {
       isMounted = false;
     };
   }, [courseId, lessonId, user?.uid]);
+
+  // Auto-mark PDF lessons complete upon opening (Part 6.4)
+  useEffect(() => {
+    if (currentLesson?.type === 'pdf' && courseId && currentLesson.id) {
+      callMarkLessonComplete(courseId, currentLesson.id);
+      setCompletedLessons((prev) =>
+        prev.includes(currentLesson.id) ? prev : [...prev, currentLesson.id]
+      );
+    }
+  }, [currentLesson?.id, currentLesson?.type, courseId]);
 
   // 3. Obtain Signed Bunny Stream HLS Token
   const loadToken = useCallback(async () => {

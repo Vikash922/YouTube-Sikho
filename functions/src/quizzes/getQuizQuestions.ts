@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { HttpsError } from 'firebase-functions/v2/https';
 
 export interface GetQuizQuestionsRequest {
   quizId: string;
@@ -7,12 +8,14 @@ export interface GetQuizQuestionsRequest {
 export interface SanitizedQuestion {
   id: string;
   question: string;
+  imageUrl?: string | null;
   options: string[];
   marks: number;
   order: number;
 }
 
 export interface GetQuizQuestionsResponse {
+  attemptId: string;
   quizId: string;
   title: string;
   timeLimitMinutes: number;
@@ -21,6 +24,8 @@ export interface GetQuizQuestionsResponse {
   questions: SanitizedQuestion[];
   attemptNumber: number;
   startedAt: number;
+  expiresAt: number;
+  serverNow: string;
 }
 
 export async function getQuizQuestionsHandler(
@@ -29,30 +34,36 @@ export async function getQuizQuestionsHandler(
   db: admin.firestore.Firestore = admin.firestore()
 ): Promise<GetQuizQuestionsResponse> {
   if (!callerUid) {
-    throw new Error('Unauthenticated: Authentication required to access quizzes.');
+    throw new HttpsError('unauthenticated', 'Authentication required to access quizzes.');
   }
 
-  const { quizId } = data;
+  const { quizId } = data || {};
   if (!quizId) {
-    throw new Error('Invalid-argument: quizId is required.');
+    throw new HttpsError('invalid-argument', 'Quiz ID is required.');
   }
 
   // 1. Verify User is not blocked
   const userDoc = await db.collection('users').doc(callerUid).get();
   if (userDoc.exists && userDoc.data()?.isBlocked === true) {
-    throw new Error('Permission-denied: Your account is blocked from taking quizzes.');
+    throw new HttpsError('permission-denied', 'Your account is blocked from taking quizzes.');
   }
 
   // 2. Fetch Quiz Metadata
   const quizDoc = await db.collection('quizzes').doc(quizId).get();
   if (!quizDoc.exists) {
-    throw new Error('Not-found: Quiz does not exist.');
+    throw new HttpsError('not-found', 'Quiz does not exist.');
   }
 
   const quizData = quizDoc.data()!;
+  if (quizData.isPublished === false) {
+    throw new HttpsError('failed-precondition', 'This quiz is not currently published.');
+  }
+
   const courseId = quizData.courseId;
   const timeLimitMinutes = Number(quizData.timeLimitMinutes || quizData.durationMinutes || 15);
   const passingPercentage = Number(quizData.passingPercentage || 60);
+  const allowRetries = quizData.allowRetries !== false;
+  const maxAttempts = Number(quizData.maxAttempts || 0);
 
   // 3. Verify Active Enrollment if course is locked
   if (courseId && courseId !== 'free_for_all' && courseId !== 'free') {
@@ -63,17 +74,90 @@ export async function getQuizQuestionsHandler(
       // Admin bypass check
       const adminDoc = await db.collection('admins').doc(callerUid).get();
       if (!adminDoc.exists) {
-        throw new Error('Permission-denied: Active course enrollment is required to take this quiz.');
+        throw new HttpsError('permission-denied', 'Active course enrollment is required to take this quiz.');
       }
     }
   }
 
-  // 4. Fetch all questions from private subcollection without orderBy (prevents dropped docs)
+  // 4. Check past completed attempts
+  const resultsSnap = await db
+    .collection('quizResults')
+    .where('uid', '==', callerUid)
+    .where('quizId', '==', quizId)
+    .get();
+
+  const finishedCount = resultsSnap.size;
+
+  if (!allowRetries && finishedCount >= 1) {
+    throw new HttpsError('failed-precondition', 'Retries are disabled for this quiz. You have already completed your attempt.');
+  }
+
+  if (maxAttempts > 0 && finishedCount >= maxAttempts) {
+    throw new HttpsError('failed-precondition', `Maximum allowed attempts (${maxAttempts}) reached for this quiz.`);
+  }
+
+  // 5. Check for an active in_progress attempt that has not expired
+  const attemptDocId = `${callerUid}_${quizId}`;
+  const attemptRef = db.collection('quizAttempts').doc(attemptDocId);
+  const existingAttempt = await attemptRef.get();
+
+  const nowMs = Date.now();
+  let attemptNumber = finishedCount + 1;
+  let startedAt = nowMs;
+  let expiresAt = nowMs + timeLimitMinutes * 60 * 1000;
+  let attemptId = `${attemptDocId}_${attemptNumber}`;
+
+  if (existingAttempt.exists) {
+    const prev = existingAttempt.data()!;
+    if (prev.status === 'in_progress' && prev.expiresAtMs && prev.expiresAtMs > nowMs) {
+      // Resume existing active attempt
+      attemptNumber = prev.attemptNumber || attemptNumber;
+      startedAt = prev.startedAtMs || nowMs;
+      expiresAt = prev.expiresAtMs;
+      attemptId = prev.attemptId || attemptId;
+    } else {
+      // Previous attempt was completed or expired, start next attempt
+      await attemptRef.set({
+        attemptId,
+        uid: callerUid,
+        quizId,
+        courseId: courseId || '',
+        attemptNumber,
+        status: 'in_progress',
+        startedAt: admin.firestore.FieldValue.serverTimestamp(),
+        startedAtMs: startedAt,
+        expiresAtMs: expiresAt,
+        timeLimitMinutes,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  } else {
+    // Fresh attempt
+    await attemptRef.set({
+      attemptId,
+      uid: callerUid,
+      quizId,
+      courseId: courseId || '',
+      attemptNumber,
+      status: 'in_progress',
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+      startedAtMs: startedAt,
+      expiresAtMs: expiresAt,
+      timeLimitMinutes,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  // 6. Fetch questions without orderBy to guarantee no questions are dropped
   const questionsSnap = await db
     .collection('quizzes')
     .doc(quizId)
     .collection('questions')
     .get();
+
+  if (questionsSnap.empty) {
+    throw new HttpsError('failed-precondition', 'This quiz has no questions configured.');
+  }
 
   const rawQuestions: SanitizedQuestion[] = [];
   questionsSnap.forEach((doc) => {
@@ -81,39 +165,18 @@ export async function getQuizQuestionsHandler(
     rawQuestions.push({
       id: doc.id,
       question: qData.question || qData.questionText || '',
+      imageUrl: qData.imageUrl || null,
       options: Array.isArray(qData.options) ? qData.options : [],
       marks: Number(qData.marks || 1),
-      order: Number(qData.order || 0),
+      order: Number(qData.order !== undefined ? qData.order : 0),
     });
   });
 
-  // Sort questions in memory by order
+  // Sort in memory by order, treats missing order as 0
   rawQuestions.sort((a, b) => a.order - b.order);
 
-  // 5. Track or create Attempt in quizAttempts/{uid_quizId}
-  const attemptRef = db.collection('quizAttempts').doc(`${callerUid}_${quizId}`);
-  const existingAttempt = await attemptRef.get();
-  let attemptNumber = 1;
-
-  if (existingAttempt.exists) {
-    const prev = existingAttempt.data();
-    attemptNumber = (prev?.attemptNumber || 1) + 1;
-  }
-
-  const startedAt = Date.now();
-  await attemptRef.set({
-    uid: callerUid,
-    quizId,
-    courseId: courseId || '',
-    attemptNumber,
-    startedAt: admin.firestore.FieldValue.serverTimestamp(),
-    startedAtMs: startedAt,
-    timeLimitMinutes,
-    completed: false,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
   return {
+    attemptId,
     quizId,
     title: quizData.title || 'Course Quiz',
     timeLimitMinutes,
@@ -122,5 +185,7 @@ export async function getQuizQuestionsHandler(
     questions: rawQuestions,
     attemptNumber,
     startedAt,
+    expiresAt,
+    serverNow: new Date().toISOString(),
   };
 }

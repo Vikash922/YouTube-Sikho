@@ -460,7 +460,7 @@ export default function CourseDetailScreen() {
                       {q.title}
                     </Text>
                     <Text style={[typography.caption, typography.tabular, { color: colors.textMuted, marginTop: 2 }]}>
-                      {q.durationMinutes} mins • Pass: {q.passMarks} marks • Total: {q.totalMarks || 10} marks
+                      {q.timeLimitMinutes || q.durationMinutes || 15} mins • Pass: {q.passingPercentage}% • {q.questionCount || 0} Questions
                     </Text>
                   </View>
 

@@ -1,18 +1,21 @@
 import * as admin from 'firebase-admin';
+import { HttpsError } from 'firebase-functions/v2/https';
 
 export interface SubmitQuizPayload {
-  quizId: string;
-  timeTakenSeconds: number;
+  attemptId: string;
+  quizId?: string; // optional for backward compatibility
   answers: Record<string, number>; // { [questionId]: selectedOptionIndex }
+  timeTakenSeconds?: number;
 }
 
-export interface QuestionResultSummary {
+export interface QuestionBreakdown {
   questionId: string;
   question: string;
   options: string[];
   selectedOptionIndex: number | null;
-  isCorrect: boolean;
+  status: 'correct' | 'wrong' | 'unanswered';
   marks: number;
+  earnedMarks: number;
   correctAnswerIndex?: number;
   explanation?: string;
 }
@@ -20,18 +23,20 @@ export interface QuestionResultSummary {
 export interface SubmitQuizResponse {
   success: boolean;
   resultId: string;
+  attemptId: string;
   attemptNumber: number;
   score: number;
-  totalMarks: number;
+  maxScore: number;
   percentage: number;
   passingPercentage: number;
   passed: boolean;
   correctCount: number;
   wrongCount: number;
-  unattemptedCount: number;
+  unansweredCount: number;
   timeTakenSeconds: number;
   isLate: boolean;
-  reviewBreakup: QuestionResultSummary[];
+  breakdown: QuestionBreakdown[];
+  answersRevealed: boolean;
 }
 
 export async function submitQuizHandler(
@@ -40,77 +45,113 @@ export async function submitQuizHandler(
   db: admin.firestore.Firestore = admin.firestore()
 ): Promise<SubmitQuizResponse> {
   if (!callerUid) {
-    throw new Error('Unauthenticated: Authentication required to submit quiz.');
+    throw new HttpsError('unauthenticated', 'Authentication required to submit quiz.');
   }
 
-  const { quizId, timeTakenSeconds = 0, answers = {} } = data;
-  if (!quizId) {
-    throw new Error('Invalid-argument: Quiz ID is required.');
+  const { attemptId, quizId: providedQuizId, answers = {} } = data || {};
+  if (!attemptId && !providedQuizId) {
+    throw new HttpsError('invalid-argument', 'Attempt ID or Quiz ID is required.');
   }
 
-  // 1. Verify User is not blocked
-  const userDoc = await db.collection('users').doc(callerUid).get();
-  if (userDoc.exists && userDoc.data()?.isBlocked === true) {
-    throw new Error('Permission-denied: Your account is blocked.');
+  // 1. Resolve Attempt Document
+  // attemptId is either "{uid}_{quizId}_{n}" or doc ID in quizAttempts
+  let attemptDoc: admin.firestore.DocumentSnapshot | null = null;
+  let attemptData: any = null;
+
+  if (attemptId) {
+    // Try finding by attemptId query first
+    const attemptQuery = await db.collection('quizAttempts').where('attemptId', '==', attemptId).limit(1).get();
+    if (!attemptQuery.empty) {
+      attemptDoc = attemptQuery.docs[0];
+      attemptData = attemptDoc.data();
+    }
   }
 
-  // 2. Fetch Quiz Metadata
-  const quizDoc = await db.collection('quizzes').doc(quizId).get();
-  if (!quizDoc.exists) {
-    throw new Error('Not-found: Quiz does not exist.');
-  }
-
-  const quizData = quizDoc.data()!;
-  const courseId = quizData.courseId;
-  const timeLimitMinutes = Number(quizData.timeLimitMinutes || quizData.durationMinutes || 15);
-  const passingPercentage = Number(quizData.passingPercentage || 60);
-  const negativeMarkingRate = Number(quizData.negativeMarkingRate || 0);
-  const allowRetries = quizData.allowRetries !== false;
-  const maxAttempts = Number(quizData.maxAttempts || 3);
-  const showAnswersAfterSubmit = quizData.showAnswersAfterSubmit === true;
-
-  // 2b. Check if already submitted and retries are disabled (both legacy and current formats)
-  const existingResult = await db.collection('quizResults').doc(`${callerUid}_${quizId}`).get();
-  if (existingResult.exists && !allowRetries) {
-    throw new Error('Retries are disabled for this quiz. Submission rejected.');
-  }
-
-  // 3. Verify Active Enrollment if course-restricted
-  if (courseId && courseId !== 'free_for_all' && courseId !== 'free') {
-    const enrollmentDoc = await db.collection('enrollments').doc(`${callerUid}_${courseId}`).get();
-    const isEnrolled = enrollmentDoc.exists && (enrollmentDoc.data()?.status === 'active' || enrollmentDoc.data()?.active === true);
-    if (!isEnrolled) {
-      const adminDoc = await db.collection('admins').doc(callerUid).get();
-      if (!adminDoc.exists && typeof (db as any).seed !== 'function') {
-        throw new Error('Permission-denied: Active enrollment required to submit this quiz.');
+  if (!attemptDoc) {
+    // Fallback: Check doc by uid_quizId
+    const fallbackQuizId = providedQuizId || (attemptId ? attemptId.split('_')[1] : null);
+    if (fallbackQuizId) {
+      const fallbackRef = db.collection('quizAttempts').doc(`${callerUid}_${fallbackQuizId}`);
+      const fallbackSnap = await fallbackRef.get();
+      if (fallbackSnap.exists) {
+        attemptDoc = fallbackSnap;
+        attemptData = fallbackSnap.data();
       }
     }
   }
 
-  // 4. Check Attempt Record in quizAttempts
-  const attemptRef = db.collection('quizAttempts').doc(`${callerUid}_${quizId}`);
-  const attemptSnap = await attemptRef.get();
-  const attemptData = attemptSnap.data();
-
-  const attemptNumber = attemptData?.attemptNumber || 1;
-  if (attemptSnap.exists && attemptData?.completed === true && !allowRetries) {
-    throw new Error('Retries are disabled for this quiz. Submission rejected.');
-  }
-  if (attemptNumber > maxAttempts && !allowRetries) {
-    throw new Error(`Failed-precondition: Maximum attempt limit (${maxAttempts}) reached.`);
+  if (!attemptDoc || !attemptData) {
+    throw new HttpsError('not-found', 'Quiz attempt session not found. Please start the quiz again.');
   }
 
-  // Enforce server-side time limit check with a 60-second network grace period
-  let isLate = false;
-  if (attemptData?.startedAtMs) {
-    const elapsedSeconds = Math.floor((Date.now() - attemptData.startedAtMs) / 1000);
-    const maxAllowedSeconds = timeLimitMinutes * 60 + 60; // 60s grace
-    if (elapsedSeconds > maxAllowedSeconds) {
-      isLate = true;
+  // Verify ownership
+  if (attemptData.uid !== callerUid) {
+    throw new HttpsError('permission-denied', 'You do not own this quiz attempt.');
+  }
+
+  const quizId = attemptData.quizId || providedQuizId;
+  const attemptNumber = attemptData.attemptNumber || 1;
+  const canonicalAttemptId = attemptData.attemptId || `${callerUid}_${quizId}_${attemptNumber}`;
+  const resultDocId = `${callerUid}_${quizId}_${attemptNumber}`;
+
+  // 2. Idempotency Check: if already submitted, return the existing result
+  if (attemptData.status === 'completed' || attemptData.status === 'submitted') {
+    const existingResultSnap = await db.collection('quizResults').doc(resultDocId).get();
+    if (existingResultSnap.exists) {
+      const resData = existingResultSnap.data()!;
+      return {
+        success: true,
+        resultId: resultDocId,
+        attemptId: canonicalAttemptId,
+        attemptNumber,
+        score: resData.score,
+        maxScore: resData.totalMarks || resData.maxScore,
+        percentage: resData.percentage,
+        passingPercentage: resData.passingPercentage,
+        passed: resData.passed,
+        correctCount: resData.correctCount,
+        wrongCount: resData.wrongCount,
+        unansweredCount: resData.unansweredCount || resData.unattemptedCount || 0,
+        timeTakenSeconds: resData.timeTakenSeconds,
+        isLate: resData.isLate || false,
+        breakdown: resData.breakdown || [],
+        answersRevealed: resData.answersRevealed || false,
+      };
     }
   }
 
-  // 5. Fetch all questions (without orderBy to avoid dropping questions)
+  // 3. User block check
+  const userDoc = await db.collection('users').doc(callerUid).get();
+  if (userDoc.exists && userDoc.data()?.isBlocked === true) {
+    throw new HttpsError('permission-denied', 'Your account is blocked from submitting quizzes.');
+  }
+
+  // 4. Fetch Quiz Master Document
+  const quizDoc = await db.collection('quizzes').doc(quizId).get();
+  if (!quizDoc.exists) {
+    throw new HttpsError('not-found', 'The associated quiz was not found.');
+  }
+
+  const quizData = quizDoc.data()!;
+  const courseId = quizData.courseId || '';
+  const timeLimitMinutes = Number(quizData.timeLimitMinutes || quizData.durationMinutes || 15);
+  const passingPercentage = Number(quizData.passingPercentage || 60);
+  const allowRetries = quizData.allowRetries !== false;
+  const maxAttempts = Number(quizData.maxAttempts || 0);
+  const negativeMarkingEnabled = quizData.negativeMarkingEnabled ?? (quizData.negativeMarkingRate > 0);
+  const negativeMarkingRate = negativeMarkingEnabled ? Number(quizData.negativeMarkingRate || 0.25) : 0;
+  const showAnswersAfterSubmit = quizData.showAnswersAfterSubmit === true;
+
+  // 5. Server-Authoritative Time Check
+  const nowMs = Date.now();
+  const startedAtMs = attemptData.startedAtMs || (nowMs - 60000);
+  const timeTakenSeconds = Math.max(1, Math.round((nowMs - startedAtMs) / 1000));
+
+  // Small grace period of 15 seconds for network latency
+  const maxAllowedSeconds = timeLimitMinutes * 60 + 15;
+  const isLate = timeTakenSeconds > maxAllowedSeconds;
+
+  // 6. Fetch Question Bank
   const questionsSnap = await db
     .collection('quizzes')
     .doc(quizId)
@@ -118,129 +159,165 @@ export async function submitQuizHandler(
     .get();
 
   if (questionsSnap.empty) {
-    throw new Error('Failed-precondition: Quiz has no questions configured.');
+    throw new HttpsError('failed-precondition', 'Quiz has no questions configured.');
   }
 
-  const rawQuestions: any[] = [];
+  const questionsList: any[] = [];
   questionsSnap.forEach((doc) => {
-    rawQuestions.push({ id: doc.id, ...doc.data() });
+    questionsList.push({ id: doc.id, ...doc.data() });
   });
 
   // Sort in memory by order
-  rawQuestions.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+  questionsList.sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+
+  // 7. Determine if Answer Key can be revealed
+  // Rule: ONLY if showAnswersAfterSubmit is true AND (no retries OR final attempt reached)
+  const isFinalAttempt = !allowRetries || (maxAttempts > 0 && attemptNumber >= maxAttempts);
+  const canRevealAnswerKey = showAnswersAfterSubmit && isFinalAttempt;
 
   let correctCount = 0;
   let wrongCount = 0;
-  let unattemptedCount = 0;
-  let rawScore = 0;
-  let totalMarks = 0;
+  let unansweredCount = 0;
+  let earnedScore = 0;
+  let maxScore = 0;
 
-  // Determine if answer keys may be revealed
-  const isFinalAttempt = !allowRetries || attemptNumber >= maxAttempts;
-  const canRevealAnswerKey = showAnswersAfterSubmit && isFinalAttempt;
+  const breakdown: QuestionBreakdown[] = [];
 
-  const reviewBreakup: QuestionResultSummary[] = [];
-
-  for (const q of rawQuestions) {
+  for (const q of questionsList) {
     const qMarks = Number(q.marks || 1);
-    totalMarks += qMarks;
+    maxScore += qMarks;
 
     const qOptions = Array.isArray(q.options) ? q.options : [];
     const correctIdx = Number(q.correctAnswerIndex !== undefined ? q.correctAnswerIndex : q.correctOptionIndex);
 
-    let selectedOption: number | undefined = answers[q.id];
-    // Validate answer index bounds
-    if (selectedOption !== undefined && (typeof selectedOption !== 'number' || selectedOption < 0 || selectedOption >= qOptions.length)) {
-      selectedOption = undefined;
+    // Validate client submitted answer
+    let selectedOption: number | null = null;
+    const rawVal = answers[q.id];
+    if (typeof rawVal === 'number' && rawVal >= 0 && rawVal < qOptions.length && Number.isInteger(rawVal)) {
+      selectedOption = rawVal;
     }
 
-    let isCorrect = false;
-    if (selectedOption === undefined || selectedOption === null || selectedOption === -1) {
-      unattemptedCount++;
+    let status: 'correct' | 'wrong' | 'unanswered' = 'unanswered';
+    let qEarned = 0;
+
+    if (selectedOption === null) {
+      unansweredCount++;
+      status = 'unanswered';
     } else if (selectedOption === correctIdx) {
-      isCorrect = true;
       correctCount++;
-      rawScore += qMarks;
+      earnedScore += qMarks;
+      qEarned = qMarks;
+      status = 'correct';
     } else {
       wrongCount++;
-      rawScore -= negativeMarkingRate * qMarks;
+      const penalty = negativeMarkingRate * qMarks;
+      earnedScore -= penalty;
+      qEarned = -penalty;
+      status = 'wrong';
     }
 
-    const item: QuestionResultSummary = {
+    const item: QuestionBreakdown = {
       questionId: q.id,
       question: q.question || q.questionText || '',
       options: qOptions,
-      selectedOptionIndex: selectedOption !== undefined ? selectedOption : null,
-      isCorrect,
+      selectedOptionIndex: selectedOption,
+      status,
       marks: qMarks,
+      earnedMarks: qEarned,
     };
 
-    // Always provide question explanation in review
-    item.explanation = q.explanation || '';
-
-    // Protect answer key unless explicitly allowed for final attempt or running under test harness
-    if (canRevealAnswerKey || typeof (db as any).seed === 'function') {
+    // Strict Answer-Key Protection:
+    // Only disclose correctAnswerIndex and explanation if permitted
+    if (canRevealAnswerKey) {
       item.correctAnswerIndex = correctIdx;
+      item.explanation = q.explanation || '';
     }
 
-    reviewBreakup.push(item);
+    breakdown.push(item);
   }
 
   // Bounds checks
-  const finalScore = Math.max(0, Math.round(rawScore * 100) / 100);
-  const percentage = totalMarks > 0 ? Math.round((finalScore / totalMarks) * 100) : 0;
+  const finalScore = Math.max(0, Math.round(earnedScore * 100) / 100);
+  const percentage = maxScore > 0 ? Math.round((finalScore / maxScore) * 100) : 0;
   const passed = percentage >= passingPercentage && !isLate;
 
-  // 6. Save result to quizResults/{uid_quizId_attemptN}
-  const resultDocId = `${callerUid}_${quizId}_attempt${attemptNumber}`;
+  // 8. Save Result Document: quizResults/{uid}_{quizId}_{attemptNumber}
   const resultPayload = {
+    resultId: resultDocId,
+    attemptId: canonicalAttemptId,
     uid: callerUid,
     quizId,
-    courseId: courseId || '',
+    courseId,
     score: finalScore,
-    totalMarks,
+    maxScore,
+    totalMarks: maxScore,
     percentage,
     passingPercentage,
     passed,
     correctCount,
     wrongCount,
-    unattemptedCount,
+    unansweredCount,
     timeTakenSeconds,
     attemptNumber,
     isLate,
+    breakdown,
+    answersRevealed: canRevealAnswerKey,
     submittedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  await db.collection('quizResults').doc(resultDocId).set(resultPayload);
-  await db.collection('quizResults').doc(`${callerUid}_${quizId}`).set(resultPayload);
+  const batch = db.batch();
+  batch.set(db.collection('quizResults').doc(resultDocId), resultPayload);
+  // Also keep backward-compatible pointer on quizResults/{uid}_{quizId}
+  batch.set(db.collection('quizResults').doc(`${callerUid}_${quizId}`), resultPayload);
 
-  // 7. Mark attempt completed in quizAttempts
-  await attemptRef.set(
-    {
-      completed: true,
-      latestResultId: resultDocId,
-      latestScore: finalScore,
-      latestPercentage: percentage,
+  // 9. Update Best-Attempt Pointer: quizBest/{uid}_{quizId}
+  const bestRef = db.collection('quizBest').doc(`${callerUid}_${quizId}`);
+  const bestSnap = await bestRef.get();
+  const shouldUpdateBest = !bestSnap.exists || (bestSnap.data()?.score || 0) < finalScore;
+
+  if (shouldUpdateBest) {
+    batch.set(bestRef, {
+      uid: callerUid,
+      quizId,
+      courseId,
+      bestResultId: resultDocId,
+      bestAttemptNumber: attemptNumber,
+      score: finalScore,
+      maxScore,
+      percentage,
       passed,
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  // 10. Mark Attempt Completed in quizAttempts
+  batch.update(attemptDoc.ref, {
+    status: 'completed',
+    resultId: resultDocId,
+    score: finalScore,
+    percentage,
+    passed,
+    completedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await batch.commit();
 
   return {
     success: true,
     resultId: resultDocId,
+    attemptId: canonicalAttemptId,
     attemptNumber,
     score: finalScore,
-    totalMarks,
+    maxScore,
     percentage,
     passingPercentage,
     passed,
     correctCount,
     wrongCount,
-    unattemptedCount,
+    unansweredCount,
     timeTakenSeconds,
     isLate,
-    reviewBreakup,
+    breakdown,
+    answersRevealed: canRevealAnswerKey,
   };
 }
