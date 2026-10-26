@@ -99,6 +99,30 @@ To grant complimentary access to a VIP student, reviewer, or scholarship winner:
 
 ---
 
+## 7. Reviewing Audit Logs (Security & Compliance)
+
+1. Navigate to the **Audit Log** tab (`/activity-log`).
+2. Inspect chronological records of:
+   - Admin promotions / demotions (`grant_admin_claim`, `revoke_admin_claim`).
+   - Manual course enrollments and access revocations (`enroll_grant`, `enroll_revoke`).
+   - Payment refunds and transaction clawbacks (`payment_refund`).
+   - Deletions of courses, quizzes, and live classes.
+   - Account deletion events and requests.
+3. Filter by action or search by student UID or course ID for compliance verification.
+
+---
+
+## 8. Handling Account Deletion Requests (Google Play Policy)
+
+Students can delete their account in 2 ways:
+1. **Self-Service via Mobile App**:
+   - In mobile app: `Settings > Danger Zone > Delete My Account`.
+   - Requires recent login (within 5 minutes). All personal progress, quiz scores, reviews, tickets, and storage avatars are purged permanently.
+2. **Web Portal via Public URL**:
+   - Direct link: `https://sikho-77341.web.app/delete-account` (or `?page=delete-account`).
+   - Requests submitted appear under `accountDeletionRequests` in Firestore.
+   - Operators can verify the request and complete account purge if the user has uninstalled the mobile app.
+
 ## 7. Emergency Maintenance Mode
 
 When performing major course overhauls or scheduled infrastructure maintenance:

@@ -116,20 +116,39 @@ export async function refundPaymentHandler(
       { merge: true }
     );
 
-    // Write audit log entry
-    const auditRef = db.collection('auditLogs').doc();
+    // Write audit log entry using canonical auditLog collection
+    const auditRef = db.collection('auditLog').doc();
     transaction.set(auditRef, {
+      actorUid: adminUid,
       action: 'payment_refund',
-      adminUid,
-      targetOrder: orderId,
-      targetUser: orderData.uid,
-      courseId: orderData.courseId,
-      amount: refundAmountPaise / 100,
-      razorpayRefundId: refundId,
-      reason,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      targetType: 'payment',
+      targetId: orderId,
+      metadata: {
+        targetUser: orderData.uid,
+        courseId: orderData.courseId,
+        amount: refundAmountPaise / 100,
+        razorpayRefundId: refundId,
+        reason,
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   });
+
+  // 3. Dispatch Notification to Student about Refund
+  try {
+    const { sendNotificationInternal } = await import('../notifications/sendNotification');
+    await sendNotificationInternal({
+      title: 'Course Refund Processed',
+      body: `Your refund of ₹${refundAmountPaise / 100} for order #${orderId.slice(0, 8)} has been initiated.`,
+      actionType: 'none',
+      targetType: 'user',
+      targetId: orderData.uid,
+      senderUid: adminUid,
+      db,
+    });
+  } catch (notifErr: any) {
+    console.warn('[refundPayment] Student notification note:', notifErr.message);
+  }
 
   return {
     success: true,

@@ -91,6 +91,23 @@ export async function setAdminClaimHandler(
     }, { merge: true });
   }
 
+  // 4. Audit Log entry
+  try {
+    const { writeAuditLog } = await import('./lib');
+    await writeAuditLog(
+      request.auth.uid,
+      grantAdmin ? 'grant_admin_claim' : 'revoke_admin_claim',
+      'claim',
+      targetUid,
+      {
+        targetEmail: targetUser.email || '',
+        role: grantAdmin ? role : null,
+      }
+    );
+  } catch (auditErr: any) {
+    console.warn('[setAdminClaim] Audit log note:', auditErr.message);
+  }
+
   return {
     success: true,
     uid: targetUid,

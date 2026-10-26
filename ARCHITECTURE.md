@@ -102,25 +102,52 @@ flowchart TD
 
 ---
 
-## 4. Cloud Functions Catalog
+## 4. Cloud Functions Catalog (Region: `asia-south1`)
 
-| Function Name | Type & Trigger | Input Parameters | Output Response | Authentication Requirement |
-| :--- | :--- | :--- | :--- | :--- |
-| `createOrder` | `onCall` (HTTPS) | `{ courseId, couponCode? }` | `{ orderId, razorpayOrderId, amount, currency }` | Authenticated Student (`request.auth.uid`) |
-| `verifyPayment` | `onCall` (HTTPS) | `{ orderId, razorpayPaymentId, razorpaySignature }` | `{ success: true, enrollmentId }` | Authenticated Student |
-| `razorpayWebhook` | `onRequest` (Webhook) | Razorpay Webhook Payload & `X-Razorpay-Signature` | `{ status: "ok" }` | HMAC Webhook Secret Verification |
-| `refundPayment` | `onCall` (HTTPS) | `{ orderId, reason }` | `{ success: true, refundId }` | Admin Role Required (`request.auth.token.admin`) |
-| `validateYoutubeVideo` | `onCall` (HTTPS) | `{ url }` | `{ videoId, title, durationSeconds, privacyStatus, embeddable }` | Admin Role Required |
-| `getLessonPlayback` | `onCall` (HTTPS) | `{ courseId, sectionId, lessonId }` | `{ provider: "youtube", videoId, startSeconds, sessionId, expiresAt }` | Enrolled Student or Free Preview |
-| `playbackHeartbeat` | `onCall` (HTTPS) | `{ sessionId }` | `{ status: "ok", active: boolean }` | Authenticated Active Student |
-| `getQuizQuestions` | `onCall` (HTTPS) | `{ quizId }` | `{ attemptId, startedAt, expiresAt, serverNow, questions: [...] }` | Enrolled Student or Free Quiz |
-| `submitQuiz` | `onCall` (HTTPS) | `{ attemptId, quizId, answers, timeTakenSeconds }` | `{ resultId, score, maxScore, percentage, passed, breakdown }` | Authenticated Student Owner |
-| `markLessonComplete` | `onCall` (HTTPS) | `{ courseId, lessonId, watchedSeconds? }` | `{ success: true, completedLessons, percentage, isFullyCompleted }` | Enrolled Student |
-| `issueCertificate` | `onCall` (HTTPS) | `{ courseId }` | `{ success: true, certificateId, certificate: {...} }` | Enrolled Student (100% Progress Required) |
-| `getMaterialUrl` | `onCall` (HTTPS) | `{ courseId, materialId }` | `{ downloadUrl, expiresAt, title, fileName }` | Enrolled Student |
-| `sendNotification` | `onCall` (HTTPS) | `{ title, body, target, targetCourseId? }` | `{ success: true, count }` | Admin Role Required |
-| `manageEnrollment` | `onCall` (HTTPS) | `{ uid, courseId, action: "grant" \| "revoke" }` | `{ success: true }` | Admin Role Required |
-| `deleteAccount` | `onCall` (HTTPS) | `{}` | `{ success: true }` | Authenticated User |
-| `deleteCourse` | `onCall` (HTTPS) | `{ courseId }` | `{ success: true }` | Admin Role Required |
-| `deleteQuiz` | `onCall` (HTTPS) | `{ quizId }` | `{ success: true }` | Admin Role Required |
-| `deleteLiveClass` | `onCall` (HTTPS) | `{ classId }` | `{ success: true }` | Admin Role Required |
+| Function Name | Type & Trigger | Input Parameters | Output Response | Secrets Bound | Auth Requirement | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `validateCoupon` | `onCall` | `{ code, courseId }` | `{ valid, discountPaise, finalPricePaise }` | None | Public / Auth | ✅ Live |
+| `createOrder` | `onCall` | `{ courseId, couponCode? }` | `{ orderId, razorpayOrderId, amountPaise, currency }` | `razorpaySecrets` | Authenticated Student | ✅ Live |
+| `verifyPayment` | `onCall` | `{ orderId, razorpayPaymentId, razorpaySignature }` | `{ success: true, enrollmentId, alreadyProcessed }` | `razorpaySecrets` | Authenticated Student | ✅ Live |
+| `razorpayWebhook` | `onRequest` | Webhook Payload & `X-Razorpay-Signature` | `{ status: "ok" }` | `razorpaySecrets` | HMAC Verification | ✅ Live |
+| `refundPayment` | `onCall` | `{ orderId, amount?, reason? }` | `{ success: true, refundId, status }` | `razorpaySecrets` | Admin Role Required | ✅ Live |
+| `setAdminClaim` | `onCall` | `{ targetUid, admin, role? }` | `{ success: true, uid, admin, role }` | None | Owner Role Required | ✅ Live |
+| `validateYoutubeVideo` | `onCall` | `{ url }` | `{ videoId, title, durationSeconds, privacyStatus, embeddable }` | `youtubeSecrets` | Admin Role Required | ✅ Live |
+| `manageEnrollment` | `onCall` | `{ action: "grant" \| "revoke", targetUid, courseId, reason? }` | `{ success: true, action, enrollmentId }` | None | Admin Role Required | ✅ Live |
+| `sendNotification` | `onCall` | `{ title, body, imageUrl?, actionType, actionValue?, target }` | `{ success: true, recipients, delivered, failed }` | None | Admin Role Required | ✅ Live |
+| `getQuizQuestions` | `onCall` | `{ quizId }` | `{ attemptId, startedAt, expiresAt, serverNow, questions: [...] }` | None | Enrolled Student / Free | ✅ Live |
+| `submitQuiz` | `onCall` | `{ attemptId, quizId, answers, timeTakenSeconds }` | `{ resultId, score, maxScore, percentage, passed, breakdown }` | None | Authenticated Student Owner | ✅ Live |
+| `markLessonComplete` | `onCall` | `{ courseId, lessonId, watchedSeconds? }` | `{ success: true, completedLessons, percentage, isFullyCompleted }` | None | Enrolled Student | ✅ Live |
+| `issueCertificate` | `onCall` | `{ courseId }` | `{ success: true, certificateId, certificate: {...} }` | None | Enrolled Student (100% Complete) | ✅ Live |
+| `getMaterialUrl` | `onCall` | `{ courseId, materialId }` | `{ downloadUrl, expiresAt, title, fileName }` | None | Enrolled Student / Admin | ✅ Live |
+| `getLiveStream` | `onCall` | `{ classId }` | `{ liveUrl, status, chatEnabled }` | None | Enrolled Student / Admin | ✅ Live |
+| `deleteCourse` | `onCall` | `{ courseId }` | `{ success: true, courseId }` | None | Admin Role Required | ✅ Live |
+| `deleteQuiz` | `onCall` | `{ quizId }` | `{ success: true, quizId }` | None | Admin Role Required | ✅ Live |
+| `deleteLiveClass` | `onCall` | `{ classId }` | `{ success: true, classId }` | None | Admin Role Required | ✅ Live |
+| `deleteAccount` | `onCall` | `{}` | `{ success: true, purgedAt }` | None | Authenticated User (Recent Login) | ✅ Live |
+| `onCoursePublished` | `onDocumentWritten` | `courses/{courseId}` | Dispatches broadcast notification to all students | None | Trigger | ✅ Live |
+| `onLiveClassReminder`| `onSchedule` | `every 5 minutes` | Dispatches push notification for starting classes | None | Scheduled Cron | ✅ Live |
+| `dailyMaintenance` | `onSchedule` | `every 24 hours` | Prunes expired `rateLimits` and `processedEvents` | None | Scheduled Cron | ✅ Live |
+
+---
+
+### Function in ARCHITECTURE.md vs Function in Code Reconciled
+
+| Catalog Function Name | Code Implementation | Status & Reconciled Decision |
+| :--- | :--- | :--- |
+| `getLessonPlayback` | Handled via official YouTube IFrame player client SDK with server-validated `enrollments/{uid}_{courseId}` security rules. Video tokens / proxies removed per YouTube API Services Developer Policies (Part 5). | Retired per YouTube Compliance |
+| `playbackHeartbeat` | Position tracking saved directly to `progress/{uid}_{courseId}` via debounced client save; completion validated authoritatively via `markLessonComplete`. | Streamlined per Part 6.4 |
+| `auditLog` | Replaced legacy `auditLogs` with canonical server-only `auditLog/{id}` collection and structured `writeAuditLog` helper. | Hardened in Part 7.5 |
+
+---
+
+## 5. Security & Secret Binding Catalog
+
+All functions are provisioned with explicit `secrets: [...]` declarations:
+
+| Secret Name | Bound Functions | Purpose |
+| :--- | :--- | :--- |
+| `RAZORPAY_KEY_ID` | `createOrder`, `verifyPayment`, `razorpayWebhook`, `refundPayment` | Authenticates with Razorpay REST API |
+| `RAZORPAY_KEY_SECRET` | `createOrder`, `verifyPayment`, `razorpayWebhook`, `refundPayment` | HMAC-SHA256 order signature verification and refund execution |
+| `RAZORPAY_WEBHOOK_SECRET` | `razorpayWebhook` | Verifies gateway webhook push payloads |
+| `YOUTUBE_API_KEY` | `validateYoutubeVideo` | Inspects unlisted YouTube videos for embeddability and duration metadata |

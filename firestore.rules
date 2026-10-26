@@ -293,6 +293,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /accountDeletionRequests/{reqId} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
     // ===============================================================
     // 20. ANALYTICS & TRANSACTIONAL MAIL
     // ===============================================================

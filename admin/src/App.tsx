@@ -15,20 +15,27 @@ import { Categories } from './pages/Categories';
 import { Materials } from './pages/Materials';
 import { HomeManager } from './pages/HomeManager';
 import { Students } from './pages/Students';
+import { ActivityLog } from './pages/ActivityLog';
 import { AdminLayout } from './components/layout/AdminLayout';
 import { NavTab } from './components/layout/Sidebar';
 import { PublicCertificateVerify } from './pages/PublicCertificateVerify';
+import { PublicAccountDeletion } from './pages/PublicAccountDeletion';
 
 export const App: React.FC = () => {
   const { user, isAdmin, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
 
-  // Check URL query parameters for public certificate verification route
+  // Check URL query parameters for public routes
   const searchParams = new URLSearchParams(window.location.search);
   const verifyId = searchParams.get('id') || searchParams.get('verify') || (window.location.pathname.startsWith('/verify/') ? window.location.pathname.split('/')[2] : null);
+  const isDeleteAccountRoute = window.location.pathname.includes('/delete-account') || searchParams.get('page') === 'delete-account';
 
   if (verifyId) {
     return <PublicCertificateVerify certId={verifyId} />;
+  }
+
+  if (isDeleteAccountRoute) {
+    return <PublicAccountDeletion />;
   }
 
   if (loading) {
@@ -66,6 +73,7 @@ export const App: React.FC = () => {
       {activeTab === 'support' && <Support />}
       {activeTab === 'settings' && <Settings />}
       {activeTab === 'students' && <Students />}
+      {activeTab === 'activity-log' && <ActivityLog />}
     </AdminLayout>
   );
 };

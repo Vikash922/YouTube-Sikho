@@ -103,3 +103,33 @@ The top 10 production issues that may arise, root causes, and step-by-step resol
   1. Open Razorpay Dashboard $\rightarrow$ **Settings** $\rightarrow$ **Webhooks**.
   2. Copy the exact Secret string configured for the webhook endpoint.
   3. Update `functions/.env` with `RAZORPAY_WEBHOOK_SECRET="<secret>"` and redeploy functions.
+
+---
+
+### 11. Account Deletion Fails with "Recent login required"
+- **Symptoms**: Student taps "Delete My Account" and gets "Re-Authentication Required".
+- **Root Cause**: Firebase Auth security requirement — sensitive actions like account deletion require the user's `auth_time` to be within the last 5 minutes (300 seconds).
+- **Fix**:
+  1. Prompt user to log out and log back in.
+  2. Upon fresh login, retry deleting the account immediately.
+  3. For users unable to log in, direct them to `https://sikho-77341.web.app/delete-account` to submit a web deletion request.
+
+---
+
+### 12. Dead FCM Push Tokens & Multicast Failures
+- **Symptoms**: Notification history shows some FCM failure count.
+- **Root Cause**: User uninstalled the app or cleared app storage, invalidating the FCM registration token.
+- **Fix**:
+  1. `sendNotification` Cloud Function automatically catches `messaging/registration-token-not-registered` and unsets the user's `fcmToken`.
+  2. When the user logs back in on the mobile app, the fresh push token is automatically registered.
+
+---
+
+### 13. Cloud Functions Deploy Fails with "Must be on Blaze plan"
+- **Symptoms**: `firebase deploy --only functions` exits with code 1 and URL pointing to Blaze upgrade.
+- **Root Cause**: Google Cloud Functions v2 and Cloud Build container generation require an active billing account (Blaze Pay-as-you-go).
+- **Fix**:
+  1. Upgrade to Firebase Blaze in [Firebase Console Usage & Billing](https://console.firebase.google.com/project/sikho-77341/usage/details).
+  2. Note: Blaze includes the exact same Free Tier as Spark (2 Million function calls/month free, 5GB storage free).
+  3. Set a ₹1 or $1 budget alert in Google Cloud Console to ensure ₹0 charges.
+  4. Once enabled, deploy via `firebase deploy --only functions`.

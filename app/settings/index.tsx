@@ -78,7 +78,7 @@ export default function SettingsScreen() {
       await logout();
       Alert.alert(
         'Account Deleted',
-        'Your account and associated personal records have been permanently purged.',
+        'Your account and all associated personal data have been permanently purged.',
         [
           {
             text: 'OK',
@@ -89,10 +89,34 @@ export default function SettingsScreen() {
     } catch (err: any) {
       console.error('[Settings] Cloud Function deleteAccount error:', err.message);
       setDeleteModalVisible(false);
-      Alert.alert(
-        'Account Deletion Failed',
-        err.message || 'Recent login required. Please sign in again and retry deleting your account.'
-      );
+
+      const isRecentLogin =
+        err.code === 'failed-precondition' ||
+        err.message?.includes('recent-login-required') ||
+        err.message?.includes('Recent login required');
+
+      if (isRecentLogin) {
+        Alert.alert(
+          'Re-Authentication Required',
+          'For security, account deletion requires a fresh login. Please log out and sign in again to verify your identity.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Log Out Now',
+              style: 'destructive',
+              onPress: async () => {
+                await logout();
+                router.replace('/(auth)/login');
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Account Deletion Failed',
+          err.message || 'Unable to delete account at this time. Please check your internet connection and try again.'
+        );
+      }
     } finally {
       setIsDeleting(false);
     }

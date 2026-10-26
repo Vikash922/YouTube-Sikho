@@ -1,7 +1,16 @@
 import * as admin from 'firebase-admin';
-import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onCall, onRequest } from 'firebase-functions/v2/https';
 import { razorpaySecrets, youtubeSecrets } from './config';
-import { requireAdmin, setAdminClaimHandler } from './auth';
+import {
+  REGION,
+  defaultCallableOptions,
+  heavyCallableOptions,
+  requireAdmin,
+  requireAuth,
+  normalizeError,
+} from './lib';
+
+import { setAdminClaimHandler } from './auth';
 import { validateYoutubeVideoHandler } from './youtube/validateYoutubeVideo';
 import { createOrderHandler } from './payments/createOrder';
 import { verifyPaymentHandler } from './payments/verifyPayment';
@@ -23,41 +32,34 @@ import { getLiveStreamHandler } from './live/getLiveStream';
 import { markLessonCompleteHandler } from './progress/markLessonComplete';
 import { issueCertificateHandler } from './certificates/issueCertificate';
 
-// Initialize Firebase Admin App
+// Initialize Firebase Admin App singleton
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
-const REGION = 'asia-south1';
-
 /**
  * 1. validateCoupon: Server-Side Coupon Validation & Discount Calculation
  */
-export const validateCoupon = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    try {
-      return await validateCouponHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('invalid-argument', err.message || 'Coupon validation failed.');
-    }
+export const validateCoupon = onCall(defaultCallableOptions, async (request) => {
+  const uid = request.auth?.uid || null;
+  try {
+    return await validateCouponHandler(request.data, uid);
+  } catch (err: any) {
+    throw normalizeError(err, 'validateCoupon');
   }
-);
+});
 
 /**
  * 2. createOrder: Server-Calculated Price & Razorpay Order Creation
  */
 export const createOrder = onCall(
-  { region: REGION, cors: true, secrets: razorpaySecrets },
+  { ...defaultCallableOptions, secrets: razorpaySecrets },
   async (request) => {
-    const uid = request.auth?.uid || null;
+    const auth = requireAuth(request);
     try {
-      return await createOrderHandler(request.data, uid);
+      return await createOrderHandler(request.data, auth.uid);
     } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('invalid-argument', err.message || 'Failed to create order.');
+      throw normalizeError(err, 'createOrder');
     }
   }
 );
@@ -66,14 +68,13 @@ export const createOrder = onCall(
  * 3. verifyPayment: Cryptographic HMAC Signature Verification & Enrollment Unlock
  */
 export const verifyPayment = onCall(
-  { region: REGION, cors: true, secrets: razorpaySecrets },
+  { ...defaultCallableOptions, secrets: razorpaySecrets },
   async (request) => {
-    const uid = request.auth?.uid || null;
+    const auth = requireAuth(request);
     try {
-      return await verifyPaymentHandler(request.data, uid);
+      return await verifyPaymentHandler(request.data, auth.uid);
     } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('invalid-argument', err.message || 'Payment verification failed.');
+      throw normalizeError(err, 'verifyPayment');
     }
   }
 );
@@ -92,15 +93,13 @@ export const razorpayWebhook = onRequest(
  * 5. refundPayment: Admin-Only Refund API & Immediate Access Revocation
  */
 export const refundPayment = onCall(
-  { region: REGION, cors: true, secrets: razorpaySecrets },
+  { ...defaultCallableOptions, secrets: razorpaySecrets },
   async (request) => {
-    requireAdmin(request);
-    const uid = request.auth!.uid;
+    const caller = requireAdmin(request);
     try {
-      return await refundPaymentHandler(request.data, uid);
+      return await refundPaymentHandler(request.data, caller.uid);
     } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Refund processing failed.');
+      throw normalizeError(err, 'refundPayment');
     }
   }
 );
@@ -109,14 +108,13 @@ export const refundPayment = onCall(
  * 6. validateYoutubeVideo: Server-Side Unlisted YouTube Video Verification
  */
 export const validateYoutubeVideo = onCall(
-  { region: REGION, cors: true, secrets: youtubeSecrets },
+  { ...defaultCallableOptions, secrets: youtubeSecrets },
   async (request) => {
     requireAdmin(request);
     try {
       return await validateYoutubeVideoHandler(request.data);
     } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('invalid-argument', err.message || 'YouTube validation failed.');
+      throw normalizeError(err, 'validateYoutubeVideo');
     }
   }
 );
@@ -124,212 +122,157 @@ export const validateYoutubeVideo = onCall(
 /**
  * 7. manageEnrollment: Admin-Only Manual Student Enroll & Revoke
  */
-export const manageEnrollment = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    requireAdmin(request);
-    const uid = request.auth!.uid;
-    try {
-      return await manageEnrollmentHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Manual enrollment management failed.');
-    }
+export const manageEnrollment = onCall(defaultCallableOptions, async (request) => {
+  try {
+    return await manageEnrollmentHandler(request.data, request);
+  } catch (err: any) {
+    throw normalizeError(err, 'manageEnrollment');
   }
-);
+});
 
 /**
  * 7b. setAdminClaim: Owner-Only Custom Claim Privilege Management
  */
-export const setAdminClaim = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    try {
-      return await setAdminClaimHandler(request.data, request);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Failed to update admin claims.');
-    }
+export const setAdminClaim = onCall(defaultCallableOptions, async (request) => {
+  try {
+    return await setAdminClaimHandler(request.data, request);
+  } catch (err: any) {
+    throw normalizeError(err, 'setAdminClaim');
   }
-);
+});
 
 /**
- * 8. sendNotification: Targeted Push & In-App Notification Dispatcher
+ * 8. sendNotification: Targeted Push & In-App Notification Dispatcher (Chunked)
  */
-export const sendNotification = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    requireAdmin(request);
-    const uid = request.auth!.uid;
-    try {
-      return await sendNotificationHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Notification dispatch failed.');
-    }
+export const sendNotification = onCall(heavyCallableOptions, async (request) => {
+  try {
+    return await sendNotificationHandler(request.data, request);
+  } catch (err: any) {
+    throw normalizeError(err, 'sendNotification');
   }
-);
+});
 
 /**
  * 8b. getQuizQuestions: Sanitized Question Bank Retrieval for Enrolled Students
  */
-export const getQuizQuestions = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    try {
-      return await getQuizQuestionsHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Could not fetch quiz questions.');
-    }
+export const getQuizQuestions = onCall(defaultCallableOptions, async (request) => {
+  const auth = requireAuth(request);
+  try {
+    return await getQuizQuestionsHandler(request.data, auth.uid);
+  } catch (err: any) {
+    throw normalizeError(err, 'getQuizQuestions');
   }
-);
+});
 
 /**
  * 9. submitQuiz: Server-Side Quiz Evaluation & Anti-Cheat Engine
  */
-export const submitQuiz = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    try {
-      return await submitQuizHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('invalid-argument', err.message || 'Quiz evaluation failed.');
-    }
+export const submitQuiz = onCall(defaultCallableOptions, async (request) => {
+  const auth = requireAuth(request);
+  try {
+    return await submitQuizHandler(request.data, auth.uid);
+  } catch (err: any) {
+    throw normalizeError(err, 'submitQuiz');
   }
-);
+});
 
 /**
- * 10. deleteAccount: Play Store Compliant User Data Purge
+ * 10. deleteAccount: Play Store & GDPR Compliant User Data Purge (Resumable)
  */
-export const deleteAccount = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    if (!request.auth?.uid) {
-      throw new HttpsError('unauthenticated', 'Authentication required.');
-    }
-    try {
-      return await deleteAccountHandler(request);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Account deletion failed.');
-    }
+export const deleteAccount = onCall(heavyCallableOptions, async (request) => {
+  try {
+    return await deleteAccountHandler(request);
+  } catch (err: any) {
+    throw normalizeError(err, 'deleteAccount');
   }
-);
+});
 
 /**
  * 11. getMaterialUrl: Short-Lived Ephemeral Download URL for Course Study Materials
  */
-export const getMaterialUrl = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
-    try {
-      return await getMaterialUrlHandler(request.data, uid, { admin: adminClaim });
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('internal', err.message || 'Failed to generate download URL.');
-    }
+export const getMaterialUrl = onCall(defaultCallableOptions, async (request) => {
+  const auth = requireAuth(request);
+  const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
+  try {
+    return await getMaterialUrlHandler(request.data, auth.uid, { admin: adminClaim });
+  } catch (err: any) {
+    throw normalizeError(err, 'getMaterialUrl');
   }
-);
+});
 
 /**
  * 12. getLiveStream: Gated Live Broadcast Access
  */
-export const getLiveStream = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
-    try {
-      return await getLiveStreamHandler(request.data, uid, { admin: adminClaim });
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('permission-denied', err.message || 'Failed to retrieve live stream.');
-    }
+export const getLiveStream = onCall(defaultCallableOptions, async (request) => {
+  const auth = requireAuth(request);
+  const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
+  try {
+    return await getLiveStreamHandler(request.data, auth.uid, { admin: adminClaim });
+  } catch (err: any) {
+    throw normalizeError(err, 'getLiveStream');
   }
-);
+});
 
 /**
  * 13. deleteCourse: Administrative Cascade Delete with Active Enrollment Safeguard
  */
-export const deleteCourse = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const caller = requireAdmin(request);
-    try {
-      return await deleteCourseHandler(request.data, caller);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('internal', err.message || 'Failed to delete course.');
-    }
+export const deleteCourse = onCall(heavyCallableOptions, async (request) => {
+  const caller = requireAdmin(request);
+  try {
+    return await deleteCourseHandler(request.data, caller);
+  } catch (err: any) {
+    throw normalizeError(err, 'deleteCourse');
   }
-);
+});
 
 /**
  * 14. deleteQuiz: Administrative Cascade Delete for Quizzes
  */
-export const deleteQuiz = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const caller = requireAdmin(request);
-    try {
-      return await deleteQuizHandler(request.data, caller);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('internal', err.message || 'Failed to delete quiz.');
-    }
+export const deleteQuiz = onCall(heavyCallableOptions, async (request) => {
+  const caller = requireAdmin(request);
+  try {
+    return await deleteQuizHandler(request.data, caller);
+  } catch (err: any) {
+    throw normalizeError(err, 'deleteQuiz');
   }
-);
+});
 
 /**
  * 15. deleteLiveClass: Administrative Cascade Delete for Live Classes
  */
-export const deleteLiveClass = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const caller = requireAdmin(request);
-    try {
-      return await deleteLiveClassHandler(request.data, caller);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('internal', err.message || 'Failed to delete live class.');
-    }
+export const deleteLiveClass = onCall(heavyCallableOptions, async (request) => {
+  const caller = requireAdmin(request);
+  try {
+    return await deleteLiveClassHandler(request.data, caller);
+  } catch (err: any) {
+    throw normalizeError(err, 'deleteLiveClass');
   }
-);
+});
 
 /**
  * 16. markLessonComplete: Authoritative Progress Evaluation & Completion Check
  */
-export const markLessonComplete = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    try {
-      return await markLessonCompleteHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('internal', err.message || 'Failed to update lesson completion.');
-    }
+export const markLessonComplete = onCall(defaultCallableOptions, async (request) => {
+  const auth = requireAuth(request);
+  try {
+    return await markLessonCompleteHandler(request.data, auth.uid);
+  } catch (err: any) {
+    throw normalizeError(err, 'markLessonComplete');
   }
-);
+});
 
 /**
  * 17. issueCertificate: Authoritative 100% Progress Verification & Certificate Issuance
  */
-export const issueCertificate = onCall(
-  { region: REGION, cors: true },
-  async (request) => {
-    const uid = request.auth?.uid || null;
-    try {
-      return await issueCertificateHandler(request.data, uid);
-    } catch (err: any) {
-      if (err instanceof HttpsError) throw err;
-      throw new HttpsError('internal', err.message || 'Failed to issue course certificate.');
-    }
+export const issueCertificate = onCall(defaultCallableOptions, async (request) => {
+  const auth = requireAuth(request);
+  try {
+    return await issueCertificateHandler(request.data, auth.uid);
+  } catch (err: any) {
+    throw normalizeError(err, 'issueCertificate');
   }
-);
+});
+
+// Automated Triggers & Scheduled Jobs
+export { onCoursePublished, onLiveClassReminder } from './notifications/triggers';
+export { dailyMaintenance } from './maintenance/dailyMaintenance';

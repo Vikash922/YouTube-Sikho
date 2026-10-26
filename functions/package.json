@@ -1,12 +1,15 @@
 {
   "name": "course-app-functions",
+  "version": "1.0.0",
+  "description": "Production hardened Cloud Functions for YouTube Sikho Course App",
   "scripts": {
-    "lint": "echo 'Linting passed'",
     "build": "tsc -p tsconfig.build.json",
     "build:all": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsc && node --test lib/__tests__/*.test.js",
-    "test:ts": "node ../scripts/test-cloud-functions.js"
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "tsc && node --test lib/__tests__/*.test.js"
   },
   "engines": {
     "node": ">=20"

@@ -13,7 +13,7 @@ import {
   Smartphone,
   Sparkles,
 } from 'lucide-react';
-import { collection, query, orderBy, onSnapshot, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { Course } from '../types';
@@ -98,39 +98,33 @@ export const Notifications: React.FC = () => {
     setFeedback(null);
 
     try {
-      // 1. Write directly to Firestore for instant real-time student app delivery
-      const notifRef = collection(db, 'notifications');
-      await addDoc(notifRef, {
+      // Dispatch exclusively via Cloud Function (creates admin record, user inbox records, and FCM)
+      const sendNotificationFn = httpsCallable<any, any>(functions, 'sendNotification');
+      const res = await sendNotificationFn({
+        target: {
+          type: target,
+          id: target !== 'all' ? targetId : undefined,
+        },
         title: title.trim(),
         body: body.trim(),
-        imageUrl: imageUrl.trim() || null,
-        target,
-        targetId: target !== 'all' ? targetId : null,
-        actionType,
-        actionData: actionData.trim() || null,
-        sentAt: serverTimestamp(),
-        createdAt: new Date().toISOString(),
+        imageUrl: imageUrl.trim() || undefined,
+        actionType: actionType === 'notifications' ? 'none' : actionType,
+        actionValue: actionData.trim() || undefined,
       });
 
-      // 2. Dispatch FCM Push Notifications via Cloud Functions
-      try {
-        const sendNotificationFn = httpsCallable(functions, 'sendNotification');
-        await sendNotificationFn({
-          target,
-          targetId: target !== 'all' ? targetId : undefined,
-          title: title.trim(),
-          body: body.trim(),
-          imageUrl: imageUrl.trim() || undefined,
-          actionType,
-          actionData: actionData.trim() || undefined,
-        });
-      } catch (fcmErr) {
-        console.warn('FCM Cloud Function note:', fcmErr);
+      const data = res.data || {};
+      const delivered = data.inAppDeliveredCount ?? data.recipients ?? 0;
+      const fcmDelivered = data.fcmSuccessCount ?? 0;
+      const fcmFailed = data.fcmFailureCount ?? 0;
+
+      let msg = `Broadcast delivered to ${delivered} student${delivered === 1 ? '' : 's'} (${fcmDelivered} push alerts sent)`;
+      if (fcmFailed > 0) {
+        msg += `, ${fcmFailed} devices unreachable`;
       }
 
       setFeedback({
         type: 'success',
-        message: 'Notification broadcast sent live to all students!',
+        message: msg,
       });
 
       // Clear form

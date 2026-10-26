@@ -17,6 +17,7 @@ import {
   FileQuestion,
   FileText,
   LifeBuoy,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -33,7 +34,8 @@ export type NavTab =
   | 'home-manager'
   | 'support'
   | 'settings'
-  | 'students';
+  | 'students'
+  | 'activity-log';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -68,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'support', label: 'Help & Tickets', icon: <LifeBuoy className="w-5 h-5" /> },
     { id: 'settings', label: 'App Settings', icon: <Sliders className="w-5 h-5" /> },
     { id: 'students', label: 'Students', icon: <Users className="w-5 h-5" /> },
+    { id: 'activity-log', label: 'Audit Log', icon: <Activity className="w-5 h-5" /> },
   ];
 
   const handleTabClick = (tab: NavTab) => {

@@ -65,13 +65,16 @@ export async function deleteCourseHandler(
     await batch.commit();
   }
 
-  // 4. Record Audit Log
-  await db.collection('auditLogs').add({
+  // 4. Record Audit Log in canonical auditLog collection
+  await db.collection('auditLog').add({
+    actorUid: caller.uid,
     action: 'delete_course',
-    courseId,
-    courseTitle: courseSnap.data()?.title || '',
-    deletedBy: caller.uid,
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    targetType: 'course',
+    targetId: courseId,
+    metadata: {
+      courseTitle: courseSnap.data()?.title || '',
+    },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   return { success: true, courseId };
@@ -101,13 +104,16 @@ export async function deleteQuizHandler(
   // Cascade delete quiz and its questions subcollection recursively
   await db.recursiveDelete(quizRef);
 
-  // Record Audit Log
-  await db.collection('auditLogs').add({
+  // Record Audit Log in canonical auditLog collection
+  await db.collection('auditLog').add({
+    actorUid: caller.uid,
     action: 'delete_quiz',
-    quizId,
-    quizTitle: quizSnap.data()?.title || '',
-    deletedBy: caller.uid,
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    targetType: 'quiz',
+    targetId: quizId,
+    metadata: {
+      quizTitle: quizSnap.data()?.title || '',
+    },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   return { success: true, quizId };
@@ -137,13 +143,16 @@ export async function deleteLiveClassHandler(
   // Cascade delete live class and messages, handRaises subcollections recursively
   await db.recursiveDelete(classRef);
 
-  // Record Audit Log
-  await db.collection('auditLogs').add({
+  // Record Audit Log in canonical auditLog collection
+  await db.collection('auditLog').add({
+    actorUid: caller.uid,
     action: 'delete_live_class',
-    classId,
-    classTitle: classSnap.data()?.title || '',
-    deletedBy: caller.uid,
-    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    targetType: 'live_class',
+    targetId: classId,
+    metadata: {
+      classTitle: classSnap.data()?.title || '',
+    },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
   return { success: true, classId };
