@@ -1,6 +1,6 @@
 import * as admin from 'firebase-admin';
 import { onCall, onRequest } from 'firebase-functions/v2/https';
-import { razorpaySecrets, youtubeSecrets } from './config';
+import { razorpaySecrets, youtubeSecrets, r2Secrets } from './config';
 import {
   REGION,
   defaultCallableOptions,
@@ -23,6 +23,7 @@ import { deleteAccountHandler } from './user/deleteAccount';
 import { submitQuizHandler } from './quizzes/submitQuiz';
 import { getQuizQuestionsHandler } from './quizzes/getQuizQuestions';
 import { getMaterialUrlHandler } from './materials/getMaterialUrl';
+import { getMaterialUploadUrlHandler } from './materials/getMaterialUploadUrl';
 import {
   deleteCourseHandler,
   deleteQuizHandler,
@@ -188,17 +189,34 @@ export const deleteAccount = onCall(heavyCallableOptions, async (request) => {
 });
 
 /**
- * 11. getMaterialUrl: Short-Lived Ephemeral Download URL for Course Study Materials
+ * 11. getMaterialUrl: Short-Lived Ephemeral Download URL for Course Study Materials (R2 & Storage)
  */
-export const getMaterialUrl = onCall(defaultCallableOptions, async (request) => {
-  const auth = requireAuth(request);
-  const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
-  try {
-    return await getMaterialUrlHandler(request.data, auth.uid, { admin: adminClaim });
-  } catch (err: any) {
-    throw normalizeError(err, 'getMaterialUrl');
+export const getMaterialUrl = onCall(
+  { ...defaultCallableOptions, secrets: r2Secrets },
+  async (request) => {
+    const auth = requireAuth(request);
+    const adminClaim = request.auth?.token?.admin === true || request.auth?.token?.role === 'owner';
+    try {
+      return await getMaterialUrlHandler(request.data, auth.uid, { admin: adminClaim });
+    } catch (err: any) {
+      throw normalizeError(err, 'getMaterialUrl');
+    }
   }
-});
+);
+
+/**
+ * 11b. getMaterialUploadUrl: Secure Admin Presigned Upload Link for Cloudflare R2
+ */
+export const getMaterialUploadUrl = onCall(
+  { ...defaultCallableOptions, secrets: r2Secrets },
+  async (request) => {
+    try {
+      return await getMaterialUploadUrlHandler(request);
+    } catch (err: any) {
+      throw normalizeError(err, 'getMaterialUploadUrl');
+    }
+  }
+);
 
 /**
  * 12. getLiveStream: Gated Live Broadcast Access

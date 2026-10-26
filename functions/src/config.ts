@@ -6,12 +6,18 @@
 
 import { defineSecret } from 'firebase-functions/params';
 import Razorpay from 'razorpay';
+import { S3Client } from '@aws-sdk/client-s3';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 export const razorpayKeyId = defineSecret('RAZORPAY_KEY_ID');
 export const razorpayKeySecret = defineSecret('RAZORPAY_KEY_SECRET');
 export const razorpayWebhookSecret = defineSecret('RAZORPAY_WEBHOOK_SECRET');
 export const youtubeApiKey = defineSecret('YOUTUBE_API_KEY');
+
+export const r2AccountId = defineSecret('R2_ACCOUNT_ID');
+export const r2AccessKeyId = defineSecret('R2_ACCESS_KEY_ID');
+export const r2SecretAccessKey = defineSecret('R2_SECRET_ACCESS_KEY');
+export const r2BucketName = defineSecret('R2_BUCKET_NAME');
 
 export const razorpaySecrets = [
   razorpayKeyId,
@@ -23,9 +29,17 @@ export const youtubeSecrets = [
   youtubeApiKey,
 ];
 
+export const r2Secrets = [
+  r2AccountId,
+  r2AccessKeyId,
+  r2SecretAccessKey,
+  r2BucketName,
+];
+
 export const allSecrets = [
   ...razorpaySecrets,
   ...youtubeSecrets,
+  ...r2Secrets,
 ];
 
 export interface AppSecrets {
@@ -85,3 +99,30 @@ export const getRazorpayClient = (): Razorpay => {
     key_secret: keySecret,
   });
 };
+
+export const getR2Client = (): S3Client => {
+  const accountId = getSecretVal(r2AccountId, 'R2_ACCOUNT_ID');
+  const accessKeyId = getSecretVal(r2AccessKeyId, 'R2_ACCESS_KEY_ID');
+  const secretAccessKey = getSecretVal(r2SecretAccessKey, 'R2_SECRET_ACCESS_KEY');
+
+  if (!accountId || !accessKeyId || !secretAccessKey) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Cloudflare R2 secrets (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are not configured. Run: firebase functions:secrets:set ...'
+    );
+  }
+
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
+  });
+};
+
+export const getR2BucketName = (): string => {
+  return getSecretVal(r2BucketName, 'R2_BUCKET_NAME') || 'course-files';
+};
+

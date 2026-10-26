@@ -30,7 +30,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, deleteObject } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db, storage, functions, httpsCallable } from '../firebase';
 import { Course, Material } from '../types';
 
 export const Materials: React.FC = () => {
@@ -56,6 +56,8 @@ export const Materials: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [existingStoragePath, setExistingStoragePath] = useState<string>('');
+  const [existingR2Key, setExistingR2Key] = useState<string>('');
+  const [existingFileName, setExistingFileName] = useState<string>('');
   const [existingSizeBytes, setExistingSizeBytes] = useState<number>(0);
 
   const [saving, setSaving] = useState(false);
@@ -90,6 +92,8 @@ export const Materials: React.FC = () => {
             description: raw.description || '',
             type: raw.type || 'pdf',
             storagePath: raw.storagePath || raw.filePath || '',
+            r2Key: raw.r2Key || '',
+            fileName: raw.fileName || '',
             externalUrl: raw.externalUrl || raw.url || '',
             sizeBytes: raw.sizeBytes || raw.fileSize || 0,
             order: typeof raw.order === 'number' ? raw.order : 1,
@@ -128,6 +132,8 @@ export const Materials: React.FC = () => {
     setSelectedFile(null);
     setUploadProgress(null);
     setExistingStoragePath('');
+    setExistingR2Key('');
+    setExistingFileName('');
     setExistingSizeBytes(0);
     setIsModalOpen(true);
   };
@@ -143,6 +149,8 @@ export const Materials: React.FC = () => {
     setSelectedFile(null);
     setUploadProgress(null);
     setExistingStoragePath(item.storagePath || '');
+    setExistingR2Key(item.r2Key || '');
+    setExistingFileName(item.fileName || '');
     setExistingSizeBytes(item.sizeBytes || 0);
     setIsModalOpen(true);
   };
@@ -202,40 +210,101 @@ export const Materials: React.FC = () => {
     setSaving(true);
     const selectedCourse = courses.find((c) => c.id === courseId);
     let finalStoragePath = existingStoragePath;
+    let finalR2Key = existingR2Key;
+    let finalFileName = existingFileName;
     let finalSizeBytes = existingSizeBytes;
 
     try {
-      // 1. Upload file to Firebase Storage if a new file is chosen
+      // 1. Upload file if a new file is chosen
       if (selectedFile && (type === 'pdf' || type === 'zip')) {
-        const sanitizedFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const storageFilePath = `materials/${courseId}/${Date.now()}_${sanitizedFileName}`;
-        const fileRef = ref(storage, storageFilePath);
+        let uploadedToR2 = false;
 
-        const uploadTask = uploadBytesResumable(fileRef, selectedFile, {
-          contentType: selectedFile.type || (type === 'pdf' ? 'application/pdf' : 'application/zip'),
-        });
+        // Try direct upload to Cloudflare R2 first (Zero Egress, Free Bandwidth)
+        try {
+          const getUploadUrlCallable = httpsCallable<
+            { courseId: string; fileName: string; contentType: string; sizeBytes: number },
+            { uploadUrl: string; key: string; fileName: string; expiresAt: number }
+          >(functions, 'getMaterialUploadUrl');
 
-        await new Promise<void>((resolve, reject) => {
-          uploadTask.on(
-            'state_changed',
-            (snapshot) => {
-              const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-              setUploadProgress(progress);
-            },
-            (error) => reject(error),
-            () => resolve()
-          );
-        });
+          const uploadRes = await getUploadUrlCallable({
+            courseId,
+            fileName: selectedFile.name,
+            contentType: selectedFile.type || (type === 'pdf' ? 'application/pdf' : 'application/zip'),
+            sizeBytes: selectedFile.size,
+          });
 
-        finalStoragePath = storageFilePath;
-        finalSizeBytes = selectedFile.size;
+          const { uploadUrl, key, fileName: cleanName } = uploadRes.data;
 
-        // If replacing an old storage file, clean up old file
-        if (existingStoragePath && existingStoragePath !== storageFilePath) {
-          try {
-            await deleteObject(ref(storage, existingStoragePath));
-          } catch (delErr) {
-            console.warn('Could not remove old file:', delErr);
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl);
+            xhr.setRequestHeader(
+              'Content-Type',
+              selectedFile.type || (type === 'pdf' ? 'application/pdf' : 'application/zip')
+            );
+
+            xhr.upload.onprogress = (evt) => {
+              if (evt.lengthComputable) {
+                const percent = Math.round((evt.loaded / evt.total) * 100);
+                setUploadProgress(percent);
+              }
+            };
+
+            xhr.onload = () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+              } else {
+                reject(new Error(`R2 upload responded with status ${xhr.status}`));
+              }
+            };
+
+            xhr.onerror = () =>
+              reject(new Error('Network error during R2 upload. Verify Cloudflare CORS configuration.'));
+            xhr.send(selectedFile);
+          });
+
+          finalR2Key = key;
+          finalFileName = cleanName;
+          finalStoragePath = key;
+          finalSizeBytes = selectedFile.size;
+          uploadedToR2 = true;
+        } catch (r2Err: any) {
+          console.warn('Direct R2 upload not active or failed, falling back to Firebase Storage:', r2Err);
+        }
+
+        // Fallback to Firebase Storage if R2 is not configured
+        if (!uploadedToR2) {
+          const sanitizedFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storageFilePath = `materials/${courseId}/${Date.now()}_${sanitizedFileName}`;
+          const fileRef = ref(storage, storageFilePath);
+
+          const uploadTask = uploadBytesResumable(fileRef, selectedFile, {
+            contentType: selectedFile.type || (type === 'pdf' ? 'application/pdf' : 'application/zip'),
+          });
+
+          await new Promise<void>((resolve, reject) => {
+            uploadTask.on(
+              'state_changed',
+              (snapshot) => {
+                const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                setUploadProgress(progress);
+              },
+              (error) => reject(error),
+              () => resolve()
+            );
+          });
+
+          finalStoragePath = storageFilePath;
+          finalFileName = sanitizedFileName;
+          finalSizeBytes = selectedFile.size;
+
+          // If replacing an old storage file, clean up old file
+          if (existingStoragePath && existingStoragePath !== storageFilePath && !existingStoragePath.startsWith('courses/')) {
+            try {
+              await deleteObject(ref(storage, existingStoragePath));
+            } catch (delErr) {
+              console.warn('Could not remove old file:', delErr);
+            }
           }
         }
       }
@@ -254,14 +323,19 @@ export const Materials: React.FC = () => {
         sizeBytes: finalSizeBytes,
         order: nextOrder,
         isPublished: Boolean(isPublished),
+        fileName: finalFileName,
         updatedAt: serverTimestamp(),
       };
 
       if (type === 'link') {
         payload.externalUrl = externalUrl.trim();
         payload.storagePath = '';
+        payload.r2Key = '';
       } else {
         payload.storagePath = finalStoragePath;
+        if (finalR2Key) {
+          payload.r2Key = finalR2Key;
+        }
         payload.externalUrl = '';
       }
 

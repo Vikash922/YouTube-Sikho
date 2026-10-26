@@ -1,5 +1,8 @@
 import * as admin from 'firebase-admin';
 import { HttpsError } from 'firebase-functions/v2/https';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getR2Client, getR2BucketName } from '../config';
 
 export interface GetMaterialUrlRequest {
   courseId: string;
@@ -11,6 +14,12 @@ export interface GetMaterialUrlResponse {
   expiresAt: number;
   title: string;
   fileName?: string;
+}
+
+const DOWNLOAD_TTL_SECONDS = 30 * 60; // 30 minutes valid
+
+function safeName(name: string): string {
+  return name.replace(/[^\w.\- ]/g, '_').slice(0, 120);
 }
 
 export async function getMaterialUrlHandler(
@@ -62,6 +71,17 @@ export async function getMaterialUrlHandler(
       }
 
       if (!isEnrolled) {
+        // Fallback check with userId field
+        const querySnap2 = await db
+          .collection('enrollments')
+          .where('userId', '==', uid)
+          .where('courseId', '==', courseId)
+          .limit(1)
+          .get();
+        isEnrolled = !querySnap2.empty && querySnap2.docs[0].data()?.status === 'active';
+      }
+
+      if (!isEnrolled) {
         throw new HttpsError(
           'permission-denied',
           'You must be actively enrolled in this course to access this study material.'
@@ -70,8 +90,12 @@ export async function getMaterialUrlHandler(
     }
   }
 
-  // 3. Locate the Material Document
-  const materialDoc = await db.doc(`materials/${materialId}`).get();
+  // 3. Locate the Material Document (check root materials/{id} or nested courses/{courseId}/materials/{id})
+  let materialDoc = await db.doc(`materials/${materialId}`).get();
+  if (!materialDoc.exists) {
+    materialDoc = await db.doc(`courses/${courseId}/materials/${materialId}`).get();
+  }
+
   if (!materialDoc.exists) {
     throw new HttpsError('not-found', `Study material ${materialId} not found.`);
   }
@@ -81,10 +105,41 @@ export async function getMaterialUrlHandler(
     throw new HttpsError('permission-denied', 'Material does not belong to the specified course.');
   }
 
-  const rawPath = materialData.storagePath || materialData.filePath || materialData.pdfPath || materialData.url;
   const fileName = materialData.fileName || materialData.title || 'material.pdf';
+  const cleanFileName = safeName(fileName);
 
-  // If already an external HTTPS URL (e.g. external CDN), return as-is
+  // 4. If material has Cloudflare R2 key (r2Key)
+  if (materialData.r2Key && typeof materialData.r2Key === 'string') {
+    try {
+      const client = getR2Client();
+      const bucket = getR2BucketName();
+      const isPdf = cleanFileName.toLowerCase().endsWith('.pdf');
+
+      const command = new GetObjectCommand({
+        Bucket: bucket,
+        Key: materialData.r2Key,
+        ResponseContentType: isPdf ? 'application/pdf' : 'application/octet-stream',
+        ResponseContentDisposition: `inline; filename="${encodeURIComponent(cleanFileName)}"`,
+      });
+
+      const downloadUrl = await getSignedUrl(client, command, {
+        expiresIn: DOWNLOAD_TTL_SECONDS,
+      });
+
+      return {
+        downloadUrl,
+        expiresAt: Math.floor(Date.now() / 1000) + DOWNLOAD_TTL_SECONDS,
+        title: materialData.title || cleanFileName,
+        fileName: cleanFileName,
+      };
+    } catch (r2Err: any) {
+      console.error('Error generating Cloudflare R2 download URL:', r2Err);
+      throw new HttpsError('internal', `Failed to generate R2 download URL: ${r2Err.message}`);
+    }
+  }
+
+  // 5. If already an external HTTPS URL (e.g. external CDN)
+  const rawPath = materialData.storagePath || materialData.filePath || materialData.pdfPath || materialData.url;
   if (
     typeof rawPath === 'string' &&
     (rawPath.startsWith('http://') || rawPath.startsWith('https://')) &&
@@ -98,7 +153,7 @@ export async function getMaterialUrlHandler(
     };
   }
 
-  // 4. Generate signed GCS URL for Cloud Storage object
+  // 6. Fallback: Firebase Storage (GCS) for backward compatibility
   try {
     let storagePath = rawPath;
     if (!storagePath) {

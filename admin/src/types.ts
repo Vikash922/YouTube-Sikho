@@ -194,6 +194,8 @@ export interface Material {
   description: string;
   type: 'pdf' | 'zip' | 'link';
   storagePath?: string;
+  r2Key?: string;
+  fileName?: string;
   externalUrl?: string;
   sizeBytes: number;
   order: number;
