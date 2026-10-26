@@ -1,18 +1,75 @@
 /**
  * Script to migrate legacy quiz schema to Part 6.1 Canonical Schema
- * Usage: node scripts/migrate-quizzes.js
+ * Usage: node scripts/migrate-quizzes.js [--key=<path-to-service-account.json>]
  */
-const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
+
+let admin;
+try {
+  admin = require('firebase-admin');
+} catch (e) {
+  try {
+    admin = require(path.resolve(__dirname, '../functions/node_modules/firebase-admin'));
+  } catch (e2) {
+    console.error('Could not load firebase-admin. Please ensure functions/node_modules is installed.');
+    process.exit(1);
+  }
+}
+
+// Parse CLI flags
+const args = process.argv.slice(2);
+const keyFlag = args.find((a) => a.startsWith('--key='));
+let serviceAccountPath = keyFlag ? keyFlag.split('=')[1] : null;
+
+if (!serviceAccountPath) {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'service-account.json'),
+    path.resolve(process.cwd(), 'serviceAccountKey.json'),
+    path.resolve(__dirname, '../service-account.json'),
+    path.resolve(__dirname, '../serviceAccountKey.json'),
+    path.resolve(__dirname, '../functions/serviceAccountKey.json'),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      serviceAccountPath = p;
+      break;
+    }
+  }
+}
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.project_id || 'sikho-77341',
+    });
+    console.log(`Using Service Account credentials from ${serviceAccountPath}`);
+  } else {
+    admin.initializeApp({
+      projectId: process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT || 'sikho-77341',
+    });
+    console.log('Using Application Default Credentials (ADC) / Environment');
+  }
 }
 
 const db = admin.firestore();
 
 async function migrateQuizzes() {
   console.log('--- Starting Quiz Schema Migration ---');
-  const quizzesSnap = await db.collection('quizzes').get();
+  let quizzesSnap;
+  try {
+    quizzesSnap = await db.collection('quizzes').get();
+  } catch (err) {
+    console.error('Failed to connect or fetch quizzes from Firestore:', err.message);
+    console.log('\nTip: To authenticate the Admin SDK on your machine, you can:');
+    console.log('1. Place your Firebase service account JSON key as serviceAccountKey.json in the project root, or');
+    console.log('2. Run: node scripts/migrate-quizzes.js --key=/path/to/key.json, or');
+    console.log('3. Set GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json');
+    return;
+  }
+
   console.log(`Found ${quizzesSnap.size} quizzes to inspect.`);
 
   let updatedQuizzes = 0;
@@ -93,5 +150,4 @@ async function migrateQuizzes() {
 
 migrateQuizzes().catch((err) => {
   console.error('Migration failed:', err);
-  process.exit(1);
 });
