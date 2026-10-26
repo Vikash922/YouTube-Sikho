@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { brandConfig } from '../../config/branding';
 import {
   Wifi,
   Battery,
@@ -15,6 +16,7 @@ import {
   Home,
   BookOpen,
   PlayCircle,
+  Play,
   User,
 } from 'lucide-react';
 import { AdminBanner, AdminHomeSection } from '../../pages/HomeManager';
@@ -29,8 +31,8 @@ interface PhoneMockupProps {
 export const PhoneMockup: React.FC<PhoneMockupProps> = ({
   banners,
   sections,
-  brandName = 'YouTube Sikho',
-  primaryColor = '#4F46E5',
+  brandName = brandConfig.shortName,
+  primaryColor = brandConfig.primaryColor,
 }) => {
   const [mockTheme, setMockTheme] = useState<'light' | 'dark'>('dark');
   const activeBanners = banners.filter((b) => b.isVisible !== false);
@@ -165,7 +167,9 @@ export const PhoneMockup: React.FC<PhoneMockupProps> = ({
 
             {/* Dynamic Ordered Sections */}
             {visibleSections.map((sec) => {
-              if (sec.type === 'live_stream') {
+              if (sec.type === 'banners') return null; // Already shown in top carousel
+
+              if (sec.type === 'live_stream' || sec.type === 'liveNow') {
                 return (
                   <div
                     key={sec.id}
@@ -194,7 +198,54 @@ export const PhoneMockup: React.FC<PhoneMockupProps> = ({
                 );
               }
 
-              if (sec.type === 'streak_banner') {
+              if (sec.type === 'continueWatching') {
+                return (
+                  <div
+                    key={sec.id}
+                    className={`p-2.5 rounded-xl border ${
+                      isDark ? 'bg-[#151B2E] border-slate-800' : 'bg-white border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-[11px] font-bold mb-1.5">
+                      <span>{sec.title || 'Continue Learning'}</span>
+                      <span className="text-[9px] text-brand-500">Resume</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white shrink-0">
+                        <Play className="w-4 h-4 fill-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-bold truncate">Lesson 4: Thumbnail Masterclass</div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-700 h-1 rounded-full mt-1.5 overflow-hidden">
+                          <div className="bg-brand-500 h-full w-2/3 rounded-full" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (sec.type === 'categories') {
+                return (
+                  <div key={sec.id} className="space-y-1.5">
+                    <div className="text-[11px] font-bold">{sec.title || 'Explore Topics'}</div>
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                      {['YouTube SEO', 'Shorts', 'Editing', 'Monetization'].map((cat) => (
+                        <span
+                          key={cat}
+                          className={`px-2.5 py-1 rounded-lg text-[9px] font-semibold whitespace-nowrap border ${
+                            isDark ? 'bg-slate-800/80 border-slate-700 text-slate-200' : 'bg-white border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (sec.type === 'streak_banner' || sec.type === 'streak') {
                 return (
                   <div
                     key={sec.id}
@@ -218,7 +269,7 @@ export const PhoneMockup: React.FC<PhoneMockupProps> = ({
                 );
               }
 
-              // Courses Sections
+              // Courses Sections (newCourses, featured, popular)
               return (
                 <div key={sec.id} className="space-y-1.5">
                   <div className="flex items-center justify-between text-[11px] font-bold">

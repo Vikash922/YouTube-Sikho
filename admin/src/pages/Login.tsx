@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, KeyRound, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { brandConfig } from '../config/branding';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
@@ -114,7 +115,7 @@ export const Login: React.FC = () => {
               <Sparkles className="w-7 h-7" />
             </div>
             <h1 className="font-display font-extrabold text-2xl tracking-tight text-light-text dark:text-dark-text">
-              YouTube Sikho
+              {brandConfig.appName}
             </h1>
             <p className="text-xs font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-widest mt-1">
               Admin Portal

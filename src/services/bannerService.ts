@@ -1,11 +1,27 @@
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { firebaseFirestore } from './firebase';
 
+export type HomeSectionType =
+  | 'banners'
+  | 'liveNow'
+  | 'continueWatching'
+  | 'categories'
+  | 'newCourses'
+  | 'featured'
+  | 'popular'
+  | 'streak'
+  | 'live_stream'
+  | 'streak_banner'
+  | 'featured_courses'
+  | 'popular_courses';
+
 export interface Banner {
   id: string;
-  title: string;
+  title?: string;
   imageUrl: string;
-  targetType: 'course' | 'url' | 'none';
+  actionType: 'course' | 'category' | 'url' | 'none';
+  actionValue?: string;
+  targetType?: 'course' | 'category' | 'url' | 'none';
   targetValue?: string;
   order: number;
   isVisible: boolean;
@@ -13,17 +29,21 @@ export interface Banner {
 
 export interface HomeSectionConfig {
   id: string;
-  type: 'live_stream' | 'streak_banner' | 'featured_courses' | 'popular_courses';
+  type: HomeSectionType;
   title: string;
   order: number;
   isVisible: boolean;
+  config?: Record<string, any>;
 }
 
 export const DEFAULT_HOME_SECTIONS: HomeSectionConfig[] = [
-  { id: 'sec_live', type: 'live_stream', title: 'Live Now Streaming', order: 1, isVisible: true },
-  { id: 'sec_streak', type: 'streak_banner', title: 'Daily Learning Streak', order: 2, isVisible: true },
-  { id: 'sec_featured', type: 'featured_courses', title: 'Featured Masterclasses', order: 3, isVisible: true },
-  { id: 'sec_popular', type: 'popular_courses', title: 'Popular Courses', order: 4, isVisible: true },
+  { id: 'banners', type: 'banners', title: 'Featured Highlights', order: 1, isVisible: true },
+  { id: 'liveNow', type: 'liveNow', title: 'Live Now Streaming', order: 2, isVisible: true },
+  { id: 'continueWatching', type: 'continueWatching', title: 'Continue Learning', order: 3, isVisible: true },
+  { id: 'categories', type: 'categories', title: 'Explore Top Topics', order: 4, isVisible: true },
+  { id: 'featured', type: 'featured', title: 'Featured Masterclasses', order: 5, isVisible: true },
+  { id: 'popular', type: 'popular', title: 'Popular Courses', order: 6, isVisible: true },
+  { id: 'streak', type: 'streak', title: 'Daily Learning Streak', order: 7, isVisible: true },
 ];
 
 /**
@@ -43,11 +63,17 @@ export function subscribeToBanners(
       const list = snapshot.docs
         .map((d) => {
           const data = d.data();
+          const actionType = data.actionType || data.targetType || 'none';
+          const actionValue = data.actionValue || data.targetValue || '';
           return {
             id: d.id,
             ...data,
             title: data.title || '',
             imageUrl: data.imageUrl || data.image || '',
+            actionType,
+            actionValue,
+            targetType: actionType,
+            targetValue: actionValue,
             isVisible: data.isVisible !== false,
             order: data.order || 0,
           } as Banner;

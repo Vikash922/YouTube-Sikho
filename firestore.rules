@@ -3,22 +3,48 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ===============================================================
-    // Helper Functions
+    // Helper Functions & Role-Based Access Control (RBAC)
     // ===============================================================
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isOwnerRole() {
       return isSignedIn() && (
-        ('admin' in request.auth.token && request.auth.token.admin == true) ||
         ('role' in request.auth.token && request.auth.token.role == 'owner') ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
+        (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner' ||
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'superadmin'))
       );
     }
 
-    function isOwner(uid) {
-      return isSignedIn() && request.auth.uid == uid;
+    function isEditorOrAbove() {
+      return isOwnerRole() || (
+        isSignedIn() && (
+          ('role' in request.auth.token && (request.auth.token.role == 'editor' || request.auth.token.role == 'admin')) ||
+          (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           (get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role in ['editor', 'admin']))
+        )
+      );
+    }
+
+    function isSupportOrAbove() {
+      return isEditorOrAbove() || (
+        isSignedIn() && (
+          ('role' in request.auth.token && request.auth.token.role == 'support') ||
+          (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'support')
+        )
+      );
+    }
+
+    function isAdmin() {
+      return isSupportOrAbove();
     }
 
     function isEnrolled(courseId) {
@@ -29,10 +55,11 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // 1. ADMINS COLLECTION
+    // 1. ADMINS COLLECTION (Owner Only)
     // ===============================================================
     match /admins/{uid} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if isOwnerRole();
     }
 
     // ===============================================================
@@ -40,7 +67,7 @@ service cloud.firestore {
     // ===============================================================
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isEditorOrAbove();
     }
 
     // ===============================================================
@@ -48,19 +75,19 @@ service cloud.firestore {
     // ===============================================================
     match /courses/{courseId} {
       allow read: if (resource == null || resource.data.isPublished == true) || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
 
       match /sections/{sectionId} {
         allow read: if (get(/databases/$(database)/documents/courses/$(courseId)).data.isPublished == true) || isAdmin();
-        allow write: if isAdmin();
+        allow write: if isEditorOrAbove();
 
         match /lessons/{lessonId} {
           allow read: if (get(/databases/$(database)/documents/courses/$(courseId)).data.isPublished == true) || isAdmin();
-          allow write: if isAdmin();
+          allow write: if isEditorOrAbove();
 
           match /private/{docId} {
-            // Admin only! Never readable by clients.
-            allow read, write: if isAdmin();
+            // Editor / Owner only! Never readable by clients.
+            allow read, write: if isEditorOrAbove();
           }
         }
       }
@@ -75,7 +102,7 @@ service cloud.firestore {
         resource.data.isVisible == true ||
         resource.data.active == true
       ) || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
     }
 
     // ===============================================================
@@ -83,15 +110,15 @@ service cloud.firestore {
     // ===============================================================
     match /homeSections/{sectionId} {
       allow read: if (resource == null || resource.data.isVisible == true) || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
     }
 
     // ===============================================================
-    // 6. APP CONFIGURATION (Maintenance, Brand Settings)
+    // 6. APP CONFIGURATION (Maintenance, Brand Settings - Owner Only)
     // ===============================================================
     match /appConfig/{configDoc} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isOwnerRole();
     }
 
     // ===============================================================
@@ -150,11 +177,11 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // 10. ORDERS & BILLING (Cloud Functions Protected - Admin SDK Only)
+    // 10. ORDERS & BILLING (Cloud Functions Protected - Owner Only for Refunds)
     // ===============================================================
     match /orders/{orderId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow write: if isOwnerRole();
     }
 
     // ===============================================================
@@ -162,7 +189,7 @@ service cloud.firestore {
     // ===============================================================
     match /coupons/{couponCode} {
       allow read: if isSignedIn() || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
     }
 
     // ===============================================================
@@ -170,7 +197,7 @@ service cloud.firestore {
     // ===============================================================
     match /liveClasses/{classId} {
       allow read: if isSignedIn() || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
 
       match /messages/{messageId} {
         allow read: if isSignedIn() || isAdmin();
@@ -178,8 +205,8 @@ service cloud.firestore {
           request.resource.data.uid == request.auth.uid &&
           request.resource.data.text is string &&
           request.resource.data.text.size() <= 300;
-        allow update: if isAdmin(); // Prevent message tampering / impersonation
-        allow delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+        allow update: if isEditorOrAbove();
+        allow delete: if isEditorOrAbove() || (isSignedIn() && resource.data.uid == request.auth.uid);
       }
 
       match /handRaises/{uid} {
@@ -196,12 +223,12 @@ service cloud.firestore {
     // 13. PUSH NOTIFICATIONS & USER NOTIFICATION CENTER
     // ===============================================================
     match /notifications/{notificationId} {
-      allow read, write: if isAdmin(); // Internal broadcast log
+      allow read, write: if isEditorOrAbove();
     }
 
     match /userNotifications/{uid}/items/{itemId} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isAdmin();
+      allow create: if isEditorOrAbove();
       allow update: if (isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])) || isAdmin();
       allow delete: if isOwner(uid) || isAdmin();
     }
@@ -211,26 +238,26 @@ service cloud.firestore {
     // ===============================================================
     match /quizzes/{quizId} {
       allow read: if isSignedIn() || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
 
       match /questions/{questionId} {
-        allow read, write: if isAdmin(); // Anti-cheat: students evaluate via submitQuiz Cloud Function
+        allow read, write: if isEditorOrAbove();
       }
     }
 
     match /quizResults/{resultId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
     }
 
     match /quizAttempts/{attemptId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
+      allow write: if isEditorOrAbove();
     }
 
     match /quizBest/{bestId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow write: if isAdmin();
+      allow write: if isEditorOrAbove();
     }
 
     // ===============================================================
@@ -241,28 +268,28 @@ service cloud.firestore {
       allow create: if isSignedIn() &&
         isOwner(request.resource.data.uid) &&
         isEnrolled(request.resource.data.courseId);
-      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isEditorOrAbove() || (isSignedIn() && resource.data.uid == request.auth.uid);
     }
 
     // ===============================================================
     // 16. SUPPORT TICKETS & FAQS
     // ===============================================================
     match /tickets/{ticketId} {
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isSupportOrAbove());
       allow create: if isSignedIn() && isOwner(request.resource.data.uid) && request.resource.data.status == 'open';
-      allow update: if isAdmin(); // Students cannot change status or assign tickets
-      allow delete: if isAdmin();
+      allow update: if isSupportOrAbove() || (isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.status in ['open', 'resolved']);
+      allow delete: if isOwnerRole();
 
       match /messages/{messageId} {
-        allow read: if isSignedIn() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.uid == request.auth.uid || isAdmin());
-        allow create: if isSignedIn() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.uid == request.auth.uid || isAdmin());
-        allow update, delete: if isAdmin();
+        allow read: if isSignedIn() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.uid == request.auth.uid || isSupportOrAbove());
+        allow create: if isSignedIn() && (get(/databases/$(database)/documents/tickets/$(ticketId)).data.uid == request.auth.uid || isSupportOrAbove());
+        allow update, delete: if isSupportOrAbove();
       }
     }
 
     match /faqs/{faqId} {
-      allow read: if (resource == null || resource.data.isPublished == true) || isAdmin();
-      allow write: if isAdmin();
+      allow read: if (resource == null || resource.data.isPublished == true) || isSupportOrAbove();
+      allow write: if isSupportOrAbove();
     }
 
     // ===============================================================
@@ -270,7 +297,7 @@ service cloud.firestore {
     // ===============================================================
     match /materials/{materialId} {
       allow read: if isSignedIn() && (isAdmin() || (resource.data.courseId != null && isEnrolled(resource.data.courseId)));
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isEditorOrAbove();
     }
 
     // ===============================================================

@@ -112,22 +112,63 @@ To grant complimentary access to a VIP student, reviewer, or scholarship winner:
 
 ---
 
-## 8. Handling Account Deletion Requests (Google Play Policy)
+## 9. Dynamic Home Screen Management
 
-Students can delete their account in 2 ways:
-1. **Self-Service via Mobile App**:
-   - In mobile app: `Settings > Danger Zone > Delete My Account`.
-   - Requires recent login (within 5 minutes). All personal progress, quiz scores, reviews, tickets, and storage avatars are purged permanently.
-2. **Web Portal via Public URL**:
-   - Direct link: `https://sikho-77341.web.app/delete-account` (or `?page=delete-account`).
-   - Requests submitted appear under `accountDeletionRequests` in Firestore.
-   - Operators can verify the request and complete account purge if the user has uninstalled the mobile app.
+The mobile app home screen order and layout is completely controlled by the Admin **Home Manager** (`/home-manager`):
+1. **Promotional Banners**:
+   - Add new banners with a 16:9 banner image.
+   - Choose action target: specific course, category, external URL, or none.
+   - Reorder banners using the Up/Down buttons or delete inactive banners.
+2. **Dynamic Section Ordering**:
+   - Canonical section types supported:
+     - `Featured Highlights` (`banners`)
+     - `Live Now Streaming` (`liveNow`)
+     - `Continue Learning` (`continueWatching`)
+     - `Explore Categories` (`categories`)
+     - `New Releases` (`newCourses`)
+     - `Featured Masterclasses` (`featured`)
+     - `Popular Courses` (`popular`)
+     - `Daily Learning Streak` (`streak`)
+   - Click **Up / Down** arrows to change section position on mobile.
+   - Click the **Eye / EyeOff** icon to show or hide a section.
+   - The interactive **Phone Mockup Preview** reflects your layout in real-time.
+   - Click **Reset Default Home** at any time to restore the recommended standard layout.
 
-## 7. Emergency Maintenance Mode
+---
 
-When performing major course overhauls or scheduled infrastructure maintenance:
-1. Navigate to the **Settings** tab.
-2. Under **Maintenance & Version Control**, toggle **Emergency Maintenance Mode** to **ON**.
-3. Click **Save All Settings**.
-4. All students currently using the mobile app are immediately displayed a friendly maintenance screen informing them that the platform is undergoing a brief upgrade.
-5. When work is complete, toggle it **OFF** and save; all students return to normal browsing instantly.
+## 10. Support Desk, Live Threads & Knowledge Base
+
+1. **Student Support Tickets** (`/support`):
+   - Review incoming inquiries filtered by status (`Open`, `In Progress`, `Resolved`).
+   - Click any ticket row to open the **Live Thread Modal**.
+   - Read the student's initial query and conversation history.
+   - Type your official response in the reply bar and send.
+   - Change ticket status to `Resolved` once resolved; the student sees the updated status immediately.
+2. **In-App FAQ Management**:
+   - Switch to the **FAQ Accordion** tab.
+   - Click **+ Add New FAQ** to create a question, answer, and category.
+   - Toggle **Publish / Hidden** to control instant visibility on the mobile app.
+
+---
+
+## 11. Student Access, Blocking & Review Moderation
+
+1. **Suspending Disruptive Students** (`/students`):
+   - Search student by name, email, phone, or UID.
+   - Click **Block**: The account is flagged `isBlocked: true` and all active authentication sessions are revoked immediately.
+   - Click **Unblock** to restore access.
+2. **Review Moderation**:
+   - Switch to the **Course Reviews** tab.
+   - Inspect ratings and student feedback.
+   - Click the **Eye / EyeOff** icon to hide abusive or spam reviews from public course listings.
+   - Click the **Trash** icon to permanently delete a review.
+
+---
+
+## 12. Multi-Role Team Permissions (RBAC)
+
+The admin panel enforces three distinct permission levels:
+- **Owner**: Full platform access. Can manage other administrators, update payment gateway keys, issue payment refunds, and change client branding.
+- **Editor**: Can create and edit courses, study materials, quizzes, push notifications, coupons, and manage home screen sections. Cannot manage other admins or modify payment settings.
+- **Support**: Dedicated customer care tier. Can reply to support tickets, publish FAQs, view student details, and read orders. Cannot modify courses or issue refunds.
+

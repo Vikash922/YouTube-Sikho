@@ -68,15 +68,27 @@ function useClient(clientName) {
     if (cfg && cfg.firebaseConfig) {
       const adminEnvContent = [
         `VITE_APP_TITLE="${cfg.appName}"`,
+        `VITE_SHORT_NAME="${cfg.shortName || cfg.appName}"`,
+        `VITE_TAGLINE="${cfg.tagline || ''}"`,
+        `VITE_LOGO_URL="${cfg.logoUrl || ''}"`,
         `VITE_PRIMARY_COLOR="${cfg.colors?.primary || '#4F46E5'}"`,
+        `VITE_SUPPORT_EMAIL="${cfg.supportEmail || ''}"`,
+        `VITE_SUPPORT_PHONE="${cfg.supportPhone || ''}"`,
+        `VITE_COMPANY_LEGAL_NAME="${cfg.companyLegalName || cfg.appName}"`,
+        `VITE_PRIVACY_URL="${cfg.privacyPolicyUrl || '/privacy'}"`,
+        `VITE_TERMS_URL="${cfg.termsUrl || '/terms'}"`,
         `VITE_FIREBASE_API_KEY="${cfg.firebaseConfig.apiKey}"`,
         `VITE_FIREBASE_AUTH_DOMAIN="${cfg.firebaseConfig.authDomain}"`,
         `VITE_FIREBASE_PROJECT_ID="${cfg.firebaseConfig.projectId}"`,
         `VITE_FIREBASE_STORAGE_BUCKET="${cfg.firebaseConfig.storageBucket}"`,
         `VITE_FIREBASE_MESSAGING_SENDER_ID="${cfg.firebaseConfig.messagingSenderId}"`,
         `VITE_FIREBASE_APP_ID="${cfg.firebaseConfig.appId}"`,
-      ].join('\n');
-      fs.writeFileSync(ADMIN_ENV, adminEnvContent + '\n');
+      ].join('\n') + '\n';
+
+      // Save to admin/.env and clients/<clientName>/admin.env
+      fs.writeFileSync(ADMIN_ENV, adminEnvContent);
+      const clientAdminEnv = path.join(clientDir, 'admin.env');
+      fs.writeFileSync(clientAdminEnv, adminEnvContent);
     }
   } catch (e) {
     log(`Note: Admin .env updated using config values.`);

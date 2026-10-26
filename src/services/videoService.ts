@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { firebaseFirestore, firebaseAuth, functions } from './firebase';
 
@@ -175,3 +175,42 @@ export async function getCourseProgress(
 
   return null;
 }
+
+/**
+ * 4. Subscribe to Real-Time Progress for User
+ */
+export function subscribeToUserProgress(
+  uid: string | null | undefined,
+  onUpdate: (progressList: CourseProgressData[]) => void
+): () => void {
+  if (!uid) {
+    onUpdate([]);
+    return () => {};
+  }
+  const colRef = collection(firebaseFirestore, 'progress');
+  const q = query(colRef, where('uid', '==', uid));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          uid: data.uid,
+          courseId: data.courseId,
+          lastLessonId: data.lastLessonId || '',
+          lastPosition: data.lastPosition || 0,
+          completedLessons: data.completedLessons || [],
+          lessons: data.lessons || {},
+          percentComplete: data.percentComplete || data.percentage || 0,
+          updatedAt: data.updatedAt,
+        } as CourseProgressData;
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn('[videoService] subscribeToUserProgress error:', err.message);
+      onUpdate([]);
+    }
+  );
+}
+

@@ -44,6 +44,32 @@ export function requireAdmin(request: CallableRequest<any>): { uid: string; emai
 }
 
 /**
+ * Validates that the caller has one of the specified administrative roles.
+ * Role 'owner' always inherits all lower permissions.
+ */
+export function requireRole(
+  request: CallableRequest<any>,
+  allowedRoles: ('owner' | 'editor' | 'support' | 'admin')[]
+): { uid: string; email?: string; role: string } {
+  const auth = requireAuth(request);
+  const token = auth.token;
+  const role = token?.role || (token?.admin === true ? 'owner' : null);
+
+  if (!role || (!allowedRoles.includes(role as any) && role !== 'owner')) {
+    fail(
+      'permission-denied',
+      `Access restricted. Operation requires one of the following roles: [${allowedRoles.join(', ')}]. Your current role is '${role || 'none'}'.`
+    );
+  }
+
+  return {
+    uid: auth.uid,
+    email: auth.email,
+    role,
+  };
+}
+
+/**
  * Validates that the user is not marked as blocked/suspended in Firestore
  */
 export async function requireNotBlocked(

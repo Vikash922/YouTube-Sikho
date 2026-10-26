@@ -42,6 +42,8 @@ export interface ClientConfig {
   dataDeletionUrl: string;
 
   razorpayKeyId?: string;
+  bunnyLibraryId?: string;
+  bunnyCdnHostname?: string;
 
   firebaseConfig: {
     apiKey: string;
@@ -124,6 +126,8 @@ export const clientConfig: ClientConfig = {
   dataDeletionUrl: "https://youtubesikho.com/delete-account",
 
   razorpayKeyId: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "",
+  bunnyLibraryId: process.env.EXPO_PUBLIC_BUNNY_LIBRARY_ID || "",
+  bunnyCdnHostname: process.env.EXPO_PUBLIC_BUNNY_CDN_HOSTNAME || "",
 
   firebaseConfig: {
     apiKey:

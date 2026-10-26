@@ -1,7 +1,7 @@
 export interface AdminUser {
   uid: string;
   email: string;
-  role: 'admin' | 'superadmin';
+  role: 'owner' | 'editor' | 'support' | 'admin' | 'superadmin';
   name?: string;
   active: boolean;
 }

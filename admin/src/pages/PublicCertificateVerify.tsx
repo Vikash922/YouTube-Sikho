@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Award, AlertTriangle, Loader2, Calendar, User, BookOpen, ShieldCheck } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -13,7 +14,10 @@ interface CertificateRecord {
   isValid?: boolean;
 }
 
-export const PublicCertificateVerify: React.FC<{ certId: string }> = ({ certId }) => {
+export const PublicCertificateVerify: React.FC<{ certId?: string }> = ({ certId: propCertId }) => {
+  const params = useParams<{ id?: string }>();
+  const [searchParams] = useSearchParams();
+  const certId = propCertId || params.id || searchParams.get('id') || searchParams.get('verify') || '';
   const [cert, setCert] = useState<CertificateRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

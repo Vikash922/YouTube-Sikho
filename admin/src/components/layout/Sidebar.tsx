@@ -18,8 +18,10 @@ import {
   FileText,
   LifeBuoy,
   Activity,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { brandConfig } from '../../config/branding';
 
 export type NavTab =
   | 'dashboard'
@@ -35,7 +37,8 @@ export type NavTab =
   | 'support'
   | 'settings'
   | 'students'
-  | 'activity-log';
+  | 'activity-log'
+  | 'admins';
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -71,6 +74,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'App Settings', icon: <Sliders className="w-5 h-5" /> },
     { id: 'students', label: 'Students', icon: <Users className="w-5 h-5" /> },
     { id: 'activity-log', label: 'Audit Log', icon: <Activity className="w-5 h-5" /> },
+    ...(adminData?.role === 'owner'
+      ? [{ id: 'admins' as NavTab, label: 'Admins & Roles', icon: <ShieldCheck className="w-5 h-5" /> }]
+      : []),
   ];
 
   const handleTabClick = (tab: NavTab) => {
@@ -94,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="font-display font-bold text-sm tracking-tight text-light-text dark:text-dark-text truncate">
-                  YouTube Sikho
+                  {brandConfig.shortName}
                 </span>
                 <span className="text-[10px] font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
                   Admin Panel
@@ -155,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {adminData?.name || 'Administrator'}
                 </span>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                  {adminData?.email || 'admin@youtubesikho.com'}
+                  {adminData?.email || brandConfig.supportEmail}
                 </span>
               </div>
             </div>

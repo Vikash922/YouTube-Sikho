@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +26,8 @@ import {
   HelpCircle,
   Sparkles,
   RefreshCw,
+  X,
+  MessageSquare,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -32,7 +35,10 @@ import {
   onSnapshot,
   query,
   where,
+  orderBy,
   addDoc,
+  updateDoc,
+  doc,
   serverTimestamp,
 } from 'firebase/firestore';
 import { firebaseFirestore, firebaseAuth } from '../src/services/firebase';
@@ -58,7 +64,16 @@ export interface SupportTicket {
   createdAt?: any;
 }
 
-const FAQS = [
+export interface TicketMessage {
+  id: string;
+  senderType: 'student' | 'admin';
+  senderUid: string;
+  senderName: string;
+  text: string;
+  createdAt?: any;
+}
+
+const DEFAULT_FAQS = [
   {
     q: 'How do I download video lessons for offline watching?',
     a: 'Due to copyright protection, videos stream in high definition directly within the app player. Ensure an active WiFi or mobile data connection.',
@@ -84,10 +99,16 @@ export default function SupportScreen() {
 
   const [activeTab, setActiveTab] = useState<'tickets' | 'faqs'>('tickets');
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [faqsList, setFaqsList] = useState<{ q: string; a: string }[]>(FAQS);
+  const [faqsList, setFaqsList] = useState<{ q: string; a: string; category?: string }[]>(DEFAULT_FAQS);
   const [loading, setLoading] = useState(true);
 
-  // Live subscription to published FAQs (conforming to firestore rules where isPublished == true)
+  // Active ticket for conversation thread modal
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [threadMessages, setThreadMessages] = useState<TicketMessage[]>([]);
+  const [studentReplyText, setStudentReplyText] = useState('');
+  const [sendingStudentReply, setSendingStudentReply] = useState(false);
+
+  // Live subscription to published FAQs
   useEffect(() => {
     const q = query(
       collection(firebaseFirestore, 'faqs'),
@@ -104,18 +125,19 @@ export default function SupportScreen() {
                 q: data.question || data.q || '',
                 a: data.answer || data.a || '',
                 order: data.order || 0,
+                category: data.category || 'General',
               };
             })
             .sort((a, b) => a.order - b.order)
-            .map(({ q, a }) => ({ q, a }));
+            .map(({ q, a, category }) => ({ q, a, category }));
           setFaqsList(list);
         } else {
-          setFaqsList(FAQS);
+          setFaqsList(DEFAULT_FAQS);
         }
       },
       (err) => {
         console.warn('FAQs listener notice:', err.message);
-        setFaqsList(FAQS);
+        setFaqsList(DEFAULT_FAQS);
       }
     );
     return () => unsub();
@@ -131,7 +153,6 @@ export default function SupportScreen() {
   // Live subscription to user's tickets
   useEffect(() => {
     const authUser = firebaseAuth.currentUser;
-    // Strictly guard to avoid permission denied when unauthenticated
     if (!authUser || !user?.uid || authUser.uid !== user.uid) {
       setTickets([]);
       setLoading(false);
@@ -146,9 +167,15 @@ export default function SupportScreen() {
     const unsub = onSnapshot(
       q,
       (snapshot) => {
-        const list = snapshot.docs.map(
-          (d) => ({ id: d.id, ...d.data() } as SupportTicket)
-        );
+        const list = snapshot.docs.map((d) => {
+          const data = d.data();
+          const rawStatus = data.status === 'closed' ? 'resolved' : data.status || 'open';
+          return {
+            id: d.id,
+            ...data,
+            status: rawStatus,
+          } as SupportTicket;
+        });
         setTickets(list);
         setLoading(false);
       },
@@ -160,6 +187,30 @@ export default function SupportScreen() {
 
     return () => unsub();
   }, [user?.uid]);
+
+  // Live listener for thread messages of selected ticket
+  useEffect(() => {
+    if (!selectedTicket?.id) {
+      setThreadMessages([]);
+      return;
+    }
+    const msgsRef = collection(firebaseFirestore, 'tickets', selectedTicket.id, 'messages');
+    const q = query(msgsRef, orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        } as TicketMessage));
+        setThreadMessages(list);
+      },
+      (err) => {
+        console.warn('Thread messages listener notice:', err.message);
+      }
+    );
+    return () => unsub();
+  }, [selectedTicket?.id]);
 
   const handleCreateTicket = async () => {
     if (!subject.trim() || !message.trim()) {
@@ -187,7 +238,7 @@ export default function SupportScreen() {
       });
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Ticket Submitted', 'Our support team will respond within a few hours.');
+      Alert.alert('Ticket Submitted', 'Our support team will respond shortly.');
       setSubject('');
       setMessage('');
       setShowCreateForm(false);
@@ -195,6 +246,52 @@ export default function SupportScreen() {
       Alert.alert('Error', err.message || 'Could not submit ticket.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSendStudentReply = async () => {
+    if (!selectedTicket || !studentReplyText.trim()) return;
+    const authUser = firebaseAuth.currentUser;
+    if (!authUser) return;
+
+    setSendingStudentReply(true);
+    try {
+      const msgsRef = collection(firebaseFirestore, 'tickets', selectedTicket.id, 'messages');
+      await addDoc(msgsRef, {
+        senderType: 'student',
+        senderUid: authUser.uid,
+        senderName: profile?.name || 'Student',
+        text: studentReplyText.trim(),
+        createdAt: serverTimestamp(),
+      });
+
+      // Update ticket updatedAt timestamp
+      await updateDoc(doc(firebaseFirestore, 'tickets', selectedTicket.id), {
+        updatedAt: serverTimestamp(),
+      });
+
+      setStudentReplyText('');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not send message.');
+    } finally {
+      setSendingStudentReply(false);
+    }
+  };
+
+  const handleMarkResolved = async (ticketId: string) => {
+    try {
+      await updateDoc(doc(firebaseFirestore, 'tickets', ticketId), {
+        status: 'resolved',
+        updatedAt: serverTimestamp(),
+      });
+      if (selectedTicket && selectedTicket.id === ticketId) {
+        setSelectedTicket((prev) => (prev ? { ...prev, status: 'resolved' } : null));
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Ticket Resolved', 'Thank you! Glad we could help.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not update ticket.');
     }
   };
 
@@ -454,14 +551,18 @@ export default function SupportScreen() {
                   No support tickets yet
                 </Text>
                 <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4, textAlign: 'center' }]}>
-                  Need help with course access or payment? Click "New Ticket" to message our team.
+                  Need help with course access or payment? Click &quot;New Ticket&quot; to message our team.
                 </Text>
               </Card>
             ) : (
               <View style={{ gap: 12 }}>
                 {tickets.map((tItem) => (
-                  <Card key={tItem.id} padding={spacing.base} style={styles.ticketCard}>
-                    {/* Top Row with notch badge and category */}
+                  <Card
+                    key={tItem.id}
+                    onPress={() => setSelectedTicket(tItem)}
+                    padding={spacing.base}
+                    style={styles.ticketCard}
+                  >
                     <View style={styles.ticketTopRow}>
                       <View style={[styles.categoryPill, { backgroundColor: colors.background, borderColor: colors.border }]}>
                         <Text style={[typography.caption, { color: colors.textMuted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }]}>
@@ -479,7 +580,6 @@ export default function SupportScreen() {
                       {tItem.message}
                     </Text>
 
-                    {/* Official Admin Reply Speech Bubble */}
                     {tItem.adminReply && (
                       <View
                         style={[
@@ -494,14 +594,20 @@ export default function SupportScreen() {
                         <View style={styles.adminHeaderRow}>
                           <Sparkles size={14} color={colors.primary} strokeWidth={2} />
                           <Text style={[typography.caption, { color: colors.primary, fontWeight: '700', marginLeft: 6 }]}>
-                            OFFICIAL INSTRUCTOR RESPONSE
+                            OFFICIAL RESPONSE
                           </Text>
                         </View>
-                        <Text style={[typography.body, { color: colors.text, fontSize: 13, marginTop: 6, lineHeight: 20 }]}>
+                        <Text style={[typography.body, { color: colors.text, fontSize: 13, marginTop: 4, lineHeight: 18 }]}>
                           {tItem.adminReply}
                         </Text>
                       </View>
                     )}
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 10 }}>
+                      <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
+                        View Conversation Thread →
+                      </Text>
+                    </View>
                   </Card>
                 ))}
               </View>
@@ -528,6 +634,187 @@ export default function SupportScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* TICKET THREAD MODAL FOR STUDENT */}
+      <Modal
+        visible={!!selectedTicket}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedTicket(null)}
+      >
+        <Screen style={{ backgroundColor: colors.background }}>
+          <View
+            style={[
+              styles.headerBar,
+              {
+                paddingTop: insets.top + spacing.xs,
+                paddingHorizontal: spacing.screen,
+                borderBottomColor: colors.border,
+              },
+            ]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.title, { color: colors.text }]} numberOfLines={1}>
+                {selectedTicket?.subject}
+              </Text>
+              <Text style={[typography.caption, { color: colors.textMuted }]}>
+                Status: {(selectedTicket?.status || 'open').replace('_', ' ').toUpperCase()}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setSelectedTicket(null)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={[styles.backButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <X size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={{ padding: spacing.screen, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Initial Query Box */}
+            <Card padding={spacing.base} style={{ marginBottom: spacing.md }}>
+              <Text style={[typography.caption, { color: colors.textMuted, fontWeight: '700' }]}>
+                INITIAL QUERY
+              </Text>
+              <Text style={[typography.body, { color: colors.text, marginTop: 6, lineHeight: 20 }]}>
+                {selectedTicket?.message}
+              </Text>
+            </Card>
+
+            {/* Conversation Thread */}
+            <Text style={[typography.heading, { color: colors.text, fontSize: 14, marginBottom: spacing.sm }]}>
+              Conversation History
+            </Text>
+
+            {threadMessages.length === 0 ? (
+              <Card padding={spacing.base} style={{ alignItems: 'center', marginVertical: 8 }}>
+                <MessageSquare size={24} color={colors.textMuted} />
+                <Text style={[typography.caption, { color: colors.textMuted, marginTop: 6 }]}>
+                  No responses yet. Support will reply here.
+                </Text>
+              </Card>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {threadMessages.map((msg) => {
+                  const isStudent = msg.senderType === 'student';
+                  return (
+                    <View
+                      key={msg.id}
+                      style={{
+                        alignSelf: isStudent ? 'flex-end' : 'flex-start',
+                        maxWidth: '85%',
+                        backgroundColor: isStudent ? colors.primary : colors.surface,
+                        borderColor: colors.border,
+                        borderWidth: isStudent ? 0 : 1,
+                        padding: spacing.sm + 4,
+                        borderRadius: radius.card,
+                      }}
+                    >
+                      <Text
+                        style={[
+                          typography.caption,
+                          {
+                            color: isStudent ? 'rgba(255,255,255,0.8)' : colors.primary,
+                            fontWeight: '700',
+                            fontSize: 11,
+                          },
+                        ]}
+                      >
+                        {msg.senderName || (isStudent ? 'You' : 'Instructor Support')}
+                      </Text>
+                      <Text
+                        style={[
+                          typography.body,
+                          {
+                            color: isStudent ? '#FFFFFF' : colors.text,
+                            marginTop: 4,
+                            lineHeight: 18,
+                            fontSize: 13,
+                          },
+                        ]}
+                      >
+                        {msg.text}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Mark as resolved option */}
+            {selectedTicket && selectedTicket.status !== 'resolved' && (
+              <View style={{ marginTop: spacing.xl, alignItems: 'center' }}>
+                <TouchableOpacity
+                  onPress={() => handleMarkResolved(selectedTicket.id)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: radius.button,
+                    backgroundColor: colors.surface,
+                    borderColor: colors.success,
+                    borderWidth: 1,
+                  }}
+                >
+                  <CheckCircle2 size={16} color={colors.success} />
+                  <Text style={[typography.caption, { color: colors.success, fontWeight: '700' }]}>
+                    Mark Ticket as Resolved
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Reply Bar */}
+          <View
+            style={[
+              styles.replyBar,
+              {
+                paddingBottom: insets.bottom + 8,
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <TextInput
+              style={[
+                styles.replyInput,
+                typography.body,
+                {
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  borderColor: colors.border,
+                  borderRadius: radius.input,
+                },
+              ]}
+              placeholder="Type your response..."
+              placeholderTextColor={colors.textMuted}
+              value={studentReplyText}
+              onChangeText={setStudentReplyText}
+            />
+            <TouchableOpacity
+              onPress={handleSendStudentReply}
+              disabled={sendingStudentReply || !studentReplyText.trim()}
+              style={[
+                styles.sendBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: sendingStudentReply || !studentReplyText.trim() ? 0.5 : 1,
+                  borderRadius: radius.button,
+                },
+              ]}
+            >
+              <Send size={16} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </Screen>
+      </Modal>
     </Screen>
   );
 }
@@ -548,15 +835,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scrollContent: {
-    paddingBottom: 80,
+    flexGrow: 1,
+    paddingBottom: 40,
   },
   quickContactBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: 16,
+    height: 44,
   },
   tabBar: {
     flexDirection: 'row',
@@ -567,7 +854,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    minHeight: 40,
   },
   createTicketBtn: {
     flexDirection: 'row',
@@ -576,42 +862,64 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   inputField: {
-    height: 48,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderWidth: 1,
   },
   ticketCard: {
-    position: 'relative',
-    overflow: 'hidden',
+    borderWidth: 1,
   },
   ticketTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   categoryPill: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
   },
   statusNotch: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingVertical: 4,
+    borderRadius: 12,
     borderWidth: 1,
   },
   adminReplyBubble: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderLeftWidth: 3,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 12,
   },
   adminHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  replyBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  replyInput: {
+    flex: 1,
+    height: 44,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

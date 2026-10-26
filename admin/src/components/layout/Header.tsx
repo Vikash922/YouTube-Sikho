@@ -29,6 +29,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onOpenMobileSidebar, 
     settings: { title: 'App Settings & Brand', subtitle: 'Manage app details, brand tokens, and maintenance' },
     students: { title: 'Student Management', subtitle: 'Inspect active learners and account access' },
     'activity-log': { title: 'Security & Audit Log', subtitle: 'Tamper-evident logs of administrative actions and security events' },
+    admins: { title: 'Administrator Role Management', subtitle: 'Assign owner, editor, or support RBAC permissions' },
   };
 
   const currentTabInfo = TAB_TITLES[activeTab] || { title: 'Admin Portal', subtitle: '' };

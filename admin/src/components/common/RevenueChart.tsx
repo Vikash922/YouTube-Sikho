@@ -32,17 +32,8 @@ export const RevenueChart: React.FC<RevenueChartProps> = ({ orders }) => {
       const label = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
       const found = ordersByDate[iso];
 
-      // If live order data exists, use it; otherwise use a realistic organic baseline
-      let amount = found ? found.amount : 0;
-      let count = found ? found.count : 0;
-
-      // In sandbox/staging preview when orders are 0 or sparse, generate smooth sample trend
-      if (orders.length <= 2) {
-        const seed = (d.getDate() * 137 + d.getMonth() * 31) % 100;
-        const trend = (days - i) * 120;
-        amount = 1499 + seed * 45 + trend;
-        count = Math.max(1, Math.round(amount / 999));
-      }
+      const amount = found ? found.amount : 0;
+      const count = found ? found.count : 0;
 
       points.push({ dateStr: iso, label, amount, count });
     }

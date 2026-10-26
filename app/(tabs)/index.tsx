@@ -7,11 +7,24 @@ import {
   TextInput,
   TouchableOpacity,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Search, Sparkles, BookOpen, Clock, Star, ArrowRight, Flame, Bell, Radio, Play } from 'lucide-react-native';
+import {
+  Search,
+  Sparkles,
+  BookOpen,
+  Clock,
+  Star,
+  ArrowRight,
+  Flame,
+  Bell,
+  Radio,
+  Play,
+  FolderOpen,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store/useAuthStore';
@@ -38,8 +51,9 @@ import {
   HomeSectionConfig,
   DEFAULT_HOME_SECTIONS,
 } from '../../src/services/bannerService';
+import { subscribeToCategories, Category } from '../../src/services/categoryService';
+import { subscribeToUserProgress, CourseProgressData } from '../../src/services/videoService';
 import { resolveImageUrl } from '../../src/utils/imageUrlResolver';
-import { Linking } from 'react-native';
 import { useLanguageStore } from '../../src/store/useLanguageStore';
 
 export default function HomeScreen() {
@@ -53,6 +67,8 @@ export default function HomeScreen() {
   const [liveNowClass, setLiveNowClass] = useState<LiveClassData | null>(null);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [homeSections, setHomeSections] = useState<HomeSectionConfig[]>(DEFAULT_HOME_SECTIONS);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [userProgress, setUserProgress] = useState<CourseProgressData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const unreadCount = useNotificationStore((state) => state.unreadCount);
 
@@ -90,15 +106,36 @@ export default function HomeScreen() {
     return () => unsubSections();
   }, []);
 
-  const featuredCourses = courses.filter((c) => c.isFeatured || c.isNew).slice(0, 4);
-  const displayList = featuredCourses.length > 0 ? featuredCourses : courses.slice(0, 4);
+  // 5. Subscribe to real-time categories
+  useEffect(() => {
+    const unsubCategories = subscribeToCategories((list) => {
+      setCategories(list);
+    });
+    return () => unsubCategories();
+  }, []);
+
+  // 6. Subscribe to real-time user course progress (Continue Watching)
+  useEffect(() => {
+    if (!profile?.uid) {
+      setUserProgress([]);
+      return;
+    }
+    const unsubProgress = subscribeToUserProgress(profile.uid, (list) => {
+      setUserProgress(list);
+    });
+    return () => unsubProgress();
+  }, [profile?.uid]);
 
   const handleBannerPress = (b: Banner) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (b.targetType === 'course' && b.targetValue) {
-      router.push({ pathname: '/course/[id]', params: { id: b.targetValue } });
-    } else if (b.targetType === 'url' && b.targetValue) {
-      Linking.openURL(b.targetValue).catch(() => {});
+    const targetType = b.actionType || b.targetType;
+    const targetValue = b.actionValue || b.targetValue;
+    if (targetType === 'course' && targetValue) {
+      router.push({ pathname: '/course/[id]', params: { id: targetValue } });
+    } else if (targetType === 'category' && targetValue) {
+      router.push('/(tabs)/courses');
+    } else if (targetType === 'url' && targetValue) {
+      Linking.openURL(targetValue).catch(() => {});
     }
   };
 
@@ -112,12 +149,510 @@ export default function HomeScreen() {
       ? t('goodEvening')
       : t('goodNight');
 
-  const isLiveSectionVisible =
-    homeSections.find((s) => s.type === 'live_stream')?.isVisible !== false;
-  const isStreakVisible =
-    homeSections.find((s) => s.type === 'streak_banner')?.isVisible !== false;
-  const isPopularVisible =
-    homeSections.find((s) => s.type === 'popular_courses')?.isVisible !== false;
+  // In-progress courses calculation
+  const inProgressList = userProgress
+    .filter((p) => (p.percentComplete || 0) < 100 && ((p.percentComplete || 0) > 0 || (p.lastPosition || 0) > 0))
+    .map((p) => {
+      const course = courses.find((c) => c.id === p.courseId);
+      return course ? { ...course, progress: p } : null;
+    })
+    .filter(Boolean) as (Course & { progress: CourseProgressData })[];
+
+  // Filtered course lists
+  const newCoursesList = courses.filter((c) => c.isNew);
+  const featuredList = courses.filter((c) => c.isFeatured);
+  const popularList = courses.filter((c) => !c.isFeatured && !c.isNew).slice(0, 4).length > 0
+    ? courses.filter((c) => !c.isFeatured && !c.isNew).slice(0, 4)
+    : courses.slice(0, 4);
+
+  // Search filtered view if user types something
+  const filteredCourses = searchQuery.trim()
+    ? courses.filter((c) =>
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.instructor?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : null;
+
+  // Render a standard course card
+  const renderCourseCard = (course: Course) => {
+    const displayPrice = course.discountPrice
+      ? `₹${course.discountPrice.toLocaleString('en-IN')}`
+      : typeof course.price === 'number'
+      ? `₹${course.price.toLocaleString('en-IN')}`
+      : course.price;
+    const displayBadge =
+      course.isFeatured ? t('featured') : course.isNew ? t('newBadge') : t('bestseller');
+
+    return (
+      <Card
+        key={course.id}
+        onPress={() => router.push({ pathname: '/course/[id]', params: { id: course.id } })}
+        padding={spacing.base}
+      >
+        {course.thumbnail ? (
+          <View
+            style={{
+              width: '100%',
+              height: 140,
+              borderRadius: radius.md,
+              overflow: 'hidden',
+              marginBottom: spacing.sm,
+              backgroundColor: colors.surfaceElevated,
+            }}
+          >
+            <Image
+              source={{ uri: resolveImageUrl(course.thumbnail) }}
+              style={{ width: '100%', height: '100%' }}
+              contentFit="cover"
+              transition={200}
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.courseHeader}>
+          <Badge label={displayBadge} variant="primary" size="sm" />
+          <View style={styles.ratingRow}>
+            <Star size={13} color={colors.accent} fill={colors.accent} />
+            <Text
+              style={[
+                typography.caption,
+                { color: colors.text, fontWeight: '600', marginLeft: 4 },
+              ]}
+            >
+              {course.rating || 4.9}
+            </Text>
+          </View>
+        </View>
+
+        <Text
+          style={[
+            typography.title,
+            { color: colors.text, marginTop: spacing.sm },
+          ]}
+          numberOfLines={2}
+        >
+          {course.title}
+        </Text>
+
+        <Text
+          style={[
+            typography.small,
+            { color: colors.textMuted, marginTop: 2 },
+          ]}
+        >
+          By {course.instructor || 'Instructor'}
+        </Text>
+
+        <View style={[styles.cardFooter, { borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm }]}>
+          <View style={styles.metaRow}>
+            <Clock size={14} color={colors.textMuted} strokeWidth={1.75} />
+            <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 4 }]}>
+              {course.duration || '12 Hours'}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+            <Text style={[typography.heading, typography.tabular, { color: colors.primary }]}>
+              {displayPrice}
+            </Text>
+            {course.discountPrice && typeof course.price === 'number' && (
+              <Text
+                style={[
+                  typography.caption,
+                  typography.tabular,
+                  { color: colors.textMuted, textDecorationLine: 'line-through' },
+                ]}
+              >
+                ₹{course.price.toLocaleString('en-IN')}
+              </Text>
+            )}
+          </View>
+        </View>
+      </Card>
+    );
+  };
+
+  // SectionRenderer for canonical section types
+  const renderSection = (section: HomeSectionConfig, index: number) => {
+    if (section.isVisible === false) return null;
+
+    switch (section.type) {
+      case 'banners':
+        return (
+          <Animated.View
+            key={section.id || `banners-${index}`}
+            entering={FadeInDown.duration(400).delay(180)}
+            style={{ marginTop: spacing.xl }}
+          >
+            {banners.length > 0 ? (
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 12 }}
+              >
+                {banners.map((b) => (
+                  <TouchableOpacity
+                    key={b.id}
+                    activeOpacity={0.9}
+                    onPress={() => handleBannerPress(b)}
+                    style={[
+                      {
+                        width: Dimensions.get('window').width - 40,
+                        height: 160,
+                        borderRadius: radius.card,
+                        overflow: 'hidden',
+                        backgroundColor: colors.surface,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      },
+                      shadows.sm,
+                    ]}
+                  >
+                    <Image
+                      source={{ uri: resolveImageUrl(b.imageUrl) }}
+                      style={{ width: '100%', height: '100%' }}
+                      contentFit="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={[styles.bannerWrapper, radius.heroCard, shadows.sm]}>
+                <LinearGradient
+                  colors={colors.primaryGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.bannerGradient, { padding: spacing.screen }, radius.heroCard]}
+                >
+                  <Badge
+                    label="FEATURED"
+                    variant="accent"
+                    icon={<Sparkles size={12} color={colors.accentText} strokeWidth={1.75} />}
+                    size="sm"
+                  />
+                  <Text style={[typography.title, { color: '#FFFFFF', marginTop: spacing.md }]}>
+                    {clientConfig.appName}
+                  </Text>
+                  <Text
+                    style={[
+                      typography.small,
+                      { color: 'rgba(255,255,255,0.85)', marginTop: spacing.xs, maxWidth: 280 },
+                    ]}
+                  >
+                    Upgrade your skills with structured video masterclasses taught by top creators.
+                  </Text>
+                </LinearGradient>
+              </View>
+            )}
+          </Animated.View>
+        );
+
+      case 'liveNow':
+      case 'live_stream':
+        if (!liveNowClass) return null;
+        return (
+          <Animated.View
+            key={section.id || `live-${index}`}
+            entering={FadeInDown.duration(400)}
+            style={{ marginTop: spacing.lg }}
+          >
+            <Card
+              padding={spacing.base}
+              onPress={() => router.push('/(tabs)/live')}
+              style={{
+                borderColor: colors.error,
+                borderWidth: 1.5,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Radio size={16} color={colors.error} strokeWidth={2.5} />
+                  <Text style={[typography.heading, { color: colors.error, fontSize: 13 }]}>
+                    {section.title || t('liveStreamNow')}
+                  </Text>
+                </View>
+                <Badge label={t('joinNow')} variant="error" size="sm" />
+              </View>
+              <Text
+                style={[typography.title, { color: colors.text, marginTop: spacing.xs, fontSize: 16 }]}
+                numberOfLines={1}
+              >
+                {liveNowClass.title}
+              </Text>
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                {liveNowClass.courseTitle || 'Free Masterclass'} • Tap to join live stream
+              </Text>
+            </Card>
+          </Animated.View>
+        );
+
+      case 'continueWatching':
+        if (inProgressList.length === 0) return null;
+        return (
+          <Animated.View
+            key={section.id || `continue-${index}`}
+            entering={FadeInDown.duration(400).delay(200)}
+            style={{ marginTop: spacing.xl }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={[typography.heading, { color: colors.text }]}>
+                {section.title || 'Continue Learning'}
+              </Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12, marginTop: spacing.md }}
+            >
+              {inProgressList.map((item) => (
+                <Card
+                  key={`progress-${item.id}`}
+                  onPress={() => router.push({ pathname: '/course/[id]', params: { id: item.id } })}
+                  padding={spacing.sm}
+                  style={{ width: 240 }}
+                >
+                  <View
+                    style={{
+                      width: '100%',
+                      height: 100,
+                      borderRadius: radius.sm,
+                      overflow: 'hidden',
+                      backgroundColor: colors.surfaceElevated,
+                      position: 'relative',
+                    }}
+                  >
+                    {item.thumbnail ? (
+                      <Image
+                        source={{ uri: resolveImageUrl(item.thumbnail) }}
+                        style={{ width: '100%', height: '100%' }}
+                        contentFit="cover"
+                      />
+                    ) : null}
+                    <View
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.3)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 18,
+                          backgroundColor: colors.primary,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Play size={16} color="#FFFFFF" fill="#FFFFFF" style={{ marginLeft: 2 }} />
+                      </View>
+                    </View>
+                  </View>
+                  <Text
+                    style={[typography.caption, { color: colors.text, fontWeight: '600', marginTop: 8 }]}
+                    numberOfLines={1}
+                  >
+                    {item.title}
+                  </Text>
+                  <View style={{ marginTop: 6 }}>
+                    <ProgressBar
+                      value={item.progress.percentComplete || 10}
+                      label={`${Math.round(item.progress.percentComplete || 10)}% completed`}
+                    />
+                  </View>
+                </Card>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        );
+
+      case 'categories':
+        if (categories.length === 0) return null;
+        return (
+          <Animated.View
+            key={section.id || `categories-${index}`}
+            entering={FadeInDown.duration(400).delay(220)}
+            style={{ marginTop: spacing.xl }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={[typography.heading, { color: colors.text }]}>
+                {section.title || 'Explore Categories'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/courses')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
+                  {t('seeAll')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, marginTop: spacing.md }}
+            >
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => router.push('/(tabs)/courses')}
+                  activeOpacity={0.8}
+                  style={[
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      borderRadius: radius.full,
+                      backgroundColor: colors.surface,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    },
+                    shadows.sm,
+                  ]}
+                >
+                  <FolderOpen size={14} color={colors.primary} />
+                  <Text style={[typography.caption, { color: colors.text, fontWeight: '600' }]}>
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        );
+
+      case 'newCourses':
+        if (newCoursesList.length === 0) return null;
+        return (
+          <Animated.View
+            key={section.id || `new-${index}`}
+            entering={FadeInDown.duration(400).delay(240)}
+            style={{ marginTop: spacing.xl }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={[typography.heading, { color: colors.text }]}>
+                {section.title || 'New Releases'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/courses')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
+                  {t('seeAll')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ gap: spacing.base, marginTop: spacing.md }}>
+              {newCoursesList.slice(0, 3).map(renderCourseCard)}
+            </View>
+          </Animated.View>
+        );
+
+      case 'featured':
+      case 'featured_courses':
+        if (featuredList.length === 0) return null;
+        return (
+          <Animated.View
+            key={section.id || `featured-${index}`}
+            entering={FadeInDown.duration(400).delay(250)}
+            style={{ marginTop: spacing.xl }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={[typography.heading, { color: colors.text }]}>
+                {section.title || t('featured')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/courses')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
+                  {t('seeAll')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ gap: spacing.base, marginTop: spacing.md }}>
+              {featuredList.slice(0, 3).map(renderCourseCard)}
+            </View>
+          </Animated.View>
+        );
+
+      case 'popular':
+      case 'popular_courses':
+        return (
+          <Animated.View
+            key={section.id || `popular-${index}`}
+            entering={FadeInDown.duration(400).delay(260)}
+            style={{ marginTop: spacing.xl }}
+          >
+            <View style={styles.sectionHeader}>
+              <Text style={[typography.heading, { color: colors.text }]}>
+                {section.title || t('popularCourses')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/courses')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
+                  {t('seeAll')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {loading ? (
+              <View style={{ gap: spacing.base, marginTop: spacing.md }}>
+                <Skeleton height={140} borderRadius={radius.card} />
+                <Skeleton height={140} borderRadius={radius.card} />
+              </View>
+            ) : (
+              <View style={{ gap: spacing.base, marginTop: spacing.md }}>
+                {popularList.map(renderCourseCard)}
+              </View>
+            )}
+          </Animated.View>
+        );
+
+      case 'streak':
+      case 'streak_banner':
+        return (
+          <Animated.View
+            key={section.id || `streak-${index}`}
+            entering={FadeInDown.duration(400).delay(230)}
+            style={{ marginTop: spacing.lg }}
+          >
+            <Card padding={spacing.base}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Flame size={18} color={colors.accent} strokeWidth={1.75} />
+                  <Text style={[typography.heading, { color: colors.text, marginLeft: 6 }]}>
+                    {section.title || `3-${t('dayStreak')}`}
+                  </Text>
+                </View>
+                <Badge label={t('onTrack')} variant="success" size="sm" />
+              </View>
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
+                {t('watchStreakDesc')}
+              </Text>
+              <View style={{ marginTop: spacing.md }}>
+                <ProgressBar value={60} label={t('weeklyGoal')} />
+              </View>
+            </Card>
+          </Animated.View>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Sort home sections by order
+  const sortedSections = [...homeSections].sort((a, b) => (a.order || 0) - (b.order || 0));
 
   return (
     <Screen withTopInset>
@@ -125,7 +660,7 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingHorizontal: spacing.screen }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Greeting Header with Avatar (Left-aligned, 20px margin) */}
+        {/* Header with Greeting & Avatar */}
         <Animated.View
           entering={FadeInDown.duration(400).delay(80)}
           style={[styles.headerRow, { marginTop: spacing.base }]}
@@ -193,7 +728,7 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
 
-        {/* 2. Search Bar (Min 48px touch target, 12px radius) */}
+        {/* Search Input Bar */}
         <Animated.View
           entering={FadeInDown.duration(400).delay(140)}
           style={[
@@ -221,284 +756,22 @@ export default function HomeScreen() {
           />
         </Animated.View>
 
-        {/* 3. Hero Promotional Banners (Dynamic Carousel from Admin or Default Hero) */}
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(200)}
-          style={{ marginTop: spacing.xl }}
-        >
-          {banners.length > 0 ? (
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 12 }}
-            >
-              {banners.map((b) => (
-                <TouchableOpacity
-                  key={b.id}
-                  activeOpacity={0.9}
-                  onPress={() => handleBannerPress(b)}
-                  style={[
-                    {
-                      width: Dimensions.get('window').width - 40,
-                      height: 160,
-                      borderRadius: radius.card,
-                      overflow: 'hidden',
-                      backgroundColor: colors.surface,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    },
-                    shadows.sm,
-                  ]}
-                >
-                  <Image
-                    source={{ uri: resolveImageUrl(b.imageUrl) }}
-                    style={{ width: '100%', height: '100%' }}
-                    contentFit="cover"
-                  />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          ) : (
-            <View
-              style={[
-                styles.bannerWrapper,
-                radius.heroCard,
-                shadows.sm,
-              ]}
-            >
-              <LinearGradient
-                colors={colors.primaryGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.bannerGradient, { padding: spacing.screen }, radius.heroCard]}
-              >
-                <Badge
-                  label="FEATURED"
-                  variant="accent"
-                  icon={<Sparkles size={12} color={colors.accentText} strokeWidth={1.75} />}
-                  size="sm"
-                />
-
-                <Text
-                  style={[
-                    typography.title,
-                    { color: '#FFFFFF', marginTop: spacing.md },
-                  ]}
-                >
-                  {clientConfig.appName}
-                </Text>
-                <Text
-                  style={[
-                    typography.small,
-                    { color: 'rgba(255,255,255,0.85)', marginTop: spacing.xs, maxWidth: 280 },
-                  ]}
-                >
-                  Upgrade your skills with structured video masterclasses taught by top creators.
-                </Text>
-              </LinearGradient>
-            </View>
-          )}
-        </Animated.View>
-
-        {/* Real-time Live Class Banner */}
-        {isLiveSectionVisible && liveNowClass && (
-          <Animated.View
-            entering={FadeInDown.duration(400)}
-            style={{ marginTop: spacing.lg }}
-          >
-            <Card
-              padding={spacing.base}
-              onPress={() => router.push('/(tabs)/live')}
-              style={{
-                borderColor: colors.error,
-                borderWidth: 1.5,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Radio size={16} color={colors.error} strokeWidth={2.5} />
-                  <Text style={[typography.heading, { color: colors.error, fontSize: 13 }]}>
-                    {t('liveStreamNow')}
-                  </Text>
-                </View>
-                <Badge label={t('joinNow')} variant="error" size="sm" />
-              </View>
-              <Text
-                style={[
-                  typography.title,
-                  { color: colors.text, marginTop: spacing.xs, fontSize: 16 },
-                ]}
-                numberOfLines={1}
-              >
-                {liveNowClass.title}
-              </Text>
-              <Text
-                style={[
-                  typography.caption,
-                  { color: colors.textMuted, marginTop: 2 },
-                ]}
-              >
-                {liveNowClass.courseTitle || 'Free Masterclass'} • Tap to join live stream
-              </Text>
-            </Card>
-          </Animated.View>
-        )}
-
-        {/* 4. Reserved Streak & Learning Progress Widget */}
-        {isStreakVisible && (
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(230)}
-            style={{ marginTop: spacing.lg }}
-          >
-            <Card padding={spacing.base}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Flame size={18} color={colors.accent} strokeWidth={1.75} />
-                  <Text style={[typography.heading, { color: colors.text, marginLeft: 6 }]}>
-                    {`3-${t('dayStreak')}`}
-                  </Text>
-                </View>
-                <Badge label={t('onTrack')} variant="success" size="sm" />
-              </View>
-              <Text style={[typography.caption, { color: colors.textMuted, marginTop: 4 }]}>
-                {t('watchStreakDesc')}
-              </Text>
-              <View style={{ marginTop: spacing.md }}>
-                <ProgressBar value={60} label={t('weeklyGoal')} />
-              </View>
-            </Card>
-          </Animated.View>
-        )}
-
-        {/* 4. Section: Popular Courses with "See all" */}
-        {isPopularVisible && (
-          <Animated.View
-            entering={FadeInDown.duration(400).delay(260)}
-            style={{ marginTop: spacing.xl }}
-          >
-          <View style={styles.sectionHeader}>
+        {/* Search Results Filter (if typing) OR Dynamic Home Sections */}
+        {filteredCourses ? (
+          <View style={{ marginTop: spacing.xl, gap: spacing.base }}>
             <Text style={[typography.heading, { color: colors.text }]}>
-              {t('popularCourses')}
+              {`Search Results (${filteredCourses.length})`}
             </Text>
-            <TouchableOpacity
-              onPress={() => router.push('/(tabs)/courses')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
-                {t('seeAll')}
+            {filteredCourses.length === 0 ? (
+              <Text style={[typography.body, { color: colors.textMuted, marginTop: 8 }]}>
+                No courses match &quot;{searchQuery}&quot;
               </Text>
-            </TouchableOpacity>
+            ) : (
+              filteredCourses.map(renderCourseCard)
+            )}
           </View>
-
-          {/* Skeleton Shimmer Loading or Clean Course Cards */}
-          {loading ? (
-            <View style={{ gap: spacing.base, marginTop: spacing.md }}>
-              <Skeleton height={140} borderRadius={radius.card} />
-              <Skeleton height={140} borderRadius={radius.card} />
-            </View>
-          ) : (
-            <View style={{ gap: spacing.base, marginTop: spacing.md }}>
-              {displayList.map((course) => {
-                const displayPrice = course.discountPrice
-                  ? `₹${course.discountPrice.toLocaleString('en-IN')}`
-                  : typeof course.price === 'number'
-                  ? `₹${course.price.toLocaleString('en-IN')}`
-                  : course.price;
-                const displayBadge =
-                  course.isFeatured ? t('featured') : course.isNew ? t('newBadge') : t('bestseller');
-
-                return (
-                  <Card
-                    key={course.id}
-                    onPress={() => router.push({ pathname: '/course/[id]', params: { id: course.id } })}
-                    padding={spacing.base}
-                  >
-                    {course.thumbnail ? (
-                      <View
-                        style={{
-                          width: '100%',
-                          height: 140,
-                          borderRadius: radius.md,
-                          overflow: 'hidden',
-                          marginBottom: spacing.sm,
-                          backgroundColor: colors.surfaceElevated,
-                        }}
-                      >
-                        <Image
-                          source={{ uri: resolveImageUrl(course.thumbnail) }}
-                          style={{ width: '100%', height: '100%' }}
-                          contentFit="cover"
-                          transition={200}
-                        />
-                      </View>
-                    ) : null}
-
-                    <View style={styles.courseHeader}>
-                      <Badge label={displayBadge} variant="primary" size="sm" />
-                      <View style={styles.ratingRow}>
-                        <Star size={13} color={colors.accent} fill={colors.accent} />
-                        <Text
-                          style={[
-                            typography.caption,
-                            { color: colors.text, fontWeight: '600', marginLeft: 4 },
-                          ]}
-                        >
-                          {course.rating || 4.9}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text
-                      style={[
-                        typography.title,
-                        { color: colors.text, marginTop: spacing.sm },
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {course.title}
-                    </Text>
-
-                    <Text
-                      style={[
-                        typography.small,
-                        { color: colors.textMuted, marginTop: 2 },
-                      ]}
-                    >
-                      By {course.instructor || 'Instructor'}
-                    </Text>
-
-                    {/* Card Footer: Metadata & Price */}
-                    <View style={[styles.cardFooter, { borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm }]}>
-                      <View style={styles.metaRow}>
-                        <Clock size={14} color={colors.textMuted} strokeWidth={1.75} />
-                        <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 4 }]}>
-                          {course.duration || '12 Hours'}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                        <Text style={[typography.heading, typography.tabular, { color: colors.primary }]}>
-                          {displayPrice}
-                        </Text>
-                        {course.discountPrice && typeof course.price === 'number' && (
-                          <Text
-                            style={[
-                              typography.caption,
-                              typography.tabular,
-                              { color: colors.textMuted, textDecorationLine: 'line-through' },
-                            ]}
-                          >
-                            ₹{course.price.toLocaleString('en-IN')}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </Card>
-                );
-              })}
-            </View>
-          )}
-        </Animated.View>
+        ) : (
+          sortedSections.map((section, idx) => renderSection(section, idx))
         )}
       </ScrollView>
     </Screen>
@@ -508,7 +781,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 100, // Breathing room above floating TabBar
+    paddingBottom: 100,
   },
   headerRow: {
     flexDirection: 'row',

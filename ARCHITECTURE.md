@@ -125,6 +125,11 @@ flowchart TD
 | `deleteQuiz` | `onCall` | `{ quizId }` | `{ success: true, quizId }` | None | Admin Role Required | ✅ Live |
 | `deleteLiveClass` | `onCall` | `{ classId }` | `{ success: true, classId }` | None | Admin Role Required | ✅ Live |
 | `deleteAccount` | `onCall` | `{}` | `{ success: true, purgedAt }` | None | Authenticated User (Recent Login) | ✅ Live |
+| `blockUser` | `onCall` | `{ uid, reason? }` | `{ success: true, message }` | None | Admin Role Required | ✅ Live |
+| `unblockUser` | `onCall` | `{ uid }` | `{ success: true, message }` | None | Admin Role Required | ✅ Live |
+| `onOrderStatsUpdate` | `onDocumentWritten` | `orders/{orderId}` | Aggregates daily & total revenue, orders, refunds | None | Trigger | ✅ Live |
+| `onUserCreatedStats` | `onDocumentCreated` | `users/{uid}` | Increments total student counts & daily signups | None | Trigger | ✅ Live |
+| `onUserDeletedStats` | `onDocumentDeleted` | `users/{uid}` | Decrements total student counter | None | Trigger | ✅ Live |
 | `onCoursePublished` | `onDocumentWritten` | `courses/{courseId}` | Dispatches broadcast notification to all students | None | Trigger | ✅ Live |
 | `onLiveClassReminder`| `onSchedule` | `every 5 minutes` | Dispatches push notification for starting classes | None | Scheduled Cron | ✅ Live |
 | `dailyMaintenance` | `onSchedule` | `every 24 hours` | Prunes expired `rateLimits` and `processedEvents` | None | Scheduled Cron | ✅ Live |

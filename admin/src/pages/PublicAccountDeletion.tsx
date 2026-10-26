@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShieldAlert, CheckCircle, Send, ArrowLeft, Loader2, Info } from 'lucide-react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { brandConfig } from '../config/branding';
 
 export const PublicAccountDeletion: React.FC = () => {
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -36,7 +37,7 @@ export const PublicAccountDeletion: React.FC = () => {
       setSubmitted(true);
     } catch (err: any) {
       console.error('Account deletion request error:', err);
-      setError('Failed to submit request. Please email support directly at support@youtubesikho.com');
+      setError(`Failed to submit request. Please email support directly at ${brandConfig.supportEmail}`);
     } finally {
       setSubmitting(false);
     }
@@ -51,7 +52,7 @@ export const PublicAccountDeletion: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Request Account & Data Deletion</h1>
-            <p className="text-xs text-slate-500">YouTube Sikho Academy Data Privacy Portal</p>
+            <p className="text-xs text-slate-500">{brandConfig.appName} Data Privacy Portal</p>
           </div>
         </div>
 

@@ -18,6 +18,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { Course } from '../types';
 import { ImageUploadField } from '../components/common/ImageUploadField';
+import { brandConfig } from '../config/branding';
 
 interface BroadcastRecord {
   id: string;
@@ -398,9 +399,9 @@ export const Notifications: React.FC = () => {
             <div className="bg-white/10 backdrop-blur-md rounded-2xl p-3 border border-white/20 shadow-md">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-4 h-4 rounded-md bg-brand-600 flex items-center justify-center text-white text-[8px] font-bold">
-                  YS
+                  {brandConfig.shortName.charAt(0)}
                 </div>
-                <span className="text-[11px] font-semibold text-slate-200">YouTube Sikho</span>
+                <span className="text-[11px] font-semibold text-slate-200">{brandConfig.shortName}</span>
                 <span className="text-[9px] text-slate-400 ml-auto">now</span>
               </div>
               <h4 className="text-xs font-bold text-white leading-tight">
@@ -424,7 +425,7 @@ export const Notifications: React.FC = () => {
             </div>
 
             <div className="mt-8 text-center text-[10px] text-slate-500">
-              Swipe up to open YouTube Sikho
+              Swipe up to open {brandConfig.shortName}
             </div>
           </div>
         </div>

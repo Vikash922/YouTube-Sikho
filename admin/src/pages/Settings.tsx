@@ -15,6 +15,8 @@ import { db } from '../firebase';
 import { Button } from '../components/common/Button';
 import { useToast } from '../context/ToastContext';
 import { ImageUploadField } from '../components/common/ImageUploadField';
+import { brandConfig } from '../config/branding';
+import { getContrastRatio } from '../utils/contrast';
 
 export interface AdminAppSettings {
   appName: string;
@@ -37,18 +39,18 @@ export interface AdminAppSettings {
 }
 
 const DEFAULT_SETTINGS: AdminAppSettings = {
-  appName: 'YouTube Sikho',
-  logoUrl: '',
-  primaryColor: '#4F46E5',
+  appName: brandConfig.appName,
+  logoUrl: brandConfig.logoUrl,
+  primaryColor: brandConfig.primaryColor,
   secondaryColor: '#06B6D4',
   accentColor: '#F59E0B',
-  supportPhone: '+91 98765 43210',
-  supportWhatsApp: '+91 98765 43210',
-  supportEmail: 'support@youtubesikho.com',
+  supportPhone: brandConfig.supportPhone || '+91 98765 43210',
+  supportWhatsApp: brandConfig.supportPhone || '+91 98765 43210',
+  supportEmail: brandConfig.supportEmail,
   maintenanceMode: false,
   minVersion: '1.0.0',
-  privacyUrl: 'https://youtubesikho.com/privacy',
-  termsUrl: 'https://youtubesikho.com/terms',
+  privacyUrl: brandConfig.privacyUrl,
+  termsUrl: brandConfig.termsUrl,
   playStoreUrl: 'https://play.google.com/store/apps',
   appStoreUrl: 'https://apps.apple.com',
   announcementActive: false,
@@ -267,6 +269,16 @@ export const Settings: React.FC = () => {
                   className="flex-1 px-3 py-2 rounded-btn bg-slate-50 dark:bg-dark-bg border border-light-border dark:border-dark-border text-sm font-mono text-light-text dark:text-dark-text"
                 />
               </div>
+              {(() => {
+                const ratio = getContrastRatio(settings.primaryColor, '#FFFFFF');
+                const isPass = ratio >= 4.5;
+                return (
+                  <div className={`mt-1.5 text-[11px] font-medium flex items-center gap-1.5 ${isPass ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                    <span>{isPass ? '✓ WCAG AA Compliant' : '⚠ Low Contrast Warning'}</span>
+                    <span className="opacity-75 font-mono">({ratio}:1 vs white text)</span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div>

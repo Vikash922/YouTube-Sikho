@@ -28,7 +28,7 @@ export function requireAdmin(request: CallableRequest<any>): { uid: string; emai
 export interface SetAdminClaimRequest {
   targetUid: string;
   admin?: boolean;
-  role?: 'owner' | 'admin';
+  role?: 'owner' | 'editor' | 'support' | 'admin';
 }
 
 /**

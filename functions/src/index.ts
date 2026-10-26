@@ -294,3 +294,10 @@ export const issueCertificate = onCall(defaultCallableOptions, async (request) =
 // Automated Triggers & Scheduled Jobs
 export { onCoursePublished, onLiveClassReminder } from './notifications/triggers';
 export { dailyMaintenance } from './maintenance/dailyMaintenance';
+export {
+  onOrderStatsUpdate,
+  onUserCreatedStats,
+  onUserDeletedStats,
+} from './stats/dashboardStats';
+export { blockUser, unblockUser } from './admin/manageUserBlock';
+
