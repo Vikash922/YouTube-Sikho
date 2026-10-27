@@ -286,7 +286,8 @@ export async function sendNotificationInternal(params: {
  */
 export async function sendNotificationHandler(
   data: SendNotificationPayload,
-  request: CallableRequest<any>
+  request: CallableRequest<any>,
+  db?: admin.firestore.Firestore
 ): Promise<SendNotificationResult> {
   const caller = requireAdmin(request);
 
@@ -327,6 +328,7 @@ export async function sendNotificationHandler(
     targetType,
     targetId,
     senderUid: caller.uid,
+    db,
   });
 
   // Write to Audit Log
@@ -341,7 +343,8 @@ export async function sendNotificationHandler(
       targetId: targetId || null,
       totalRecipients: result.totalRecipients,
       fcmSuccessCount: result.fcmSuccessCount,
-    }
+    },
+    db
   );
 
   return result;

@@ -29,6 +29,9 @@ import {
   FileQuestion,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { GestureDetector } from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
+import { useQuizCardSwipe } from '../../src/motion/hooks/useQuizCardSwipe';
 import { useThemeColors } from '../../src/theme';
 import {
   startQuizSession,
@@ -289,6 +292,21 @@ export default function QuizTakingScreen() {
   const unattemptedCount = Math.max(0, questions.length - answeredCount);
   const markedCount = markedForReview.length;
 
+  const handleNextQuestion = () => {
+    setCurrentIndex((prev) => Math.min(questions.length - 1, prev + 1));
+  };
+
+  const handlePrevQuestion = () => {
+    setCurrentIndex((prev) => Math.max(0, prev - 1));
+  };
+
+  const { gesture: cardSwipeGesture, cardAnimatedStyle } = useQuizCardSwipe({
+    onNext: handleNextQuestion,
+    onPrev: handlePrevQuestion,
+    threshold: 100,
+    velocityThreshold: 600,
+  });
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* 1. Header Bar */}
@@ -397,11 +415,13 @@ export default function QuizTakingScreen() {
         </ScrollView>
       </View>
 
-      {/* 3. Question Body */}
-      <ScrollView
-        contentContainerStyle={styles.questionScroll}
-        showsVerticalScrollIndicator={false}
-      >
+      {/* 3. Question Body with Swipeable Card Gesture */}
+      <GestureDetector gesture={cardSwipeGesture}>
+        <Animated.View style={[{ flex: 1 }, cardAnimatedStyle]}>
+          <ScrollView
+            contentContainerStyle={styles.questionScroll}
+            showsVerticalScrollIndicator={false}
+          >
         {/* Question Counter Card */}
         <View style={styles.qMetaRow}>
           <Text style={[styles.qIndexLabel, { color: colors.primary }]}>
@@ -488,7 +508,9 @@ export default function QuizTakingScreen() {
             );
           })}
         </View>
-      </ScrollView>
+          </ScrollView>
+        </Animated.View>
+      </GestureDetector>
 
       {/* 4. Bottom Controls Toolbar */}
       <View

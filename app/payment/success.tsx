@@ -32,6 +32,8 @@ import { Card } from '../../src/components/common/Card';
 import { Screen } from '../../src/components/common/Screen';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { doc, onSnapshot, firebaseFirestore } from '../../src/services/firebase';
+import { ConfettiBurst } from '../../src/motion/particles/ConfettiBurst';
+import { AnimatedCheckmark } from '../../src/motion/svg/AnimatedCheckmark';
 
 export default function PaymentSuccessScreen() {
   const params = useLocalSearchParams<{
@@ -195,6 +197,7 @@ export default function PaymentSuccessScreen() {
   // State 3: Confirmed server enrollment
   return (
     <Screen>
+      <ConfettiBurst count={72} />
       <ScrollView
         contentContainerStyle={[
           styles.container,
@@ -220,7 +223,7 @@ export default function PaymentSuccessScreen() {
                 { backgroundColor: colors.success },
               ]}
             >
-              <CheckCircle2 size={44} color={colors.surface} strokeWidth={2.2} />
+              <AnimatedCheckmark size={44} color={colors.surface} strokeWidth={3} />
             </View>
           </View>
         </Animated.View>
@@ -389,7 +392,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,

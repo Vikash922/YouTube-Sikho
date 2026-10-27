@@ -4,6 +4,7 @@ import { razorpaySecrets, youtubeSecrets, r2Secrets } from './config';
 import {
   REGION,
   defaultCallableOptions,
+  sensitiveCallableOptions,
   heavyCallableOptions,
   requireAdmin,
   requireAuth,
@@ -54,7 +55,7 @@ export const validateCoupon = onCall(defaultCallableOptions, async (request) => 
  * 2. createOrder: Server-Calculated Price & Razorpay Order Creation
  */
 export const createOrder = onCall(
-  { ...defaultCallableOptions, secrets: razorpaySecrets },
+  { ...sensitiveCallableOptions, secrets: razorpaySecrets },
   async (request) => {
     const auth = requireAuth(request);
     try {
@@ -69,7 +70,7 @@ export const createOrder = onCall(
  * 3. verifyPayment: Cryptographic HMAC Signature Verification & Enrollment Unlock
  */
 export const verifyPayment = onCall(
-  { ...defaultCallableOptions, secrets: razorpaySecrets },
+  { ...sensitiveCallableOptions, secrets: razorpaySecrets },
   async (request) => {
     const auth = requireAuth(request);
     try {
@@ -180,13 +181,16 @@ export const submitQuiz = onCall(defaultCallableOptions, async (request) => {
 /**
  * 10. deleteAccount: Play Store & GDPR Compliant User Data Purge (Resumable)
  */
-export const deleteAccount = onCall(heavyCallableOptions, async (request) => {
-  try {
-    return await deleteAccountHandler(request);
-  } catch (err: any) {
-    throw normalizeError(err, 'deleteAccount');
+export const deleteAccount = onCall(
+  { ...heavyCallableOptions, consumeAppCheckToken: true },
+  async (request) => {
+    try {
+      return await deleteAccountHandler(request);
+    } catch (err: any) {
+      throw normalizeError(err, 'deleteAccount');
+    }
   }
-});
+);
 
 /**
  * 11. getMaterialUrl: Short-Lived Ephemeral Download URL for Course Study Materials (R2 & Storage)

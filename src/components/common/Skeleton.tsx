@@ -9,6 +9,8 @@ import Animated, {
   useReducedMotion,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme';
+import { useMotion } from '../../motion/hooks/useMotion';
+import { ShimmerSkeleton } from '../../motion/shaders/ShimmerSkeleton';
 
 export interface SkeletonProps {
   width?: number | string;
@@ -25,19 +27,22 @@ export const Skeleton: React.FC<SkeletonProps> = ({
 }) => {
   const { colors, radius } = useTheme();
   const shouldReduceMotion = useReducedMotion();
+  const { allowShaders, reduceMotion: motionReduceMotion, tier } = useMotion();
+  const isReduced = shouldReduceMotion || motionReduceMotion;
+
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    if (shouldReduceMotion) return;
+    if (isReduced) return;
     progress.value = withRepeat(
       withTiming(1, { duration: 1000 }),
       -1,
       true
     );
-  }, [shouldReduceMotion]);
+  }, [isReduced, progress]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    if (shouldReduceMotion) {
+    if (isReduced) {
       return { backgroundColor: colors.surfaceElevated };
     }
     const backgroundColor = interpolateColor(
@@ -47,6 +52,17 @@ export const Skeleton: React.FC<SkeletonProps> = ({
     );
     return { backgroundColor };
   });
+
+  if (allowShaders && !isReduced && tier !== 'low') {
+    return (
+      <ShimmerSkeleton
+        width={width}
+        height={height}
+        borderRadius={borderRadius ?? radius.card}
+        style={style}
+      />
+    );
+  }
 
   return (
     <Animated.View

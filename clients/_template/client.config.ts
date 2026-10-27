@@ -3,67 +3,10 @@
  * -------------------------------------------------------------
  * Copy this file to clients/<clientName>/client.config.ts and fill in
  * the brand details, Firebase project keys, and color themes.
+ * Must conform to src/config/schema.ts.
  */
 
-export interface ClientConfig {
-  appName: string;
-  shortName: string;
-  tagline: string;
-  slug: string;
-  packageName: string;
-  bundleIdentifier: string;
-  version: string;
-  logoUrl: string;
-  splashUrl?: string;
-  faviconUrl?: string;
-
-  colors: {
-    primary: string;
-    primaryDark: string;
-    secondary: string;
-    accent: string;
-    background: string;
-    surface: string;
-    text: string;
-    textMuted: string;
-    border: string;
-    error: string;
-    success: string;
-  };
-
-  supportPhone: string;
-  supportWhatsApp: string;
-  supportEmail: string;
-
-  companyLegalName: string;
-  privacyPolicyUrl: string;
-  termsUrl: string;
-  refundPolicyUrl: string;
-  dataDeletionUrl: string;
-
-  razorpayKeyId: string;
-  bunnyLibraryId?: string;
-  bunnyCdnHostname?: string;
-
-  firebaseConfig: {
-    apiKey: string;
-    authDomain: string;
-    projectId: string;
-    storageBucket: string;
-    messagingSenderId: string;
-    appId: string;
-  };
-
-  features: {
-    liveClassesEnabled: boolean;
-    quizzesEnabled: boolean;
-    certificateEnabled: boolean;
-    communityChatEnabled: boolean;
-    offlineDownloadEnabled: boolean;
-    referralEnabled: boolean;
-    reviewsEnabled: boolean;
-  };
-}
+import { ClientConfig } from '../../src/config/schema';
 
 export const clientConfig: ClientConfig = {
   appName: "Creator Academy",
@@ -72,13 +15,14 @@ export const clientConfig: ClientConfig = {
   slug: "creator-academy",
   packageName: "com.creator.academy",
   bundleIdentifier: "com.creator.academy",
+  scheme: "creatoracademy",
   version: "1.0.0",
-  logoUrl: "https://via.placeholder.com/200x200.png?text=Logo",
+  logoUrl: "./assets/icon.png",
   splashUrl: "./assets/splash.png",
   faviconUrl: "./assets/icon.png",
 
   colors: {
-    primary: "#2563EB", // Brand primary
+    primary: "#2563EB",
     primaryDark: "#1D4ED8",
     secondary: "#1E293B",
     accent: "#F59E0B",
@@ -93,25 +37,26 @@ export const clientConfig: ClientConfig = {
 
   supportPhone: "",
   supportWhatsApp: "",
-  supportEmail: "support@example.com",
+  supportEmail: "support@myacademy.org",
 
-  companyLegalName: "Creator Academy Private Limited",
-  privacyPolicyUrl: "https://example.com/privacy",
-  termsUrl: "https://example.com/terms",
-  refundPolicyUrl: "https://example.com/refund",
-  dataDeletionUrl: "https://example.com/delete-account",
+  companyLegalName: "Creator Academy LLP",
+  websiteUrl: "https://myacademy.org",
+  privacyPolicyUrl: "https://myacademy.org/privacy",
+  termsUrl: "https://myacademy.org/terms",
+  refundPolicyUrl: "https://myacademy.org/refund",
+  dataDeletionUrl: "https://myacademy.org/delete-account",
 
-  razorpayKeyId: "rzp_live_CLIENT_KEY",
-  bunnyLibraryId: "YOUR_BUNNY_LIBRARY_ID",
-  bunnyCdnHostname: "video.yourdomain.com",
+  razorpayKeyId: "",
+  bunnyLibraryId: "",
+  bunnyCdnHostname: "",
 
   firebaseConfig: {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID",
+    apiKey: "",
+    authDomain: "",
+    projectId: "",
+    storageBucket: "",
+    messagingSenderId: "",
+    appId: "",
   },
 
   features: {

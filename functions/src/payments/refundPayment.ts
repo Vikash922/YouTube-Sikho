@@ -108,6 +108,7 @@ export async function refundPaymentHandler(
       enrollmentRef,
       {
         status: 'revoked',
+        active: false,
         refundedAt: admin.firestore.FieldValue.serverTimestamp(),
         refundedBy: adminUid,
         refundReason: reason,

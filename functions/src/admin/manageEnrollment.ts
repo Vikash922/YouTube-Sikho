@@ -70,11 +70,18 @@ export async function manageEnrollmentHandler(
     }).catch((e) => console.warn('[manageEnrollment] Notification note:', e.message));
 
     // Audit Log
-    await writeAuditLog(caller.uid, 'enroll_grant', 'enrollment', enrollmentId, {
-      targetUid,
-      courseId,
-      reason,
-    });
+    await writeAuditLog(
+      caller.uid,
+      'enroll_grant',
+      'enrollment',
+      enrollmentId,
+      {
+        targetUid,
+        courseId,
+        reason,
+      },
+      db
+    );
   } else if (action === 'revoke') {
     await enrollmentRef.set(
       {
@@ -100,11 +107,18 @@ export async function manageEnrollmentHandler(
     }).catch((e) => console.warn('[manageEnrollment] Revoke notification note:', e.message));
 
     // Audit Log
-    await writeAuditLog(caller.uid, 'enroll_revoke', 'enrollment', enrollmentId, {
-      targetUid,
-      courseId,
-      reason,
-    });
+    await writeAuditLog(
+      caller.uid,
+      'enroll_revoke',
+      'enrollment',
+      enrollmentId,
+      {
+        targetUid,
+        courseId,
+        reason,
+      },
+      db
+    );
   }
 
   return {

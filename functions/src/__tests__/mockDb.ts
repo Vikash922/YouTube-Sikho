@@ -75,46 +75,23 @@ export class MockFirestore {
         self.data.set(p, { ...val, id: docId });
         return { id: docId, path: p, get: async () => self.doc(p).get() };
       },
-      orderBy: (field: string, direction?: string) => ({
-        get: async () => self.collection(collectionPath).get(),
-      }),
-      limit: (n: number) => ({
-        get: async () => self.collection(collectionPath).get(),
-      }),
-      get: async () => {
-        const docs: any[] = [];
-        for (const [key, val] of self.data.entries()) {
-          if (key.startsWith(collectionPath + '/') && key.split('/').length === collectionPath.split('/').length + 1) {
-            docs.push({
-              id: key.split('/').pop(),
-              exists: true,
-              data: () => ({ ...val }),
-              ref: self.doc(key),
-            });
-          }
-        }
-        return {
-          docs,
-          size: docs.length,
-          empty: docs.length === 0,
-          forEach: (cb: (doc: any) => void) => docs.forEach(cb),
-        };
-      },
-      where: (field: string, op: string, value: any) => {
-        return {
-          where: (f2: string, op2: string, v2: any) => ({
-            limit: () => ({
-              get: async () => self.query(collectionPath, [[field, op, value], [f2, op2, v2]]),
-            }),
-            get: async () => self.query(collectionPath, [[field, op, value], [f2, op2, v2]]),
-          }),
-          limit: () => ({
-            get: async () => self.query(collectionPath, [[field, op, value]]),
-          }),
-          get: async () => self.query(collectionPath, [[field, op, value]]),
-        };
-      },
+      orderBy: (field: string, direction?: string) => self.createQuery(collectionPath, []),
+      limit: (n: number) => self.createQuery(collectionPath, []),
+      get: async () => self.query(collectionPath, []),
+      where: (field: string, op: string, value: any) => self.createQuery(collectionPath, [[field, op, value]]),
     };
+  }
+
+  private createQuery(collectionPath: string, conditions: [string, string, any][] = []) {
+    const self = this;
+    const queryObj: any = {
+      where: (f: string, op: string, v: any) => self.createQuery(collectionPath, [...conditions, [f, op, v]]),
+      limit: (_n: number) => queryObj,
+      orderBy: (_f: string, _dir?: string) => queryObj,
+      startAfter: (_doc: any) => queryObj,
+      get: async () => self.query(collectionPath, conditions),
+    };
+    return queryObj;
   }
 
   private async query(collectionPath: string, conditions: [string, string, any][]) {
@@ -147,9 +124,22 @@ export class MockFirestore {
   async runTransaction(updateFunction: (transaction: any) => Promise<any>) {
     const transaction = {
       get: async (ref: any) => ref.get(),
-      set: async (ref: any, data: any, options?: any) => ref.set(data, options),
-      update: async (ref: any, updates: any) => ref.update(updates),
-      delete: async (ref: any) => ref.delete(),
+      set: (ref: any, data: any, options?: any) => {
+        const p = ref.path || (ref.id ? ref.id : '');
+        if (options?.merge && this.data.has(p)) {
+          this.data.set(p, { ...this.data.get(p), ...data });
+        } else {
+          this.data.set(p, { ...data });
+        }
+      },
+      update: (ref: any, updates: any) => {
+        const p = ref.path || (ref.id ? ref.id : '');
+        this.update(p, updates);
+      },
+      delete: (ref: any) => {
+        const p = ref.path || (ref.id ? ref.id : '');
+        this.delete(p);
+      },
     };
     return await updateFunction(transaction);
   }

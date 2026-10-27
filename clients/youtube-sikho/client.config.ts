@@ -2,92 +2,10 @@
  * CLIENT CONFIGURATION: YouTube Sikho Academy
  * -------------------------------------------------------------
  * Complete single source of truth for white-label client instance.
- * Follows ARCHITECTURE.md strictly.
+ * Validated strictly against src/config/schema.ts.
  */
 
-export interface ClientConfig {
-  appName: string;
-  shortName: string;
-  tagline: string;
-  slug: string;
-  packageName: string;
-  bundleIdentifier: string;
-  version: string;
-  logoUrl: string;
-  splashUrl?: string;
-  faviconUrl?: string;
-
-  colors: {
-    primary: string;
-    primaryDark: string;
-    secondary: string;
-    accent: string;
-    background: string;
-    surface: string;
-    text: string;
-    textMuted: string;
-    border: string;
-    error: string;
-    success: string;
-  };
-
-  supportPhone: string;
-  supportWhatsApp: string;
-  supportEmail: string;
-
-  companyLegalName: string;
-  privacyPolicyUrl: string;
-  termsUrl: string;
-  refundPolicyUrl: string;
-  dataDeletionUrl: string;
-
-  razorpayKeyId?: string;
-  bunnyLibraryId?: string;
-  bunnyCdnHostname?: string;
-
-  firebaseConfig: {
-    apiKey: string;
-    authDomain: string;
-    projectId: string;
-    storageBucket: string;
-    messagingSenderId: string;
-    appId: string;
-  };
-
-  features: {
-    liveClassesEnabled: boolean;
-    quizzesEnabled: boolean;
-    certificateEnabled: boolean;
-    communityChatEnabled: boolean;
-    offlineDownloadEnabled: boolean;
-    referralEnabled: boolean;
-    reviewsEnabled: boolean;
-  };
-}
-
-export function validateClientConfig(config: ClientConfig): { valid: boolean; warnings: string[] } {
-  const warnings: string[] = [];
-
-  if (!config.appName) warnings.push('appName is required.');
-  if (!config.packageName || config.packageName.includes('_')) {
-    warnings.push(`Invalid packageName '${config.packageName}'. Must use lowercase dot notation (e.g. com.company.app).`);
-  }
-  if (!config.firebaseConfig?.projectId) {
-    warnings.push('firebaseConfig.projectId is missing.');
-  }
-  if (!config.privacyPolicyUrl || !config.termsUrl) {
-    warnings.push('Legal URLs (privacyPolicyUrl, termsUrl) must be configured for Play Store compliance.');
-  }
-
-  if (warnings.length > 0 && process.env.NODE_ENV !== 'production') {
-    console.warn('⚠️ [ClientConfig Validation Warnings]:', warnings);
-  }
-
-  return {
-    valid: warnings.length === 0,
-    warnings,
-  };
-}
+import { ClientConfig, validateClientConfig } from '../../src/config/schema';
 
 export const clientConfig: ClientConfig = {
   appName: "YouTube Sikho Academy",
@@ -96,6 +14,7 @@ export const clientConfig: ClientConfig = {
   slug: "youtube-sikho",
   packageName: "com.youtubesikho.academy",
   bundleIdentifier: "com.youtubesikho.academy",
+  scheme: "youtubesikho",
   version: "1.0.0",
   logoUrl: "./assets/icon.png",
   splashUrl: "./assets/splash.png",
@@ -120,6 +39,7 @@ export const clientConfig: ClientConfig = {
   supportEmail: "support@youtubesikho.com",
 
   companyLegalName: "YouTube Sikho Education LLP",
+  websiteUrl: "https://sikho-77341.web.app",
   privacyPolicyUrl: "https://youtubesikho.com/privacy",
   termsUrl: "https://youtubesikho.com/terms",
   refundPolicyUrl: "https://youtubesikho.com/refund",
@@ -132,7 +52,7 @@ export const clientConfig: ClientConfig = {
   firebaseConfig: {
     apiKey:
       process.env.EXPO_PUBLIC_FIREBASE_API_KEY ||
-      ['AIzaSy', 'C2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4'].join(''),
+      "AIzaSyC2a-_m9-hR5bk0ioLVch-KcUE6pyu_Ja4",
     authDomain: "sikho-77341.firebaseapp.com",
     projectId: "sikho-77341",
     storageBucket: "sikho-77341.firebasestorage.app",
@@ -151,6 +71,10 @@ export const clientConfig: ClientConfig = {
   },
 };
 
-validateClientConfig(clientConfig);
+const validation = validateClientConfig(clientConfig);
+if (!validation.valid && typeof __DEV__ !== 'undefined' && __DEV__) {
+  console.error('❌ [ClientConfig Validation Errors]:', validation.errors);
+}
 
+export { ClientConfig, validateClientConfig };
 export default clientConfig;

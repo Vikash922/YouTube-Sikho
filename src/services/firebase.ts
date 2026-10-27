@@ -37,7 +37,7 @@ import { clientConfig } from '../config/client.config';
 
 /**
  * Universal Firebase SDK (100% Expo Go & Production Compatible)
- * Configured for Project: sikho-77341
+ * Configured dynamically from active ClientConfig
  */
 const firebaseApp =
   getApps().length === 0

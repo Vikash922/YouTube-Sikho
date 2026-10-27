@@ -15,8 +15,11 @@ import Animated, {
   runOnJS,
   useReducedMotion,
 } from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
+import { motionSprings } from '../../motion';
+import { useBottomSheetGesture } from '../../motion/hooks/useBottomSheetGesture';
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -37,33 +40,34 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   const insets = useSafeAreaInsets();
   const shouldReduceMotion = useReducedMotion();
 
-  const translateY = useSharedValue(500);
   const backdropOpacity = useSharedValue(0);
+
+  const handleClose = () => {
+    backdropOpacity.value = withTiming(0, { duration: 150 });
+    runOnJS(onClose)();
+  };
+
+  const { gesture, translateY, animatedStyle: gestureAnimatedStyle } = useBottomSheetGesture({
+    onClose: handleClose,
+    sheetHeight: 500,
+    dismissThreshold: 150,
+    velocityThreshold: 600,
+    enabled: visible,
+  });
 
   useEffect(() => {
     if (visible) {
       backdropOpacity.value = withTiming(1, { duration: 200 });
-      translateY.value = shouldReduceMotion
-        ? 0
-        : withSpring(0, { damping: 20, stiffness: 220 });
+      if (shouldReduceMotion) {
+        translateY.value = 0;
+      } else {
+        translateY.value = withSpring(0, motionSprings.snappy);
+      }
     } else {
       backdropOpacity.value = withTiming(0, { duration: 150 });
-      translateY.value = shouldReduceMotion
-        ? 500
-        : withTiming(500, { duration: 200 });
+      translateY.value = 500;
     }
-  }, [visible, shouldReduceMotion]);
-
-  const handleClose = () => {
-    backdropOpacity.value = withTiming(0, { duration: 150 });
-    translateY.value = withTiming(500, { duration: 200 }, () => {
-      runOnJS(onClose)();
-    });
-  };
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  }, [visible, shouldReduceMotion, translateY, backdropOpacity]);
 
   const backdropAnimatedStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
@@ -89,49 +93,51 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
           <Pressable style={styles.backdropPressable} onPress={handleClose} />
         </Animated.View>
 
-        {/* Sheet Content */}
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderTopLeftRadius: radius.sheet, // 24px
-              borderTopRightRadius: radius.sheet,
-              paddingBottom: Math.max(insets.bottom, 24),
-              paddingHorizontal: spacing.screen,
-            },
-            shadows.lg,
-            sheetAnimatedStyle,
-            style,
-          ]}
-        >
-          {/* Drag Handle */}
-          <View style={styles.dragHandleContainer}>
-            <View
-              style={[
-                styles.dragHandle,
-                { backgroundColor: colors.border, borderRadius: radius.full },
-              ]}
-            />
-          </View>
-
-          {/* Optional Title */}
-          {title ? (
-            <View style={styles.header}>
-              <Text
+        {/* Sheet Content with Pan Gesture */}
+        <GestureDetector gesture={gesture}>
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderTopLeftRadius: radius.sheet, // 24px
+                borderTopRightRadius: radius.sheet,
+                paddingBottom: Math.max(insets.bottom, 24),
+                paddingHorizontal: spacing.screen,
+              },
+              shadows.lg,
+              gestureAnimatedStyle,
+              style,
+            ]}
+          >
+            {/* Drag Handle */}
+            <View style={styles.dragHandleContainer}>
+              <View
                 style={[
-                  typography.title,
-                  { color: colors.text, textAlign: 'center' },
+                  styles.dragHandle,
+                  { backgroundColor: colors.border, borderRadius: radius.full },
                 ]}
-              >
-                {title}
-              </Text>
+              />
             </View>
-          ) : null}
 
-          {children}
-        </Animated.View>
+            {/* Optional Title */}
+            {title ? (
+              <View style={styles.header}>
+                <Text
+                  style={[
+                    typography.title,
+                    { color: colors.text, textAlign: 'center' },
+                  ]}
+                >
+                  {title}
+                </Text>
+              </View>
+            ) : null}
+
+            {children}
+          </Animated.View>
+        </GestureDetector>
       </View>
     </Modal>
   );

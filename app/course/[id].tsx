@@ -9,7 +9,14 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  LinearTransition,
+} from 'react-native-reanimated';
+import { motionLayout, motionSprings, triggerHaptic } from '../../src/motion';
 import {
   ArrowLeft,
   Star,
@@ -484,80 +491,15 @@ export default function CourseDetailScreen() {
 
           {displayedSections && displayedSections.length > 0 ? (
             displayedSections.map((section, sIdx) => (
-              <View key={section.id || sIdx} style={{ marginTop: spacing.md }}>
-                <Text style={[typography.small, { color: colors.text, fontWeight: '700', marginBottom: 8 }]}>
-                  {section.title}
-                </Text>
-
-                {section.lessons.map((lesson, lIdx) => {
-                  const isUnlocked = isEnrolled || lesson.isFreePreview;
-                  return (
-                    <TouchableOpacity
-                      key={lesson.id || lIdx}
-                      onPress={() => handleLessonPress(lesson)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessible={true}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${lesson.title}, ${isUnlocked ? 'Available to watch' : 'Locked lesson'}`}
-                      style={[
-                        styles.lessonCard,
-                        {
-                          backgroundColor: colors.surface,
-                          borderColor: isUnlocked && lesson.isFreePreview ? colors.accent : colors.border,
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.lessonIconBox,
-                          {
-                            backgroundColor: isUnlocked ? colors.background : colors.surface,
-                            borderColor: colors.border,
-                          },
-                        ]}
-                      >
-                        {isUnlocked ? (
-                          lesson.type === 'pdf' ? (
-                            <FileText size={16} color={colors.primary} strokeWidth={1.75} />
-                          ) : (
-                            <Play size={16} color={colors.primary} strokeWidth={1.75} />
-                          )
-                        ) : (
-                          <Lock size={16} color={colors.textMuted} strokeWidth={1.75} />
-                        )}
-                      </View>
-
-                      <View style={{ flex: 1, marginLeft: spacing.sm }}>
-                        <Text
-                          style={[
-                            typography.body,
-                            {
-                              color: isUnlocked ? colors.text : colors.textMuted,
-                              fontWeight: isUnlocked ? '600' : '400',
-                            },
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {lesson.title}
-                        </Text>
-                        {lesson.duration && (
-                          <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
-                            {formatLessonDuration(lesson.duration)} • {lesson.type.toUpperCase()}
-                          </Text>
-                        )}
-                      </View>
-
-                      {lesson.isFreePreview && !isEnrolled && (
-                        <View style={[styles.freePreviewPill, { borderColor: colors.accent, backgroundColor: colors.accent + '15' }]}>
-                          <Text style={[typography.caption, { color: colors.accent, fontWeight: '700', fontSize: 10 }]}>
-                            {t('freePreview')}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <SyllabusSectionAccordion
+                key={section.id || sIdx}
+                section={section}
+                index={sIdx}
+                isEnrolled={isEnrolled}
+                onLessonPress={handleLessonPress}
+                formatLessonDuration={formatLessonDuration}
+                t={t}
+              />
             ))
           ) : (
             <Card style={[styles.emptyCurriculumCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -629,7 +571,152 @@ export default function CourseDetailScreen() {
   );
 }
 
+interface SyllabusSectionAccordionProps {
+  section: Section;
+  index: number;
+  isEnrolled: boolean;
+  onLessonPress: (lesson: Lesson) => void;
+  formatLessonDuration: (dur?: number | string) => string | null;
+  t: (key: any) => string;
+}
+
+const SyllabusSectionAccordion: React.FC<SyllabusSectionAccordionProps> = ({
+  section,
+  index,
+  isEnrolled,
+  onLessonPress,
+  formatLessonDuration,
+  t,
+}) => {
+  const { colors, typography, spacing, radius } = useTheme();
+  const [isExpanded, setIsExpanded] = useState(index === 0);
+  const chevronRotation = useSharedValue(index === 0 ? 90 : 0);
+
+  const toggleExpand = () => {
+    triggerHaptic('light');
+    setIsExpanded((prev) => {
+      const next = !prev;
+      chevronRotation.value = withSpring(next ? 90 : 0, motionSprings.snappy);
+      return next;
+    });
+  };
+
+  const chevronAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${chevronRotation.value}deg` }],
+  }));
+
+  return (
+    <Animated.View layout={motionLayout.smooth} style={{ marginTop: spacing.md }}>
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={toggleExpand}
+        style={[
+          styles.accordionHeader,
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+            borderRadius: radius.md,
+          },
+        ]}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`${section.title}, ${isExpanded ? 'expanded' : 'collapsed'}`}
+      >
+        <Text style={[typography.small, { color: colors.text, fontWeight: '700', flex: 1 }]}>
+          {section.title}
+        </Text>
+        <Text style={[typography.caption, { color: colors.textMuted, marginRight: 8 }]}>
+          {section.lessons.length} {section.lessons.length === 1 ? 'lesson' : 'lessons'}
+        </Text>
+        <Animated.View style={chevronAnimatedStyle}>
+          <ChevronRight size={18} color={colors.textMuted} strokeWidth={2} />
+        </Animated.View>
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <Animated.View layout={motionLayout.smooth} style={{ marginTop: spacing.xs }}>
+          {section.lessons.map((lesson, lIdx) => {
+            const isUnlocked = isEnrolled || lesson.isFreePreview;
+            return (
+              <TouchableOpacity
+                key={lesson.id || lIdx}
+                onPress={() => onLessonPress(lesson)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={`${lesson.title}, ${isUnlocked ? 'Available to watch' : 'Locked lesson'}`}
+                style={[
+                  styles.lessonCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: isUnlocked && lesson.isFreePreview ? colors.accent : colors.border,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.lessonIconBox,
+                    {
+                      backgroundColor: isUnlocked ? colors.background : colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  {isUnlocked ? (
+                    lesson.type === 'pdf' ? (
+                      <FileText size={16} color={colors.primary} strokeWidth={1.75} />
+                    ) : (
+                      <Play size={16} color={colors.primary} strokeWidth={1.75} />
+                    )
+                  ) : (
+                    <Lock size={16} color={colors.textMuted} strokeWidth={1.75} />
+                  )}
+                </View>
+
+                <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                  <Text
+                    style={[
+                      typography.body,
+                      {
+                        color: isUnlocked ? colors.text : colors.textMuted,
+                        fontWeight: isUnlocked ? '600' : '400',
+                      },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {lesson.title}
+                  </Text>
+                  {lesson.duration && (
+                    <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}>
+                      {formatLessonDuration(lesson.duration)} • {lesson.type.toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+
+                {lesson.isFreePreview && !isEnrolled && (
+                  <View style={[styles.freePreviewPill, { borderColor: colors.accent, backgroundColor: colors.accent + '15' }]}>
+                    <Text style={[typography.caption, { color: colors.accent, fontWeight: '700', fontSize: 10 }]}>
+                      {t('freePreview')}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+};
+
 const styles = StyleSheet.create({
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderWidth: 1,
+    minHeight: 48,
+  },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',

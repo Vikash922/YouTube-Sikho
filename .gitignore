@@ -27,6 +27,12 @@ serviceAccount*.json
 # Android keystores & certificates
 *.keystore
 *.jks
+*.p12
+*.key
+*.apk
+*.aab
+*.bak
+.agents/
 
 
 backups/

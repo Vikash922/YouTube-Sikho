@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import Constants from 'expo-constants';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useThemeStore, ThemePreference } from '../../src/store/useThemeStore';
 import { useConfigStore } from '../../src/store/useConfigStore';
@@ -69,17 +70,20 @@ export default function ProfileScreen() {
     }
   };
 
+  const supportPhone = config?.supportPhone || clientConfig.supportPhone;
+  const supportWhatsApp = config?.supportWhatsApp || clientConfig.supportWhatsApp;
+
   const handleOpenWhatsApp = () => {
+    if (!supportWhatsApp) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const raw = config?.supportWhatsApp || clientConfig.supportWhatsApp;
-    const cleanPhone = raw.replace(/\D/g, '');
+    const cleanPhone = supportWhatsApp.replace(/\D/g, '');
     Linking.openURL(`https://wa.me/${cleanPhone}`);
   };
 
   const handleCallSupport = () => {
+    if (!supportPhone) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const raw = config?.supportPhone || clientConfig.supportPhone || '+91 98765 43210';
-    const cleanPhone = raw.replace(/[^\d+]/g, '');
+    const cleanPhone = supportPhone.replace(/[^\d+]/g, '');
     Linking.openURL(`tel:${cleanPhone}`).catch(() => {});
   };
 
@@ -105,9 +109,11 @@ export default function ProfileScreen() {
                     <Badge label="VERIFIED" variant="success" size="sm" />
                   </View>
                 </View>
-                <Text style={[typography.small, { color: colors.textMuted, marginTop: 2 }]}>
-                  {profile?.phone || user?.phoneNumber || '+91 98765 43210'}
-                </Text>
+                {(profile?.phone || user?.phoneNumber || profile?.email || user?.email) && (
+                  <Text style={[typography.small, { color: colors.textMuted, marginTop: 2 }]}>
+                    {profile?.phone || user?.phoneNumber || profile?.email || user?.email}
+                  </Text>
+                )}
               </View>
             </View>
           </Card>
@@ -238,37 +244,43 @@ export default function ProfileScreen() {
               <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
             </TouchableOpacity>
 
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            {supportWhatsApp ? (
+              <>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity
+                  style={[styles.menuRow, { paddingHorizontal: spacing.base }]}
+                  onPress={handleOpenWhatsApp}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.menuLeft}>
+                    <MessageCircle size={20} color="#25D366" strokeWidth={1.75} />
+                    <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
+                      {t('chatWhatsApp')}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
+                </TouchableOpacity>
+              </>
+            ) : null}
 
-            <TouchableOpacity
-              style={[styles.menuRow, { paddingHorizontal: spacing.base }]}
-              onPress={handleOpenWhatsApp}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuLeft}>
-                <MessageCircle size={20} color="#25D366" strokeWidth={1.75} />
-                <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  {t('chatWhatsApp')}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
-            </TouchableOpacity>
-
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-            <TouchableOpacity
-              style={[styles.menuRow, { paddingHorizontal: spacing.base }]}
-              onPress={handleCallSupport}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuLeft}>
-                <Phone size={20} color={colors.primary} strokeWidth={1.75} />
-                <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
-                  {t('callSupport')}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
-            </TouchableOpacity>
+            {supportPhone ? (
+              <>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity
+                  style={[styles.menuRow, { paddingHorizontal: spacing.base }]}
+                  onPress={handleCallSupport}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.menuLeft}>
+                    <Phone size={20} color={colors.primary} strokeWidth={1.75} />
+                    <Text style={[typography.body, { color: colors.text, marginLeft: 12 }]}>
+                      {t('callSupport')}
+                    </Text>
+                  </View>
+                  <ChevronRight size={18} color={colors.textMuted} strokeWidth={1.75} />
+                </TouchableOpacity>
+              </>
+            ) : null}
           </Card>
         </Animated.View>
 
@@ -361,7 +373,12 @@ export default function ProfileScreen() {
         {/* App Version Footnote */}
         <View style={styles.versionContainer}>
           <Text style={[typography.caption, typography.tabular, { color: colors.textMuted }]}>
-            {clientConfig.appName} v{clientConfig.version} (Build 1)
+            {clientConfig.appName} v{Constants.expoConfig?.version || clientConfig.version}
+            {Constants.expoConfig?.android?.versionCode
+              ? ` (${Constants.expoConfig.android.versionCode})`
+              : Constants.expoConfig?.ios?.buildNumber
+              ? ` (${Constants.expoConfig.ios.buildNumber})`
+              : ''}
           </Text>
         </View>
       </ScrollView>

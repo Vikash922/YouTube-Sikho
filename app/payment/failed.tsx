@@ -53,7 +53,7 @@ export default function PaymentFailedScreen() {
 
   const handleContactWhatsApp = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const cleanPhone = clientConfig.supportWhatsApp.replace(/[^0-9]/g, '');
+    const cleanPhone = (clientConfig.supportWhatsApp || '').replace(/[^0-9]/g, '');
     const message = encodeURIComponent(
       `Hello ${clientConfig.appName} Support, I experienced an issue during checkout for course ID ${params.courseId || 'unknown'}. Order ID: ${params.orderId || 'N/A'}. Could you please assist me?`
     );

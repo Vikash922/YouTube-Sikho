@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "../node_modules/.bin/eslint \"src/**/*.{ts,tsx}\" --quiet",
+    "test": "npm run typecheck"
   },
   "dependencies": {
     "dompurify": "^3.4.17",

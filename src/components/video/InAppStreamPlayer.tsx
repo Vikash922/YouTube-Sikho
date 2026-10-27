@@ -21,7 +21,7 @@ export function extractYouTubeId(url?: string | null): string | null {
   const clean = url.trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
 
-  const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+  const regExp = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?|live)\/|.*[?&]v=)|youtu\.be\/)([^"&?/\s]{11})/;
   const match = clean.match(regExp);
   return match && match[1] ? match[1] : null;
 }
@@ -151,12 +151,6 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
           title={title}
           style={styles.webview}
         />
-        {isEnded && (
-          <View style={[styles.replayIndicatorPill, { borderColor: colors.accent }]}>
-            <Sparkles size={11} color={colors.accent} strokeWidth={2} />
-            <Text style={[styles.replayIndicatorText, { color: colors.accent }]}>RECORDED REPLAY</Text>
-          </View>
-        )}
       </View>
     );
   }
@@ -166,12 +160,6 @@ export const InAppStreamPlayer: React.FC<InAppStreamPlayerProps> = ({
     return (
       <View style={styles.container}>
         <DirectVideoPlayerView url={streamUrl!} />
-        {isEnded && (
-          <View style={[styles.replayIndicatorPill, { borderColor: colors.accent }]}>
-            <Sparkles size={11} color={colors.accent} strokeWidth={2} />
-            <Text style={[styles.replayIndicatorText, { color: colors.accent }]}>RECORDED REPLAY</Text>
-          </View>
-        )}
       </View>
     );
   }

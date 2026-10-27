@@ -1,4 +1,4 @@
-# YouTube Sikho Design System Architecture
+# White-Label Academy Design System Architecture
 ### Distinctive, Premium EdTech Design & Engineering Specification
 
 ---

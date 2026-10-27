@@ -2,18 +2,23 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { firebaseFirestore } from './firebase';
 
 export type HomeSectionType =
+  | 'banner'
   | 'banners'
+  | 'courses'
   | 'liveNow'
   | 'continueWatching'
+  | 'continue_watching'
   | 'categories'
   | 'newCourses'
   | 'featured'
   | 'popular'
   | 'streak'
+  | 'custom'
   | 'live_stream'
   | 'streak_banner'
   | 'featured_courses'
-  | 'popular_courses';
+  | 'popular_courses'
+  | (string & Record<never, never>);
 
 export interface Banner {
   id: string;

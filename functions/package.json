@@ -6,10 +6,11 @@
     "build": "tsc -p tsconfig.build.json",
     "build:all": "tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "../node_modules/.bin/eslint \"src/**/*.ts\" --quiet",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test": "tsc && node --test lib/__tests__/*.test.js"
+    "test": "tsc && NODE_ENV=test node --test lib/__tests__/*.test.js"
   },
   "engines": {
     "node": ">=20"

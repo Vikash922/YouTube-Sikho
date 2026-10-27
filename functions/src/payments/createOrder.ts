@@ -125,6 +125,7 @@ export async function createOrderHandler(
     courseId,
     courseTitle: courseData.title || 'Course Enrollment',
     amountPaise: finalPaise,
+    finalPrice: Math.round(finalPaise / 100),
     currency: 'INR',
     status: 'created',
     couponCode: normalizedCouponCode,

@@ -125,13 +125,15 @@ Fill out the Data Safety form with the following answers:
 
 ### 2. Specific Data Categories Collected
 
-| Data Type | Purpose | Collected or Shared | Required or Optional |
-| :--- | :--- | :--- | :--- |
-| **Name** | App functionality, Personalizing Certificates | Collected (Not Shared) | Required |
-| **Phone Number / Email** | Account authentication & login verification | Collected (Not Shared) | Required |
-| **User IDs (UID)** | Account management & course enrollment tracking | Collected (Not Shared) | Required |
-| **Purchase History** | Unlocking purchased courses & generating receipts | Collected (Not Shared) | Required |
-| **Crash Logs & Diagnostics** | App stability & crash diagnostics | Collected (Not Shared) | Optional |
+| Data Type | Purpose | SDK / Processor | Collected or Shared | Required or Optional |
+| :--- | :--- | :--- | :--- | :--- |
+| **Name** | Personalizing student certificates and profile display | Internal App | Collected (Not Shared) | Required |
+| **Phone Number / Email** | Account authentication & OTP login verification | Firebase Auth | Collected (Not Shared) | Required |
+| **User IDs (UID)** | Account identification & course enrollment tracking | Firebase Auth & Firestore | Collected (Not Shared) | Required |
+| **Purchase History** | Unlocking purchased courses & transaction receipts | Razorpay & Cloud Functions | Shared with Razorpay for Payment Processing | Required |
+| **Crash Logs & Diagnostics** | App stability & crash monitoring | Firebase Crashlytics | Collected (Not Shared) | Optional |
+| **Device / Integrity Tokens** | Abuse detection, fraud prevention & bot protection | Firebase App Check (Play Integrity) | Collected (Not Shared) | Required |
+| **Push Notification Tokens** | Delivering live class and study alert broadcasts | Firebase Cloud Messaging (FCM) | Collected (Not Shared) | Optional |
 
 ---
 
@@ -143,6 +145,17 @@ Fill out the Data Safety form with the following answers:
 - **Permissions Declared**:
   - `INTERNET` (Network communication)
   - `ACCESS_NETWORK_STATE` (Offline banner state detection)
-  - `RECEIVE_BOOT_COMPLETED` (Local live class reminder notifications)
+  - `POST_NOTIFICATIONS` (Live class broadcasts and study alerts on Android 13+)
   - `VIBRATE` (Haptic feedback on quiz success and button taps)
-- **Zero Sensitive Permissions**: No location, background audio, microphone, SMS read, or contact access requested.
+- **Zero Sensitive Permissions**: No location, background audio, microphone, SMS read, call log, or contact access requested.
+
+---
+
+## 6. Google Play Payments Policy Note (Digital Goods vs India User Choice Billing)
+
+- **Context**: Google Play's Payments Policy mandates Google Play Billing for digital goods and courses in many jurisdictions.
+- **India Exception / User Choice Billing (UCB)**: In India, following the Competition Commission of India (CCI) directives, Google permits **User Choice Billing (UCB)** and alternative billing systems for developers distributing apps to users in India.
+- **Verification Checklist**:
+  1. In Google Play Console -> **Monetization setup** -> **Alternative billing**, enroll in India User Choice Billing if distributing within India.
+  2. If deploying internationally outside India where external gateways (like Razorpay) are not permitted for purely digital content, integrate Google Play Billing SDK (`react-native-iap` or Expo In-App Purchases) alongside Razorpay.
+

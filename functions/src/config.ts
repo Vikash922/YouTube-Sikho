@@ -50,13 +50,16 @@ export interface AppSecrets {
 }
 
 const getSecretVal = (param: { value: () => string }, envName: string): string => {
+  if (process.env[envName]) {
+    return process.env[envName]!;
+  }
   try {
     const val = param.value();
     if (val) return val;
   } catch {
     // Falls back to process.env in emulator or test runners
   }
-  return process.env[envName] || '';
+  return '';
 };
 
 export const getSecrets = (): AppSecrets => {
@@ -93,6 +96,39 @@ export const getRazorpayWebhookSecret = (): string => {
 };
 
 export const getRazorpayClient = (): Razorpay => {
+  if (process.env.NODE_ENV === 'test') {
+    return {
+      orders: {
+        create: async (params: any) => ({
+          id: 'order_test_mock_123',
+          entity: 'order',
+          amount: params.amount,
+          currency: params.currency,
+          receipt: params.receipt,
+          status: 'created',
+        }),
+      },
+      payments: {
+        fetch: async (paymentId: string) => ({
+          id: paymentId,
+          entity: 'payment',
+          amount: 49900,
+          currency: 'INR',
+          status: 'captured',
+          order_id: 'order_test_mock_123',
+          method: 'upi',
+          captured: true,
+        }),
+        refund: async (paymentId: string, params: any) => ({
+          id: 'rfnd_test_mock_123',
+          entity: 'refund',
+          amount: params?.amount || 49900,
+          payment_id: paymentId,
+          status: 'processed',
+        }),
+      },
+    } as any;
+  }
   const { keyId, keySecret } = getRazorpaySecrets();
   return new Razorpay({
     key_id: keyId,

@@ -65,9 +65,11 @@ This creates a new configuration file at `clients/rohit-academy/client.config.ts
 5. **Support Contacts**:
    - `supportPhone`, `supportWhatsApp`, and `supportEmail`.
 
-Now switch the project to your new client:
-
 ```bash
+# 1. Validate your client configuration against the strict schema
+npm run client:validate rohit-academy
+
+# 2. Switch the active project & update Admin .env automatically
 npm run client:use rohit-academy
 ```
 
@@ -75,20 +77,19 @@ npm run client:use rohit-academy
 
 ## Step 3: Deploy Backend Infrastructure (3 mins)
 
-Link your Firebase CLI to the new client's Firebase project:
+Our automated client manager CLI guarantees project safety by explicitly passing `--project <projectId>` to all operations:
 
 ```bash
-firebase use <firebase-project-id>
+# 1. Bootstrap clean Firestore /appConfig/main and /homeSections
+# 2. Deploy hardened Firestore rules and indexes
+npm run client:setup rohit-academy
 ```
 
-Initialize clean production database tables and security rules:
+Or deploy individual targets:
 
 ```bash
-# 1. Initialize clean Firestore schema with zero demo data
-node scripts/setup-database.js
-
-# 2. Deploy Firestore Rules and Indexes
-npm run deploy:backend
+# Deploy Firestore security rules with strict project isolation
+npm run deploy:backend rohit-academy
 ```
 
 ---

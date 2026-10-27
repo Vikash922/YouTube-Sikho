@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Text,
   ActivityIndicator,
@@ -7,7 +7,6 @@ import {
   TextStyle,
   StyleProp,
   Pressable,
-  AccessibilityInfo,
   View,
   AccessibilityRole,
 } from 'react-native';
@@ -15,11 +14,12 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
   useReducedMotion,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme';
+import { motionSprings, motionDurations, triggerHaptic } from '../../motion';
 
 export interface ButtonProps {
   title: string;
@@ -53,23 +53,31 @@ export const Button: React.FC<ButtonProps> = ({
   const { colors, radius, typography, spacing, shadows } = useTheme();
   const shouldReduceMotion = useReducedMotion();
   const scale = useSharedValue(1);
+  const opacity = useSharedValue(disabled || loading ? 0.5 : 1);
+
+  useEffect(() => {
+    opacity.value = withTiming(disabled || loading ? 0.5 : 1, {
+      duration: motionDurations.fast,
+    });
+  }, [disabled, loading, opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: shouldReduceMotion ? 1 : scale.value }],
+    opacity: opacity.value,
   }));
 
   const handlePressIn = () => {
     if (disabled || loading) return;
-    scale.value = withSpring(0.97, { damping: 14, stiffness: 350 });
+    scale.value = withSpring(0.97, motionSprings.snappy);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 14, stiffness: 350 });
+    scale.value = withSpring(1, motionSprings.snappy);
   };
 
   const handlePress = () => {
     if (disabled || loading) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic('light', shouldReduceMotion);
     onPress();
   };
 

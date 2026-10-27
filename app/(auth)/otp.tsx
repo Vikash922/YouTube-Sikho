@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
   KeyboardAvoidingView,
@@ -11,10 +10,6 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
   FadeInDown,
   useReducedMotion,
 } from 'react-native-reanimated';
@@ -26,23 +21,24 @@ import { getUserProfile } from '../../src/services/userService';
 import { firebaseAuth } from '../../src/services/firebase';
 import { useTheme } from '../../src/theme';
 import { Button } from '../../src/components/common/Button';
+import { OtpBoxes, OtpBoxesRef } from '../../src/components/common/OtpBoxes';
+import { triggerHaptic } from '../../src/motion';
 
 export default function OtpScreen() {
   const router = useRouter();
-  const { colors, typography, radius, spacing, shadows } = useTheme();
-  const { confirmation, phoneNumber, setUser, setProfile, setConfirmation } = useAuthStore();
+  const { colors, typography, spacing } = useTheme();
+  const { confirmation, phoneNumber, setUser, setProfile } = useAuthStore();
   const showToast = useToastStore((state) => state.showToast);
   const shouldReduceMotion = useReducedMotion();
 
-  const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [code, setCode] = useState('');
+  const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [timer, setTimer] = useState(30);
   const [resendAttempts, setResendAttempts] = useState(0);
   const isSubmittingRef = useRef(false);
-  const inputRefs = useRef<Array<any>>([]);
-
-  const shakeX = useSharedValue(0);
+  const otpRef = useRef<OtpBoxesRef>(null);
 
   useEffect(() => {
     if (timer <= 0) return;
@@ -53,75 +49,19 @@ export default function OtpScreen() {
   }, [timer]);
 
   const triggerShake = () => {
-    if (shouldReduceMotion) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    shakeX.value = withSequence(
-      withTiming(-12, { duration: 60 }),
-      withTiming(12, { duration: 60 }),
-      withTiming(-8, { duration: 60 }),
-      withTiming(8, { duration: 60 }),
-      withTiming(0, { duration: 60 })
-    );
-  };
-
-  const shakeAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shakeX.value }],
-  }));
-
-  const handleDigitChange = (text: string, index: number) => {
-    if (text.length > 1) {
-      // Paste handler: always populate from box 0 to 5 regardless of which box is focused
-      const cleanDigits = text.replace(/\D/g, '').slice(0, 6).split('');
-      const newDigits = ['', '', '', '', '', ''];
-      cleanDigits.forEach((d, idx) => {
-        newDigits[idx] = d;
-      });
-      setDigits(newDigits);
-      const nextFocus = Math.min(cleanDigits.length, 5);
-      inputRefs.current[nextFocus]?.focus();
-      if (cleanDigits.length === 6 && !isSubmittingRef.current) {
-        autoSubmit(cleanDigits.join(''));
-      }
-      return;
-    }
-
-    const val = text.replace(/\D/g, '');
-    const newDigits = [...digits];
-    newDigits[index] = val;
-    setDigits(newDigits);
-
-    if (val && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit when all 6 digits entered
-    if (val && index === 5) {
-      const full = newDigits.join('');
-      if (full.length === 6 && !isSubmittingRef.current) {
-        autoSubmit(full);
-      }
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const autoSubmit = (otpCode: string) => {
-    handleVerifyOTP(otpCode);
+    setHasError(true);
+    otpRef.current?.shake();
   };
 
   const handleVerifyOTP = async (codeToVerify?: string) => {
     if (isSubmittingRef.current || loading || isSuccess) return;
 
-    const code = codeToVerify || digits.join('');
+    const codeValue = codeToVerify || code;
     if (!confirmation) {
       showToast('Session expired. Please request a new OTP.', 'error');
       return;
     }
-    if (code.length !== 6) {
+    if (codeValue.length !== 6) {
       triggerShake();
       showToast('Please enter the full 6-digit code', 'error');
       return;
@@ -131,14 +71,14 @@ export default function OtpScreen() {
     setLoading(true);
 
     try {
-      const userCredential = await confirmation.confirm(code);
+      const userCredential = await confirmation.confirm(codeValue);
       const authenticatedUser = userCredential.user || firebaseAuth.currentUser;
       if (!authenticatedUser) {
         throw new Error('Authentication failed. Please verify your OTP code and try again.');
       }
 
       setUser(authenticatedUser);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      triggerHaptic('success', shouldReduceMotion);
       setIsSuccess(true);
 
       const profile = await getUserProfile(authenticatedUser.uid);
@@ -188,9 +128,10 @@ export default function OtpScreen() {
     }
     setResendAttempts((prev) => prev + 1);
     setTimer(30);
-    setDigits(['', '', '', '', '', '']);
-    inputRefs.current[0]?.focus();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setCode('');
+    setHasError(false);
+    otpRef.current?.clear();
+    triggerHaptic('medium', shouldReduceMotion);
     showToast('A new 6-digit code has been sent via SMS.', 'info');
   };
 
@@ -216,6 +157,9 @@ export default function OtpScreen() {
             },
           ]}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
           <ArrowLeft size={20} color={colors.text} strokeWidth={1.75} />
         </TouchableOpacity>
@@ -241,48 +185,23 @@ export default function OtpScreen() {
           </Text>
         </Animated.View>
 
-        {/* 6 OTP Boxes Container */}
+        {/* 6 Reusable Animated OTP Boxes */}
         <Animated.View
           entering={FadeInDown.duration(400).delay(160)}
           style={{ width: '100%', marginTop: spacing.xl }}
         >
-          <Animated.View style={[styles.boxesWrapper, shakeAnimatedStyle]}>
-            {digits.map((digit, index) => {
-              const isFilled = Boolean(digit);
-              return (
-                <View
-                  key={index}
-                  style={[
-                    styles.box,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: isFilled ? colors.primary : colors.border,
-                      borderRadius: radius.input, // 12px
-                      borderWidth: isFilled ? 1.5 : 1,
-                    },
-                  ]}
-                >
-                  <TextInput
-                    ref={(ref) => {
-                      inputRefs.current[index] = ref;
-                    }}
-                    style={[
-                      typography.title,
-                      styles.digitInput,
-                      { color: colors.text },
-                    ]}
-                    value={digit}
-                    onChangeText={(t) => handleDigitChange(t, index)}
-                    onKeyPress={(e) => handleKeyPress(e, index)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    selectTextOnFocus
-                    editable={!loading && !isSuccess}
-                  />
-                </View>
-              );
-            })}
-          </Animated.View>
+          <OtpBoxes
+            ref={otpRef}
+            length={6}
+            value={code}
+            onChange={(newCode) => {
+              setCode(newCode);
+              setHasError(false);
+            }}
+            error={hasError}
+            autoSubmit={(autoCode) => handleVerifyOTP(autoCode)}
+            disabled={loading || isSuccess}
+          />
         </Animated.View>
 
         {/* Resend Link & Timer */}
@@ -302,6 +221,9 @@ export default function OtpScreen() {
               onPress={handleResend}
               style={styles.resendBtn}
               activeOpacity={0.7}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Resend verification code"
             >
               <RefreshCw size={14} color={colors.primary} strokeWidth={1.75} style={{ marginRight: 6 }} />
               <Text style={[typography.caption, { color: colors.primary, fontWeight: '600' }]}>
@@ -317,7 +239,7 @@ export default function OtpScreen() {
             title={isSuccess ? 'Verified!' : 'Verify & Continue'}
             onPress={() => handleVerifyOTP()}
             loading={loading}
-            disabled={digits.some((d) => !d) || isSuccess}
+            disabled={code.length < 6 || isSuccess}
             icon={isSuccess ? <Check size={18} color="#FFFFFF" strokeWidth={1.75} /> : undefined}
           />
         </View>
@@ -342,24 +264,6 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     width: '100%',
-  },
-  boxesWrapper: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  box: {
-    flex: 1,
-    height: 54,
-    minHeight: 48,
-    marginHorizontal: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  digitInput: {
-    textAlign: 'center',
-    width: '100%',
-    height: '100%',
   },
   resendSection: {
     alignItems: 'center',

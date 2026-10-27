@@ -265,7 +265,7 @@ export default function LiveRoomScreen() {
         )}
       </View>
 
-      {/* 2. In-App Video Stream Canvas */}
+      {/* 2. In-App Video Stream Canvas (Zero Overlays on Player Surface) */}
       <View style={[styles.playerContainer, { backgroundColor: '#000000' }]}>
         <InAppStreamPlayer
           classId={id}
@@ -274,52 +274,62 @@ export default function LiveRoomScreen() {
           title={liveClass.title}
           scheduledAt={liveClass.scheduledAt}
         />
+      </View>
 
-        {/* Real Viewers or Replay Badge Overlay */}
-        <View style={styles.playerOverlayFooter}>
-          <View style={styles.viewerBadge}>
-            {isLive ? (
-              <>
-                <Users size={12} color="#FFFFFF" strokeWidth={2} />
-                <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
-                  {liveClass.viewerCount && liveClass.viewerCount > 0 ? liveClass.viewerCount : 1} watching
-                </Text>
-              </>
-            ) : (
-              <>
-                <Sparkles size={12} color={colors.accent} strokeWidth={2} />
-                <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
-                  Recorded Session
-                </Text>
-              </>
-            )}
-          </View>
-
-          {/* Raise Hand only available during ACTIVE live broadcast */}
-          {isLive && (
-            <TouchableOpacity
-              onPress={handleRaiseHand}
-              style={[
-                styles.raiseHandBtn,
-                { backgroundColor: handRaised ? colors.accent : 'rgba(255,255,255,0.2)' },
-              ]}
-            >
-              <Hand size={14} color={handRaised ? colors.accentText : '#FFFFFF'} strokeWidth={2} />
-              <Text
-                style={[
-                  typography.caption,
-                  {
-                    color: handRaised ? colors.accentText : '#FFFFFF',
-                    marginLeft: 4,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                {handRaised ? 'Hand Raised' : 'Raise Hand'}
+      {/* External Live Class Action Bar (Directly Below Video Player) */}
+      <View
+        style={[
+          styles.liveActionBar,
+          {
+            backgroundColor: colors.surface,
+            borderBottomColor: colors.border,
+            borderBottomWidth: 1,
+            paddingHorizontal: spacing.screen,
+          },
+        ]}
+      >
+        <View style={[styles.viewerBadge, { backgroundColor: colors.surfaceElevated }]}>
+          {isLive ? (
+            <>
+              <Users size={12} color="#FFFFFF" strokeWidth={2} />
+              <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
+                {liveClass.viewerCount && liveClass.viewerCount > 0 ? liveClass.viewerCount : 1} watching
               </Text>
-            </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Sparkles size={12} color={colors.accent} strokeWidth={2} />
+              <Text style={[typography.caption, { color: '#FFFFFF', marginLeft: 4, fontWeight: '600' }]}>
+                Recorded Session
+              </Text>
+            </>
           )}
         </View>
+
+        {/* Raise Hand only available during ACTIVE live broadcast */}
+        {isLive && (
+          <TouchableOpacity
+            onPress={handleRaiseHand}
+            style={[
+              styles.raiseHandBtn,
+              { backgroundColor: handRaised ? colors.accent : colors.surfaceElevated },
+            ]}
+          >
+            <Hand size={14} color={handRaised ? colors.accentText : '#FFFFFF'} strokeWidth={2} />
+            <Text
+              style={[
+                typography.caption,
+                {
+                  color: handRaised ? colors.accentText : '#FFFFFF',
+                  marginLeft: 4,
+                  fontWeight: '700',
+                },
+              ]}
+            >
+              {handRaised ? 'Hand Raised' : 'Raise Hand'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* 3. Live Chat Area */}
@@ -509,14 +519,11 @@ const styles = StyleSheet.create({
     height: 230,
     position: 'relative',
   },
-  playerOverlayFooter: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    right: 12,
+  liveActionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 10,
   },
   viewerBadge: {
     flexDirection: 'row',

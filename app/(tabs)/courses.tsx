@@ -10,6 +10,7 @@ import {
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { motionLayout } from '../../src/motion/tokens/layout';
 import { Search, BookOpen, Clock, Star, Filter } from 'lucide-react-native';
 import { useTheme } from '../../src/theme';
 import { Card } from '../../src/components/common/Card';
@@ -19,6 +20,7 @@ import { Skeleton } from '../../src/components/common/Skeleton';
 import { Screen } from '../../src/components/common/Screen';
 import { Header } from '../../src/components/common/Header';
 import { EmptyState } from '../../src/components/common/EmptyState';
+import { AnimatedLottieView } from '../../src/motion/lottie';
 import {
   Course,
   subscribeToPublishedCourses,
@@ -140,7 +142,13 @@ export default function CoursesScreen() {
           </View>
         ) : filteredCourses.length === 0 ? (
           <EmptyState
-            icon={<BookOpen size={32} color={colors.primary} strokeWidth={1.75} />}
+            icon={
+              <AnimatedLottieView
+                source={require('../../assets/animations/empty-courses.json')}
+                style={{ width: 44, height: 44 }}
+                fallbackIcon={<BookOpen size={32} color={colors.primary} strokeWidth={1.75} />}
+              />
+            }
             title={t('noCoursesFound')}
             description={t('noCoursesDescription')}
             actionTitle={t('clearFilter')}
@@ -161,82 +169,83 @@ export default function CoursesScreen() {
                 course.isFeatured ? 'FEATURED' : course.isNew ? 'NEW' : 'POPULAR';
 
               return (
-                <Card
-                  key={course.id}
-                  onPress={() => router.push({ pathname: '/course/[id]', params: { id: course.id } })}
-                  padding={spacing.base}
-                >
-                  {course.thumbnail ? (
-                    <View
-                      style={{
-                        width: '100%',
-                        height: 150,
-                        borderRadius: radius.md,
-                        overflow: 'hidden',
-                        marginBottom: spacing.sm,
-                        backgroundColor: colors.surfaceElevated,
-                      }}
-                    >
-                      <Image
-                        source={{ uri: resolveImageUrl(course.thumbnail) }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                        transition={200}
-                      />
-                    </View>
-                  ) : null}
-
-                  <View style={styles.cardHeader}>
-                    <Badge label={displayBadge} variant="primary" size="sm" />
-                    <View style={styles.ratingRow}>
-                      <Star size={13} color={colors.accent} fill={colors.accent} />
-                      <Text
-                        style={[
-                          typography.caption,
-                          { color: colors.text, fontWeight: '600', marginLeft: 4 },
-                        ]}
+                <Animated.View key={course.id} layout={motionLayout.snappy}>
+                  <Card
+                    onPress={() => router.push({ pathname: '/course/[id]', params: { id: course.id } })}
+                    padding={spacing.base}
+                  >
+                    {course.thumbnail ? (
+                      <View
+                        style={{
+                          width: '100%',
+                          height: 150,
+                          borderRadius: radius.md,
+                          overflow: 'hidden',
+                          marginBottom: spacing.sm,
+                          backgroundColor: colors.surfaceElevated,
+                        }}
                       >
-                        {course.rating || 4.9}
-                      </Text>
+                        <Image
+                          source={{ uri: resolveImageUrl(course.thumbnail) }}
+                          style={{ width: '100%', height: '100%' }}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      </View>
+                    ) : null}
+
+                    <View style={styles.cardHeader}>
+                      <Badge label={displayBadge} variant="primary" size="sm" />
+                      <View style={styles.ratingRow}>
+                        <Star size={13} color={colors.accent} fill={colors.accent} />
+                        <Text
+                          style={[
+                            typography.caption,
+                            { color: colors.text, fontWeight: '600', marginLeft: 4 },
+                          ]}
+                        >
+                          {course.rating || 4.9}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
 
-                  <Text
-                    style={[
-                      typography.title,
-                      { color: colors.text, marginTop: spacing.sm },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {course.title}
-                  </Text>
-
-                  <Text
-                    style={[
-                      typography.small,
-                      { color: colors.textMuted, marginTop: 2 },
-                    ]}
-                  >
-                    By {course.instructor || 'Instructor'}
-                  </Text>
-
-                  <View
-                    style={[
-                      styles.cardFooter,
-                      { borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm },
-                    ]}
-                  >
-                    <View style={styles.metaRow}>
-                      <Clock size={14} color={colors.textMuted} strokeWidth={1.75} />
-                      <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 4 }]}>
-                        {course.duration || 'Comprehensive'}
-                      </Text>
-                    </View>
-                    <Text style={[typography.heading, { color: colors.primary }]}>
-                      {displayPrice}
+                    <Text
+                      style={[
+                        typography.title,
+                        { color: colors.text, marginTop: spacing.sm },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {course.title}
                     </Text>
-                  </View>
-                </Card>
+
+                    <Text
+                      style={[
+                        typography.small,
+                        { color: colors.textMuted, marginTop: 2 },
+                      ]}
+                    >
+                      By {course.instructor || 'Instructor'}
+                    </Text>
+
+                    <View
+                      style={[
+                        styles.cardFooter,
+                        { borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm },
+                      ]}
+                    >
+                      <View style={styles.metaRow}>
+                        <Clock size={14} color={colors.textMuted} strokeWidth={1.75} />
+                        <Text style={[typography.caption, { color: colors.textMuted, marginLeft: 4 }]}>
+                          {course.duration || 'Comprehensive'}
+                        </Text>
+                      </View>
+                      <Text style={[typography.heading, { color: colors.primary }]}>
+                        {displayPrice}
+                      </Text>
+                    </View>
+                  </Card>
+                </Animated.View>
               );
             })}
           </View>

@@ -7,7 +7,7 @@
  *  - Google Sign-In with automatic Firestore profile creation
  *  - Sign Out
  *
- * Configured for project: sikho-77341
+ * Configured dynamically from ClientConfig
  * Guided by: ARCHITECTURE.md & Firebase Auth Best Practices
  */
 

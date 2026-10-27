@@ -1,24 +1,33 @@
 # Automated Testing & Quality Assurance Guide
 
-This project includes a strict, automated verification pipeline designed to catch accessibility violations, color regressions, and touch ergonomics issues before runtime.
+This project features a comprehensive, zero-false-assurance quality pipeline covering root mobile app, web admin console, Cloud Functions, and live Firebase emulators.
 
 ---
 
-## 1. Test Commands
+## 1. Master Quality Verification Pipeline
 
-Run the full automated check suite in sequence:
+Run the master verification pipeline that executes all 15 stages across the entire monorepo in sequence:
 ```bash
-npm run check
+npm run verify
 ```
-Or run individual verification commands:
+This script stops at the first failure and generates a structured summary table.
 
-| Command | Suite | What It Catches | Expected Result |
-| :--- | :--- | :--- | :--- |
-| `npm run test:contrast` | WCAG AA/AAA Suite | Detects any foreground/background color pair with a contrast ratio below **4.5:1** (normal text) or **3.0:1** (large text/borders). Tests 4 client brand themes in both Light and Dark modes. | `✓ 58 contrast checks passed (0 failures)` |
-| `npm run lint` | Token Compliance Scan | Scans all `.tsx` and `.ts` files in `src/components/` and `app/`. Fails if any arbitrary hex colors (`#...`) are hardcoded outside `src/theme/`. | `✓ All UI components exclusively consume theme tokens` |
-| `npm run test` | Full QA Suite | Runs all automated verification suites (contrast, token compliance, accessibility). | `✓ Total Suites: 3 \| Passed: 3 \| Failed: 0` |
-| `npm run doctor` | Expo Doctor | Checks for incompatible native dependencies or mismatched SDK versions. | `✓ Expo Doctor: No issues detected` |
-| `npm run e2e` | Maestro E2E Flows | End-to-end automation flows in `e2e/flows/` for smoke, authentication, tab switching, and theme changes. | `Maestro flows pass` |
+### Individual Verification Commands
+
+| Command | Project / Scope | What It Verifies |
+| :--- | :--- | :--- |
+| `npm run verify` | Whole Monorepo | Executes all 15 quality checks across Root, Admin, Functions, and live Rules emulators. |
+| `npm run typecheck` | Root App | Strict TypeScript compilation (`tsc --noEmit`). |
+| `npm run lint` | Root App | ESLint static analysis with zero warnings/errors. |
+| `npm run test:rules` | Firebase Rules | Live emulator tests against Firestore & Storage with `@firebase/rules-unit-testing`. |
+| `npm --prefix functions test` | Cloud Functions | 20 server unit tests for order creation, payments, webhooks, and enrollment. |
+| `npm --prefix admin run build` | Web Admin | Production Vite build with source maps and debugger statements dropped. |
+| `npm run export:android` | Root App | Validates production React Native Android bundle generation. |
+| `npm run doctor` | Root App | Expo Doctor 20-point native dependency compatibility check. |
+| `npm run lint:tokens` | Design System | Validates zero hardcoded hex colors; ensures 100% theme token adoption. |
+| `npm run lint:contrast` | Accessibility | WCAG AA/AAA automated color contrast verification. |
+| `npm run lint:i18n` | Localization | Dual-language dictionary parity between English and Hindi keys. |
+| `npm run lint:secrets` | Security | Pre-commit git secret scanner blocking API keys, tokens, or keystores. |
 
 ---
 
@@ -82,17 +91,14 @@ Tests defined in `functions/__tests__/`:
 5. **`refundPayment` Access Revocation**:
    - Calls Razorpay Refund API and immediately deletes `/enrollments/{uid_courseId}` document upon confirmation.
 
-### B. Firestore Security Rules Suite (`scripts/test-firestore-rules.js`)
-- **Enrollments Protection**:
-  - `allow write: if false;` (Writable ONLY by Cloud Functions / Admin SDK).
-  - Students can read only their own enrollments (`resource.data.uid == request.auth.uid`).
-- **Orders Protection**:
-  - `allow write: if false;` (Created and updated exclusively by Cloud Functions).
-  - Students can read only their own orders.
-- **Coupons Protection**:
-  - Students can read active coupons for checkout preview, but CANNOT write, edit, or reset usage counters.
-- **Progress Protection**:
-  - Students can update only their own progress document (`uid == request.auth.uid`).
+### B. Live Emulator Rules Suite (`npm run test:rules`)
+Executed against local Firestore (port 8080) and Storage (port 9199) emulators with `@firebase/rules-unit-testing`:
+- **Users PII & Field Protection**: Asserts students can read/update allowed profile fields (`name`, `phone`, `language`), but CANNOT modify protected fields (`role`, `isBlocked`, `coinBalance`) or inspect another student's profile.
+- **Courses & Sections**: Unauthenticated callers can only read published courses. Unpublished drafts and private video media documents are completely blocked to students.
+- **Enrollments & Orders**: Students can read only their own enrollments and orders; direct client writes, price tampers, and status updates are rejected.
+- **Reviews**: Only enrolled students who completed the prerequisite coursework can submit course reviews.
+- **Support Tickets**: Students can create `open` tickets and read their own history; unauthorized status elevation to `resolved` is blocked.
+- **Storage Rules**: Validates student avatar uploads (<= 5MB image types) while denying uploads to course materials or banner directories.
 
 ### C. Mobile Player & Checkout Tests
 - **Video Player**:
@@ -137,7 +143,7 @@ Execute the following checklist on a physical Android/iOS phone:
 - **Privacy Isolation**: Confirms student notifications, tickets, and PII are strictly isolated to document owners.
 - **Expected Result**: `56 PASSED | 0 FAILED (TOTAL: 56)`.
 
-### B. Cloud Functions Test Suite (`scripts/test-cloud-functions.js`)
+### B. Cloud Functions Test Suite (`npm --prefix functions test`)
 - Runs 21 end-to-end backend function tests across 9 test suites:
   - `createOrder`: Server-side price calculation, coupon validation (expiry, usage limits).
   - `verifyPayment` & `razorpayWebhook`: Cryptographic HMAC signatures, idempotency, parallel webhook events.

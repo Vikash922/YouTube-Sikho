@@ -5,13 +5,13 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Dimensions,
   Linking,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import {
   ArrowLeft,
@@ -29,11 +29,14 @@ import { useNotificationStore, InAppNotification } from '../src/store/useNotific
 import { Screen } from '../src/components/common/Screen';
 import { EmptyState } from '../src/components/common/EmptyState';
 import { resolveImageUrl } from '../src/utils/imageUrlResolver';
+import { useSwipeAction } from '../src/motion/hooks/useSwipeAction';
+import { motionLayout } from '../src/motion/tokens/layout';
+import { AnimatedLottieView } from '../src/motion/lottie';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors, typography, spacing, radius, shadows } = useTheme();
+  const { colors, typography, spacing } = useTheme();
 
   const notifications = useNotificationStore((state) => state.notifications);
   const readIds = useNotificationStore((state) => state.readIds);
@@ -169,7 +172,13 @@ export default function NotificationsScreen() {
       {notifications.length === 0 ? (
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <EmptyState
-            icon={<Bell size={36} color={colors.primary} strokeWidth={1.75} />}
+            icon={
+              <AnimatedLottieView
+                source={require('../assets/animations/empty-notifications.json')}
+                style={{ width: 44, height: 44 }}
+                fallbackIcon={<Bell size={36} color={colors.primary} strokeWidth={1.75} />}
+              />
+            }
             title="All caught up!"
             description="You don't have any notifications right now. Broadcast announcements, live stream alerts, and course updates will appear here."
             actionTitle="Explore Courses"
@@ -181,148 +190,214 @@ export default function NotificationsScreen() {
           data={notifications}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.listContent, { paddingHorizontal: spacing.screen }]}
-          renderItem={({ item, index }) => {
-            const isRead = readIds.includes(item.id);
-            const resolvedImg = resolveImageUrl(item.imageUrl);
-            const timeAgo = formatTimeAgo(item.createdAt);
-
-            return (
-              <Animated.View entering={FadeInDown.duration(300).delay(index * 40)}>
-                <TouchableOpacity
-                  activeOpacity={0.88}
-                  onPress={() => handleNotificationPress(item)}
-                  style={[
-                    styles.notificationCard,
-                    {
-                      backgroundColor: isRead ? colors.surface : colors.surfaceElevated,
-                      borderColor: isRead ? colors.border : colors.primary,
-                      borderRadius: radius.card,
-                    },
-                    shadows.sm,
-                  ]}
-                >
-                  <View style={styles.cardHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                      {!isRead && (
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: colors.primary,
-                          }}
-                        />
-                      )}
-                      <Text
-                        style={[
-                          typography.heading,
-                          {
-                            color: colors.text,
-                            fontSize: 15,
-                            fontWeight: isRead ? '600' : '700',
-                            flex: 1,
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.title}
-                      </Text>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      {timeAgo ? (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <Clock size={12} color={colors.textMuted} />
-                          <Text style={[typography.caption, { color: colors.textMuted }]}>
-                            {timeAgo}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation?.();
-                          handleDeleteItem(item.id);
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Delete notification"
-                        style={styles.deleteItemBtn}
-                      >
-                        <Trash2 size={15} color={colors.textMuted} strokeWidth={1.75} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <Text
-                    style={[
-                      typography.body,
-                      {
-                        color: colors.textMuted,
-                        marginTop: 6,
-                        fontSize: 13,
-                        lineHeight: 18,
-                      },
-                    ]}
-                  >
-                    {item.body}
-                  </Text>
-
-                  {/* Optional resolved banner image */}
-                  {resolvedImg ? (
-                    <View
-                      style={{
-                        width: '100%',
-                        height: 140,
-                        borderRadius: radius.sm,
-                        overflow: 'hidden',
-                        marginTop: 10,
-                        backgroundColor: colors.background,
-                      }}
-                    >
-                      <Image
-                        source={{ uri: resolvedImg }}
-                        style={{ width: '100%', height: '100%' }}
-                        contentFit="cover"
-                        transition={200}
-                      />
-                    </View>
-                  ) : null}
-
-                  {/* Action Link Footer */}
-                  {item.actionType && item.actionType !== 'notifications' && item.actionData && (
-                    <View style={styles.actionFooter}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        {item.actionType === 'live' && <Radio size={14} color={colors.error} />}
-                        {item.actionType === 'course' && <BookOpen size={14} color={colors.primary} />}
-                        {item.actionType === 'url' && <ExternalLink size={14} color={colors.primary} />}
-                        <Text
-                          style={[
-                            typography.caption,
-                            {
-                              color: item.actionType === 'live' ? colors.error : colors.primary,
-                              fontWeight: '700',
-                            },
-                          ]}
-                        >
-                          {item.actionType === 'live'
-                            ? 'Tap to Join Live Class'
-                            : item.actionType === 'course'
-                            ? 'Tap to View Course'
-                            : 'Open Link'}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          }}
+          renderItem={({ item, index }) => (
+            <NotificationItemRow
+              key={item.id}
+              item={item}
+              index={index}
+              isRead={readIds.includes(item.id)}
+              timeAgo={formatTimeAgo(item.createdAt)}
+              onPress={() => handleNotificationPress(item)}
+              onDelete={() => handleDeleteItem(item.id)}
+            />
+          )}
         />
       )}
     </Screen>
   );
 }
+
+interface NotificationItemRowProps {
+  item: InAppNotification;
+  index: number;
+  isRead: boolean;
+  timeAgo: string;
+  onPress: () => void;
+  onDelete: () => void;
+}
+
+const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
+  item,
+  index,
+  isRead,
+  timeAgo,
+  onPress,
+  onDelete,
+}) => {
+  const { colors, typography, radius, shadows } = useTheme();
+  const resolvedImg = resolveImageUrl(item.imageUrl);
+
+  const { gesture, animatedStyle } = useSwipeAction({
+    onDelete,
+    revealWidth: 80,
+    dismissThreshold: 140,
+  });
+
+  return (
+    <Animated.View
+      layout={motionLayout.snappy}
+      entering={FadeInDown.duration(300).delay(index * 40)}
+      style={styles.swipeWrapper}
+    >
+      {/* Background Delete Action Revealed on Swipe */}
+      <View
+        style={[
+          styles.deleteActionBehind,
+          {
+            backgroundColor: colors.error,
+            borderRadius: radius.card,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          onPress={onDelete}
+          style={styles.deleteButtonTouch}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Delete notification"
+        >
+          <Trash2 size={20} color="#FFFFFF" strokeWidth={2} />
+          <Text style={[typography.caption, { color: '#FFFFFF', fontWeight: '700', marginTop: 2 }]}>
+            Delete
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Swipeable Foreground Card */}
+      <GestureDetector gesture={gesture}>
+        <Animated.View style={[animatedStyle, { width: '100%' }]}>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={onPress}
+            style={[
+              styles.notificationCard,
+              {
+                backgroundColor: isRead ? colors.surface : colors.surfaceElevated,
+                borderColor: isRead ? colors.border : colors.primary,
+                borderRadius: radius.card,
+              },
+              shadows.sm,
+            ]}
+          >
+            <View style={styles.cardHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                {!isRead && (
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: colors.primary,
+                    }}
+                  />
+                )}
+                <Text
+                  style={[
+                    typography.heading,
+                    {
+                      color: colors.text,
+                      fontSize: 15,
+                      fontWeight: isRead ? '600' : '700',
+                      flex: 1,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.title}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {timeAgo ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <Clock size={12} color={colors.textMuted} />
+                    <Text style={[typography.caption, { color: colors.textMuted }]}>
+                      {timeAgo}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    onDelete();
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete notification"
+                  style={styles.deleteItemBtn}
+                >
+                  <Trash2 size={15} color={colors.textMuted} strokeWidth={1.75} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <Text
+              style={[
+                typography.body,
+                {
+                  color: colors.textMuted,
+                  marginTop: 6,
+                  fontSize: 13,
+                  lineHeight: 18,
+                },
+              ]}
+            >
+              {item.body}
+            </Text>
+
+            {/* Optional resolved banner image */}
+            {resolvedImg ? (
+              <View
+                style={{
+                  width: '100%',
+                  height: 140,
+                  borderRadius: radius.sm,
+                  overflow: 'hidden',
+                  marginTop: 10,
+                  backgroundColor: colors.background,
+                }}
+              >
+                <Image
+                  source={{ uri: resolvedImg }}
+                  style={{ width: '100%', height: '100%' }}
+                  contentFit="cover"
+                  transition={200}
+                />
+              </View>
+            ) : null}
+
+            {/* Action Link Footer */}
+            {item.actionType && item.actionType !== 'notifications' && item.actionData && (
+              <View style={styles.actionFooter}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {item.actionType === 'live' && <Radio size={14} color={colors.error} />}
+                  {item.actionType === 'course' && <BookOpen size={14} color={colors.primary} />}
+                  {item.actionType === 'url' && <ExternalLink size={14} color={colors.primary} />}
+                  <Text
+                    style={[
+                      typography.caption,
+                      {
+                        color: item.actionType === 'live' ? colors.error : colors.primary,
+                        fontWeight: '700',
+                      },
+                    ]}
+                  >
+                    {item.actionType === 'live'
+                      ? 'Tap to Join Live Class'
+                      : item.actionType === 'course'
+                      ? 'Tap to View Course'
+                      : 'Open Link'}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </GestureDetector>
+    </Animated.View>
+  );
+};
 
 const styles = StyleSheet.create({
   headerBar: {
@@ -363,6 +438,25 @@ const styles = StyleSheet.create({
   listContent: {
     paddingVertical: 16,
     gap: 12,
+  },
+  swipeWrapper: {
+    position: 'relative',
+    width: '100%',
+  },
+  deleteActionBehind: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteButtonTouch: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   notificationCard: {
     padding: 16,

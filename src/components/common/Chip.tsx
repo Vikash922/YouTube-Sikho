@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Text,
   StyleSheet,
@@ -11,10 +11,11 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  interpolateColor,
   useReducedMotion,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme';
+import { motionSprings, triggerHaptic } from '../../motion';
 
 export interface ChipProps {
   label: string;
@@ -40,24 +41,60 @@ export const Chip: React.FC<ChipProps> = ({
   const { colors, radius, typography, spacing } = useTheme();
   const shouldReduceMotion = useReducedMotion();
   const scale = useSharedValue(1);
+  const selectProgress = useSharedValue(selected ? 1 : 0);
+  const badgeScale = useSharedValue(1);
+  const prevCountRef = useRef(count);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: shouldReduceMotion ? 1 : scale.value }],
+  useEffect(() => {
+    selectProgress.value = withSpring(selected ? 1 : 0, motionSprings.snappy);
+  }, [selected, selectProgress]);
+
+  useEffect(() => {
+    if (count !== undefined && prevCountRef.current !== undefined && count !== prevCountRef.current) {
+      if (!shouldReduceMotion) {
+        badgeScale.value = 1.2;
+        badgeScale.value = withSpring(1.0, motionSprings.bouncy);
+      }
+    }
+    prevCountRef.current = count;
+  }, [count, shouldReduceMotion, badgeScale]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      selectProgress.value,
+      [0, 1],
+      [colors.surface, colors.primary]
+    );
+    const borderColor = interpolateColor(
+      selectProgress.value,
+      [0, 1],
+      [colors.border, colors.primary]
+    );
+
+    return {
+      backgroundColor,
+      borderColor,
+      transform: [{ scale: shouldReduceMotion ? 1 : scale.value }],
+    };
+  });
+
+  const badgeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScale.value }],
   }));
 
   const handlePressIn = () => {
     if (!onPress) return;
-    scale.value = withSpring(0.95, { damping: 15, stiffness: 350 });
+    scale.value = withSpring(0.95, motionSprings.snappy);
   };
 
   const handlePressOut = () => {
     if (!onPress) return;
-    scale.value = withSpring(1, { damping: 15, stiffness: 350 });
+    scale.value = withSpring(1, motionSprings.snappy);
   };
 
   const handlePress = () => {
     if (!onPress) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic('light', shouldReduceMotion);
     onPress();
   };
 
@@ -71,8 +108,6 @@ export const Chip: React.FC<ChipProps> = ({
         styles.chip,
         {
           borderRadius: radius.full,
-          backgroundColor: selected ? colors.primary : colors.surface,
-          borderColor: selected ? colors.primary : colors.border,
           paddingHorizontal: spacing.base,
           paddingVertical: spacing.sm,
         },
@@ -94,7 +129,7 @@ export const Chip: React.FC<ChipProps> = ({
         {label}
       </Text>
       {count !== undefined ? (
-        <View
+        <Animated.View
           style={[
             styles.countBadge,
             {
@@ -103,6 +138,7 @@ export const Chip: React.FC<ChipProps> = ({
                 : colors.surfaceElevated,
               borderRadius: radius.full,
             },
+            badgeAnimatedStyle,
           ]}
         >
           <Text
@@ -116,7 +152,7 @@ export const Chip: React.FC<ChipProps> = ({
           >
             {count}
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
     </AnimatedPressable>
   );

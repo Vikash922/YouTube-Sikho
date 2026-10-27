@@ -31,6 +31,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 30-Minute Idle Session Timeout
+  useEffect(() => {
+    if (!user) return;
+
+    const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        console.warn('[Session] Admin signed out after 30 minutes of inactivity');
+        await firebaseSignOut(auth);
+        setUser(null);
+        setAdminData(null);
+        setIsAdmin(false);
+        setError('Your session has expired due to 30 minutes of inactivity. Please sign in again.');
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const activityEvents = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    activityEvents.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, resetTimer));
+    };
+  }, [user]);
+
   // Helper to verify ID token custom claim admin === true
   const verifyAdminToken = async (firebaseUser: User): Promise<boolean> => {
     try {

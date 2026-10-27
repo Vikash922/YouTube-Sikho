@@ -35,8 +35,10 @@ import { useTheme } from '../../src/theme';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useConfigStore } from '../../src/store/useConfigStore';
 import { useScreenProtection } from '../../src/hooks/useScreenProtection';
+import { clientConfig } from '../../src/config/client.config';
 import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
+import { ConfettiBurst } from '../../src/motion/particles/ConfettiBurst';
 import { Screen } from '../../src/components/common/Screen';
 
 interface CertificateData {
@@ -93,11 +95,12 @@ export default function CertificateScreen() {
     };
   }, [courseId]);
 
-  const clientName = cert?.clientName || config?.appName || 'Academy';
+  const clientName = cert?.clientName || config?.appName || clientConfig.appName;
   const studentName = cert?.studentName || profile?.name || user?.displayName || 'Learner';
   const courseTitle = cert?.courseTitle || 'Master Course';
   const certificateId = cert?.id || 'PENDING';
-  const verifyUrl = cert?.verifyUrl || `https://sikho-77341.web.app/verify?id=${certificateId}`;
+  const projectId = clientConfig.firebaseConfig?.projectId || 'app';
+  const verifyUrl = cert?.verifyUrl || `https://${projectId}.web.app/verify?id=${certificateId}`;
 
   const formattedDate = cert?.issuedAt
     ? new Date(cert.issuedAt).toLocaleDateString('en-IN', {
@@ -130,6 +133,7 @@ export default function CertificateScreen() {
     setDownloading(true);
 
     try {
+      const brandColor = clientConfig.colors.primary;
       const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -141,8 +145,8 @@ export default function CertificateScreen() {
               margin: 0;
               padding: 40px;
               font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-              background-color: #f8fafc;
-              color: #0f172a;
+              background-color: rgb(248, 250, 252);
+              color: rgb(15, 23, 42);
               display: flex;
               align-items: center;
               justify-content: center;
@@ -150,10 +154,10 @@ export default function CertificateScreen() {
               box-sizing: border-box;
             }
             .cert-container {
-              background: #ffffff;
+              background: #FFFFFF;
               width: 100%;
               height: 100%;
-              border: 12px double #059669;
+              border: 12px double ${brandColor};
               padding: 40px 60px;
               box-sizing: border-box;
               text-align: center;
@@ -164,7 +168,7 @@ export default function CertificateScreen() {
               font-weight: 800;
               text-transform: uppercase;
               letter-spacing: 4px;
-              color: #059669;
+              color: ${brandColor};
               margin-bottom: 8px;
             }
             .cert-title {
@@ -173,11 +177,11 @@ export default function CertificateScreen() {
               text-transform: uppercase;
               letter-spacing: 2px;
               margin: 10px 0;
-              color: #1e293b;
+              color: rgb(30, 41, 59);
             }
             .cert-subtitle {
               font-size: 14px;
-              color: #64748b;
+              color: rgb(100, 116, 139);
               text-transform: uppercase;
               letter-spacing: 2px;
               margin-bottom: 25px;
@@ -185,8 +189,8 @@ export default function CertificateScreen() {
             .recipient-name {
               font-size: 34px;
               font-weight: 800;
-              color: #0f172a;
-              border-bottom: 2px solid #059669;
+              color: rgb(15, 23, 42);
+              border-bottom: 2px solid ${brandColor};
               display: inline-block;
               padding-bottom: 6px;
               margin-bottom: 20px;
@@ -194,7 +198,7 @@ export default function CertificateScreen() {
             .course-name {
               font-size: 20px;
               font-weight: 700;
-              color: #334155;
+              color: rgb(51, 65, 85);
               margin-bottom: 30px;
             }
             .footer-row {
@@ -206,15 +210,15 @@ export default function CertificateScreen() {
               justify-content: space-between;
               align-items: flex-end;
               font-size: 12px;
-              color: #64748b;
+              color: rgb(100, 116, 139);
             }
             .meta-item { text-align: left; }
-            .meta-id { font-family: monospace; font-weight: bold; color: #059669; font-size: 14px; }
+            .meta-id { font-family: monospace; font-weight: bold; color: ${brandColor}; font-size: 14px; }
             .badge-verified {
               display: inline-block;
-              background: #ecfdf5;
-              color: #059669;
-              border: 1px solid #10b981;
+              background: rgba(16, 185, 129, 0.1);
+              color: ${brandColor};
+              border: 1px solid ${brandColor};
               padding: 4px 12px;
               font-weight: bold;
               border-radius: 4px;
@@ -231,7 +235,7 @@ export default function CertificateScreen() {
             
             <div class="recipient-name">${studentName}</div>
             
-            <p style="font-size: 15px; color: #475569; max-width: 600px; margin: 0 auto 10px;">
+            <p style="font-size: 15px; color: rgb(71, 85, 105); max-width: 600px; margin: 0 auto 10px;">
               for successfully completing all lessons, projects, and authoritatively passing evaluation checkpoints for
             </p>
             <div class="course-name">"${courseTitle}"</div>
@@ -245,7 +249,7 @@ export default function CertificateScreen() {
               </div>
               <div style="text-align: right;">
                 <div>Certificate ID: <span class="meta-id">${certificateId}</span></div>
-                <div style="font-size: 10px; margin-top: 4px; color: #94a3b8;">Issued via Firebase Protected Authority</div>
+                <div style="font-size: 10px; margin-top: 4px; color: rgb(148, 163, 184);">Issued via Firebase Protected Authority</div>
               </div>
             </div>
           </div>
@@ -322,6 +326,7 @@ export default function CertificateScreen() {
 
   return (
     <Screen withTopInset>
+      <ConfettiBurst count={80} />
       {/* Header */}
       <View
         style={[

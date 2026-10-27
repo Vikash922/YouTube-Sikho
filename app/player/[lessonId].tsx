@@ -47,6 +47,7 @@ import { Card } from '../../src/components/common/Card';
 import { Button } from '../../src/components/common/Button';
 import { Badge } from '../../src/components/common/Badge';
 import { Screen } from '../../src/components/common/Screen';
+import { Tabs } from '../../src/components/common/Tabs';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useScreenProtection } from '../../src/hooks/useScreenProtection';
 import {
@@ -779,54 +780,21 @@ export default function VideoPlayerScreen() {
           </Animated.View>
 
           {/* Tab Selector: Curriculum vs Course Details */}
-          <View style={[styles.tabBarWrapper, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TouchableOpacity
-              onPress={() => setActiveTab('curriculum')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="View curriculum lessons list"
-              style={[
-                styles.tabBtn,
-                activeTab === 'curriculum' && [styles.activeTabBtn, { backgroundColor: colors.background }],
+          <View style={{ marginTop: spacing.md }}>
+            <Tabs
+              tabs={[
+                {
+                  id: 'curriculum',
+                  label: `Lessons (${course?.sections?.reduce((a, s) => a + s.lessons.length, 0) || 0})`,
+                },
+                {
+                  id: 'overview',
+                  label: 'Course Info',
+                },
               ]}
-            >
-              <Text
-                style={[
-                  typography.small,
-                  {
-                    color: activeTab === 'curriculum' ? colors.primary : colors.textMuted,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                Lessons ({course?.sections?.reduce((a, s) => a + s.lessons.length, 0) || 0})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setActiveTab('overview')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="View course overview description"
-              style={[
-                styles.tabBtn,
-                activeTab === 'overview' && [styles.activeTabBtn, { backgroundColor: colors.background }],
-              ]}
-            >
-              <Text
-                style={[
-                  typography.small,
-                  {
-                    color: activeTab === 'overview' ? colors.primary : colors.textMuted,
-                    fontWeight: '700',
-                  },
-                ]}
-              >
-                Course Info
-              </Text>
-            </TouchableOpacity>
+              activeTab={activeTab}
+              onChange={(tabId) => setActiveTab(tabId as 'curriculum' | 'overview')}
+            />
           </View>
 
           {/* Curriculum Lessons List */}

@@ -132,10 +132,17 @@ export async function deleteAccountHandler(
     }
 
     // 12. Write to Audit Log BEFORE deleting the Auth user
-    await writeAuditLog(uid, 'delete_account', 'user', uid, {
-      requestedAt: new Date().toISOString(),
-      email: caller.email || null,
-    });
+    await writeAuditLog(
+      uid,
+      'delete_account',
+      'user',
+      uid,
+      {
+        requestedAt: new Date().toISOString(),
+        email: caller.email || null,
+      },
+      db
+    );
 
     // 13. Delete user document and subcollections
     await userRef.delete();

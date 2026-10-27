@@ -40,6 +40,14 @@ export const defaultCallableOptions: CallableOptions = {
 };
 
 /**
+ * Sensitive Callable Options with one-time App Check token replay protection
+ */
+export const sensitiveCallableOptions: CallableOptions = {
+  ...defaultCallableOptions,
+  consumeAppCheckToken: true,
+};
+
+/**
  * Heavy Callable Options (e.g. notifications, account deletion, bulk operations)
  */
 export const heavyCallableOptions: CallableOptions = {

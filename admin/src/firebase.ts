@@ -3,6 +3,7 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const env = (import.meta as any).env || {};
 
@@ -38,6 +39,19 @@ if (isFirebaseConfigValid) {
   dbInstance = getFirestore(appInstance);
   storageInstance = getStorage(appInstance);
   functionsInstance = getFunctions(appInstance, 'asia-south1');
+
+  // Initialize App Check for Admin Web Console (reCAPTCHA v3)
+  if (env.VITE_RECAPTCHA_SITE_KEY) {
+    try {
+      initializeAppCheck(appInstance, {
+        provider: new ReCaptchaV3Provider(env.VITE_RECAPTCHA_SITE_KEY),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.log('[AppCheck] Initialized successfully with reCAPTCHA v3');
+    } catch (err) {
+      console.warn('[AppCheck] Web initialization warning:', err);
+    }
+  }
 } else {
   console.error(
     `[Client Config Error] Firebase configuration is incomplete. Missing keys: ${missingFirebaseKeys.join(', ')}. Firebase was NOT initialized to prevent cross-client data contamination.`

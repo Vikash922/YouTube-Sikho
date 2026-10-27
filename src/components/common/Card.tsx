@@ -6,8 +6,8 @@ import Animated, {
   withSpring,
   useReducedMotion,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../theme';
+import { motionSprings, triggerHaptic } from '../../motion';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -28,7 +28,7 @@ export const Card: React.FC<CardProps> = ({
   padding,
   variant = 'default',
 }) => {
-  const { colors, radius, spacing, shadows, motion } = useTheme();
+  const { colors, radius, spacing, shadows } = useTheme();
   const shouldReduceMotion = useReducedMotion();
   const scale = useSharedValue(1);
 
@@ -38,17 +38,17 @@ export const Card: React.FC<CardProps> = ({
 
   const handlePressIn = () => {
     if (!onPress) return;
-    scale.value = withSpring(motion.pressScale, motion.presets.snappy);
+    scale.value = withSpring(0.97, motionSprings.snappy);
   };
 
   const handlePressOut = () => {
     if (!onPress) return;
-    scale.value = withSpring(1, motion.presets.snappy);
+    scale.value = withSpring(1, motionSprings.snappy);
   };
 
   const handlePress = () => {
     if (!onPress) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic('light', shouldReduceMotion);
     onPress();
   };
 

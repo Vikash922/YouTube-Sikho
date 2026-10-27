@@ -295,17 +295,20 @@ export default function SupportScreen() {
     }
   };
 
+  const supportWhatsApp = config?.supportWhatsApp || clientConfig.supportWhatsApp;
+  const supportPhone = config?.supportPhone || clientConfig.supportPhone;
+
   const handleOpenWhatsApp = () => {
+    if (!supportWhatsApp) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const raw = config?.supportWhatsApp || clientConfig.supportWhatsApp;
-    const clean = raw.replace(/\D/g, '');
+    const clean = supportWhatsApp.replace(/\D/g, '');
     Linking.openURL(`https://wa.me/${clean}`).catch(() => {});
   };
 
   const handleCallSupport = () => {
+    if (!supportPhone) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const raw = config?.supportPhone || clientConfig.supportPhone || '+91 98765 43210';
-    const cleanPhone = raw.replace(/[^\d+]/g, '');
+    const cleanPhone = supportPhone.replace(/[^\d+]/g, '');
     Linking.openURL(`tel:${cleanPhone}`).catch(() => {});
   };
 
@@ -378,37 +381,43 @@ export default function SupportScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Quick Contact Bar */}
-        <Animated.View entering={FadeInDown.duration(300)} style={{ marginTop: spacing.md }}>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity
-              onPress={handleOpenWhatsApp}
-              style={[
-                styles.quickContactBtn,
-                { backgroundColor: '#25D366', borderRadius: radius.card },
-              ]}
-              activeOpacity={0.8}
-            >
-              <MessageCircle size={18} color="#FFFFFF" strokeWidth={2} />
-              <Text style={[typography.small, { color: '#FFFFFF', fontWeight: '700', marginLeft: 6 }]}>
-                {t('chatWhatsApp')}
-              </Text>
-            </TouchableOpacity>
+        {(supportWhatsApp || supportPhone) && (
+          <Animated.View entering={FadeInDown.duration(300)} style={{ marginTop: spacing.md }}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {supportWhatsApp ? (
+                <TouchableOpacity
+                  onPress={handleOpenWhatsApp}
+                  style={[
+                    styles.quickContactBtn,
+                    { backgroundColor: '#25D366', borderRadius: radius.card },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <MessageCircle size={18} color="#FFFFFF" strokeWidth={2} />
+                  <Text style={[typography.small, { color: '#FFFFFF', fontWeight: '700', marginLeft: 6 }]}>
+                    {t('chatWhatsApp')}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
 
-            <TouchableOpacity
-              onPress={handleCallSupport}
-              style={[
-                styles.quickContactBtn,
-                { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.card },
-              ]}
-              activeOpacity={0.8}
-            >
-              <Phone size={18} color={colors.primary} strokeWidth={2} />
-              <Text style={[typography.small, { color: colors.text, fontWeight: '700', marginLeft: 6 }]}>
-                {t('callSupport')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
+              {supportPhone ? (
+                <TouchableOpacity
+                  onPress={handleCallSupport}
+                  style={[
+                    styles.quickContactBtn,
+                    { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: radius.card },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <Phone size={18} color={colors.primary} strokeWidth={2} />
+                  <Text style={[typography.small, { color: colors.text, fontWeight: '700', marginLeft: 6 }]}>
+                    {t('callSupport')}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </Animated.View>
+        )}
 
         {/* Tab Selector */}
         <View style={[styles.tabBar, { backgroundColor: colors.surface, borderRadius: radius.button, marginTop: spacing.lg }]}>

@@ -1,6 +1,6 @@
 # 🏛 System Architecture & Technical Specifications
 
-This document outlines the full end-to-end architecture, data flows, Firestore collection schemas, and Cloud Functions catalog for the **YouTube Sikho Course App Platform**.
+This document outlines the full end-to-end architecture, data flows, Firestore collection schemas, security model, and Cloud Functions catalog for the **White-Label Course App Platform**.
 
 ---
 
@@ -119,7 +119,8 @@ flowchart TD
 | `submitQuiz` | `onCall` | `{ attemptId, quizId, answers, timeTakenSeconds }` | `{ resultId, score, maxScore, percentage, passed, breakdown }` | None | Authenticated Student Owner | ✅ Live |
 | `markLessonComplete` | `onCall` | `{ courseId, lessonId, watchedSeconds? }` | `{ success: true, completedLessons, percentage, isFullyCompleted }` | None | Enrolled Student | ✅ Live |
 | `issueCertificate` | `onCall` | `{ courseId }` | `{ success: true, certificateId, certificate: {...} }` | None | Enrolled Student (100% Complete) | ✅ Live |
-| `getMaterialUrl` | `onCall` | `{ courseId, materialId }` | `{ downloadUrl, expiresAt, title, fileName }` | None | Enrolled Student / Admin | ✅ Live |
+| `getMaterialUrl` | `onCall` | `{ courseId, materialId }` | `{ downloadUrl, expiresAt, title, fileName }` | `r2Secrets` | Enrolled Student / Admin | ✅ Live |
+| `getMaterialUploadUrl` | `onCall` | `{ courseId, fileName, contentType }` | `{ uploadUrl, downloadUrl, storagePath }` | `r2Secrets` | Admin Role Required | ✅ Live |
 | `getLiveStream` | `onCall` | `{ classId }` | `{ liveUrl, status, chatEnabled }` | None | Enrolled Student / Admin | ✅ Live |
 | `deleteCourse` | `onCall` | `{ courseId }` | `{ success: true, courseId }` | None | Admin Role Required | ✅ Live |
 | `deleteQuiz` | `onCall` | `{ quizId }` | `{ success: true, quizId }` | None | Admin Role Required | ✅ Live |
@@ -156,3 +157,40 @@ All functions are provisioned with explicit `secrets: [...]` declarations:
 | `RAZORPAY_KEY_SECRET` | `createOrder`, `verifyPayment`, `razorpayWebhook`, `refundPayment` | HMAC-SHA256 order signature verification and refund execution |
 | `RAZORPAY_WEBHOOK_SECRET` | `razorpayWebhook` | Verifies gateway webhook push payloads |
 | `YOUTUBE_API_KEY` | `validateYoutubeVideo` | Inspects unlisted YouTube videos for embeddability and duration metadata |
+
+---
+
+## 6. White-Label Client Architecture
+
+The platform operates as a single codebase supporting multiple isolated client deployments:
+
+```
+clients/
+  ├── _template/client.config.ts        # Fully commented reference schema
+  └── youtube-sikho/client.config.ts     # Active production client configuration
+```
+
+### Key Principles:
+1. **Single Source of Truth**: All client-specific branding, colors, Firebase credentials, Razorpay key IDs, legal URLs, and package identifiers live strictly in `clients/<client-name>/client.config.ts`.
+2. **Deterministic Switching**:
+   - `npm run client:use <name>` swaps active configuration and updates `.firebaserc` and symlinks cleanly.
+   - `npm run client:validate <name>` enforces zero empty fields, valid URLs, WCAG contrast compliance, and real package format before build or deployment.
+3. **Deploy Safety Guard**:
+   - `client-manager.js` verifies that the active Firebase CLI project matches the client configuration project ID before permitting `firebase deploy`.
+
+---
+
+## 7. Security Hardening, App Check & Rules Validation
+
+### A. Server-Authoritative Invariants
+- Direct client writes to `enrollments`, `orders`, `quizResults`, and `certificates` are strictly denied.
+- Pricing, coupon deductions, payment verification, and quiz evaluations are executed solely within Cloud Functions with runtime idempotency and transactions.
+
+### B. Firebase App Check
+- **Mobile (Android)**: Attested via Google Play Integrity API with custom debug token fallback in local development.
+- **Web Admin**: Protected via Google reCAPTCHA v3.
+- **Backend Callable Functions**: Enforce `enforceAppCheck: true` and single-use replay protection (`consumeAppCheckToken: true`) on financial and sensitive account operations (`createOrder`, `verifyPayment`, `deleteAccount`).
+
+### C. Live Security Rules Testing
+- All Firestore and Storage security rules are continuously verified using `@firebase/rules-unit-testing` running against live local emulators (`npm run test:rules`).
+- 33 test scenarios validate user PII isolation, field immutability, draft/published course access, student enrollment read isolation, server-authoritative billing, and file upload limits.

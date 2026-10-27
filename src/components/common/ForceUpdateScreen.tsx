@@ -9,11 +9,15 @@ import { clientConfig } from '../../config/client.config';
 export const ForceUpdateScreen: React.FC = () => {
   const { colors } = useTheme();
   const config = useConfigStore((state) => state.config);
+  const installedVersion = useConfigStore((state) => state.installedVersion);
+
+  const defaultAndroidUrl = `https://play.google.com/store/apps/details?id=${clientConfig.packageName}`;
+  const defaultIosUrl = `https://apps.apple.com/app/id${clientConfig.bundleIdentifier}`;
 
   const updateUrl = Platform.select({
-    ios: config?.appStoreUrl || 'https://apps.apple.com',
-    android: config?.playStoreUrl || 'https://play.google.com/store/apps',
-    default: config?.playStoreUrl || 'https://play.google.com/store/apps',
+    ios: config?.appStoreUrl || defaultIosUrl,
+    android: config?.playStoreUrl || defaultAndroidUrl,
+    default: config?.playStoreUrl || defaultAndroidUrl,
   });
 
   const handleUpdate = () => {
@@ -33,12 +37,12 @@ export const ForceUpdateScreen: React.FC = () => {
       <Text style={[styles.title, { color: colors.text }]}>Update Required</Text>
 
       <Text style={[styles.description, { color: colors.textSecondary }]}>
-        A new and improved version of {config?.appName || clientConfig.appName} is available with critical performance fixes and new features. Please update to continue.
+        A new and improved version of {config?.appName || clientConfig.appName} is available with critical performance fixes and security updates. Please update to continue.
       </Text>
 
       <View style={[styles.versionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.versionLabel, { color: colors.textSecondary }]}>Installed Version: </Text>
-        <Text style={[styles.versionValue, { color: colors.text }]}>v{clientConfig.version}</Text>
+        <Text style={[styles.versionValue, { color: colors.text }]}>v{installedVersion}</Text>
         <Text style={[styles.versionLabel, { color: colors.textSecondary, marginLeft: 16 }]}>Required: </Text>
         <Text style={[styles.versionValue, { color: colors.primary }]}>v{config?.minVersion || '1.0.0'}</Text>
       </View>

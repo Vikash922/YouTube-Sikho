@@ -12,6 +12,7 @@ export interface AppRemoteConfig {
   supportEmail?: string;
   maintenanceMode: boolean;
   minVersion: string;
+  latestVersion?: string;
   privacyUrl?: string;
   termsUrl?: string;
   razorpayKeyId?: string;

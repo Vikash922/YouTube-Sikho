@@ -22,6 +22,8 @@ import {
 } from 'lucide-react-native';
 import { useThemeColors } from '../../../src/theme';
 import { fetchQuizResult, QuizEvaluationResult, QuestionBreakdownItem } from '../../../src/services/quizService';
+import { ConfettiBurst } from '../../../src/motion/particles/ConfettiBurst';
+import { AnimatedProgressRing } from '../../../src/motion/svg/AnimatedProgressRing';
 
 export default function QuizResultScreen() {
   const { resultId } = useLocalSearchParams<{ resultId: string }>();
@@ -101,6 +103,7 @@ export default function QuizResultScreen() {
         <View style={{ width: 48 }} />
       </View>
 
+      {isPassed && <ConfettiBurst count={72} />}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -115,6 +118,20 @@ export default function QuizResultScreen() {
             },
           ]}
         >
+          <View style={{ alignItems: 'center', marginBottom: 16 }}>
+            <AnimatedProgressRing
+              progress={result.percentage}
+              targetValue={result.percentage}
+              size={120}
+              strokeWidth={10}
+              color={isPassed ? colors.semanticSuccess : colors.primary}
+              trackColor={colors.surfaceHover}
+              textColor={colors.textPrimary}
+              unit="%"
+              label="Score"
+            />
+          </View>
+
           <View
             style={[
               styles.trophyCircle,

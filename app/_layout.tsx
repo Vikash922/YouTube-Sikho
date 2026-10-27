@@ -12,6 +12,11 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
+import {
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
+import { clientConfig, validateClientConfig } from '../src/config/client.config';
 import { useTheme } from '../src/theme';
 import { ToastContainer } from '../src/components/common/Toast';
 import { ConnectionBanner } from '../src/components/common/ConnectionBanner';
@@ -23,6 +28,7 @@ import { realtimeManager } from '../src/services/realtimeManager';
 import { ForceUpdateScreen } from '../src/components/common/ForceUpdateScreen';
 import { AnnouncementBanner } from '../src/components/common/AnnouncementBanner';
 import { initializePushNotifications, setupNotificationResponseHandler } from '../src/services/pushNotificationService';
+import { MotionProvider } from '../src/motion';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -119,11 +125,21 @@ export default function RootLayout() {
     }
   }, [user, pathname, router]);
 
+  // 0. Runtime validation of client configuration
+  useEffect(() => {
+    const res = validateClientConfig(clientConfig);
+    if (!res.valid && __DEV__) {
+      console.error('[ClientConfig Validation Error]:', res.errors.join('\n'));
+    }
+  }, []);
+
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
   });
 
   if (!fontsLoaded) {
@@ -133,38 +149,40 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={styles.root}>
-        <SafeAreaProvider>
-          <QueryClientProvider client={queryClient}>
-            <StatusBar style={isDark ? 'light' : 'dark'} />
-            <ConnectionBanner />
-            <AnnouncementBanner />
-            <ToastContainer />
-            {isUpdateRequired ? (
-              <ForceUpdateScreen />
-            ) : (
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.background },
-                  animation: 'slide_from_right',
-                }}
-              >
-                <Stack.Screen name="index" />
-                <Stack.Screen name="maintenance" options={{ gestureEnabled: false }} />
-                <Stack.Screen name="(auth)" options={{ gestureEnabled: false }} />
-                <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
-                <Stack.Screen name="course/[id]" />
-                <Stack.Screen name="live/[id]" />
-                <Stack.Screen name="player/[lessonId]" />
-                <Stack.Screen name="checkout/[courseId]" />
-                <Stack.Screen name="notifications" />
-                <Stack.Screen name="support" />
-                <Stack.Screen name="payment/success" options={{ gestureEnabled: false }} />
-                <Stack.Screen name="payment/failed" options={{ gestureEnabled: false }} />
-              </Stack>
-            )}
-          </QueryClientProvider>
-        </SafeAreaProvider>
+        <MotionProvider>
+          <SafeAreaProvider>
+            <QueryClientProvider client={queryClient}>
+              <StatusBar style={isDark ? 'light' : 'dark'} />
+              <ConnectionBanner />
+              <AnnouncementBanner />
+              <ToastContainer />
+              {isUpdateRequired ? (
+                <ForceUpdateScreen />
+              ) : (
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.background },
+                    animation: 'slide_from_right',
+                  }}
+                >
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="maintenance" options={{ gestureEnabled: false }} />
+                  <Stack.Screen name="(auth)" options={{ gestureEnabled: false }} />
+                  <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+                  <Stack.Screen name="course/[id]" />
+                  <Stack.Screen name="live/[id]" />
+                  <Stack.Screen name="player/[lessonId]" />
+                  <Stack.Screen name="checkout/[courseId]" />
+                  <Stack.Screen name="notifications" />
+                  <Stack.Screen name="support" />
+                  <Stack.Screen name="payment/success" options={{ gestureEnabled: false }} />
+                  <Stack.Screen name="payment/failed" options={{ gestureEnabled: false }} />
+                </Stack>
+              )}
+            </QueryClientProvider>
+          </SafeAreaProvider>
+        </MotionProvider>
       </GestureHandlerRootView>
     </ErrorBoundary>
   );

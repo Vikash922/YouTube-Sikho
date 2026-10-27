@@ -256,7 +256,7 @@ export default function ProfileSetupScreen() {
           <View style={{ marginTop: spacing.sm }}>
             <Input
               label="Registered Phone / Account"
-              value={user?.phoneNumber || phoneNumber || '+91 98765 43210'}
+              value={user?.phoneNumber || phoneNumber || user?.email || ''}
               editable={false}
               style={{ color: colors.textMuted }}
             />

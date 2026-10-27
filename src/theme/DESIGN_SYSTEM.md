@@ -1,4 +1,4 @@
-# YouTube Sikho Design System Architecture
+# White-Label Academy Design System Architecture
 ### Strict Principles: Text Hierarchy • Font Pairing • Layout Balance • Color Theory • Repetition • Contrast • Negative Space
 
 This document codifies the 8 design fundamentals that govern every screen, component, modal, and interaction in this app.

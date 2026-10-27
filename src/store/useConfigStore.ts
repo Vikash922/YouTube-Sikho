@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import Constants from 'expo-constants';
 import {
   fetchRemoteConfig,
   subscribeToRemoteConfig,
   AppRemoteConfig,
 } from '../services/configService';
 import { clientConfig } from '../config/client.config';
+import { isVersionBelow } from '../utils/semver';
 
 interface ConfigState {
   config: AppRemoteConfig | null;
@@ -14,20 +16,11 @@ interface ConfigState {
   startLiveSync: () => () => void;
   isMaintenanceMode: boolean;
   isUpdateRequired: boolean;
+  isSoftUpdateAvailable: boolean;
+  installedVersion: string;
 }
 
-// Compare semantic version strings
-function isVersionLower(current: string, required: string): boolean {
-  const c = current.split('.').map(Number);
-  const r = required.split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const curVal = c[i] || 0;
-    const reqVal = r[i] || 0;
-    if (curVal < reqVal) return true;
-    if (curVal > reqVal) return false;
-  }
-  return false;
-}
+const currentAppVersion = Constants.expoConfig?.version || clientConfig.version || '1.0.0';
 
 export const useConfigStore = create<ConfigState>((set) => ({
   config: null,
@@ -35,18 +28,22 @@ export const useConfigStore = create<ConfigState>((set) => ({
   error: null,
   isMaintenanceMode: false,
   isUpdateRequired: false,
+  isSoftUpdateAvailable: false,
+  installedVersion: currentAppVersion,
 
   fetchConfig: async () => {
     set({ isLoading: true, error: null });
     try {
       const config = await fetchRemoteConfig();
       const isMaintenance = Boolean(config.maintenanceMode);
-      const isUpdate = isVersionLower(clientConfig.version, config.minVersion || '1.0.0');
+      const isUpdate = isVersionBelow(currentAppVersion, config.minVersion || '1.0.0');
+      const isSoft = Boolean(config.latestVersion) && isVersionBelow(currentAppVersion, config.latestVersion!) && !isUpdate;
 
       set({
         config,
         isMaintenanceMode: isMaintenance,
         isUpdateRequired: isUpdate,
+        isSoftUpdateAvailable: isSoft,
         isLoading: false,
       });
     } catch (err: any) {
@@ -60,12 +57,14 @@ export const useConfigStore = create<ConfigState>((set) => ({
   startLiveSync: () => {
     return subscribeToRemoteConfig((config) => {
       const isMaintenance = Boolean(config.maintenanceMode);
-      const isUpdate = isVersionLower(clientConfig.version, config.minVersion || '1.0.0');
+      const isUpdate = isVersionBelow(currentAppVersion, config.minVersion || '1.0.0');
+      const isSoft = Boolean(config.latestVersion) && isVersionBelow(currentAppVersion, config.latestVersion!) && !isUpdate;
 
       set({
         config,
         isMaintenanceMode: isMaintenance,
         isUpdateRequired: isUpdate,
+        isSoftUpdateAvailable: isSoft,
         isLoading: false,
       });
     });
